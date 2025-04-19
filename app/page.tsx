@@ -1,6 +1,17 @@
 import Image from "next/image";
+import { currentUser } from '@clerk/nextjs/server';
+import { getUserRole } from '@/lib/auth/role-helpers';
+import { RoleButtons } from './role-buttons';
+import { redirect } from 'next/navigation';
 
-export default function Home() {
+export default async function Home() {
+  const user = await currentUser();
+  const role = getUserRole(user);
+
+  if (role === 'client') redirect('/dashboard');
+  if (role === 'contractor') redirect('/contractor');
+  if (role === 'admin') redirect('/admin');
+
   return (
     <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
       <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
@@ -50,6 +61,8 @@ export default function Home() {
             Read our docs
           </a>
         </div>
+        {/* Role selection buttons for new users */}
+        {user && !role && <RoleButtons />}
       </main>
       <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
         <a
