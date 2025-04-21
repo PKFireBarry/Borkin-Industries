@@ -3,6 +3,7 @@ import { currentUser } from '@clerk/nextjs/server';
 import { getUserRole } from '@/lib/auth/role-helpers';
 import { RoleButtons } from './role-buttons';
 import { redirect } from 'next/navigation';
+import { GenerateTestDataButton } from './generate-test-data-button';
 
 export default async function Home() {
   const user = await currentUser();
@@ -63,6 +64,8 @@ export default async function Home() {
         </div>
         {/* Role selection buttons for new users */}
         {user && !role && <RoleButtons />}
+        {/* Admin-only: Generate test data button */}
+        {user && role === 'admin' && <GenerateTestDataButton />}
       </main>
       <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
         <a

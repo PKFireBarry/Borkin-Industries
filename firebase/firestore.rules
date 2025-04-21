@@ -1,0 +1,37 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Clients: users can only read/write their own document
+    match /clients/{clientId} {
+      allow read, write: if request.auth != null && request.auth.uid == clientId;
+    }
+
+    // Contractors: users can only read/write their own document
+    match /contractors/{contractorId} {
+      allow read, write: if request.auth != null && request.auth.uid == contractorId;
+    }
+
+    // Bookings: authenticated users can create, but only involved parties can read
+    match /bookings/{bookingId} {
+      allow create: if request.auth != null;
+      allow read: if request.auth != null && (
+        request.auth.uid == resource.data.clientId ||
+        request.auth.uid == resource.data.contractorId
+      );
+      // Only the client or contractor can update/cancel their own booking
+      allow update, delete: if request.auth != null && (
+        request.auth.uid == resource.data.clientId ||
+        request.auth.uid == resource.data.contractorId
+      );
+    }
+
+    // Admin: allow read/write to all docs for users with a custom claim 'admin' == true
+    function isAdmin() {
+      return request.auth.token.admin == true;
+    }
+    match /{document=**} {
+      allow read, write: if isAdmin();
+    }
+  }
+} 

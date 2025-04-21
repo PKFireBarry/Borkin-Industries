@@ -126,12 +126,12 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
 - [x] Design contractor data model (profile, application, availability, payment info, work history, ratings)
 - [x] Design booking data model (client, contractor, pet, service, status, payment, review)
 - [x] Set up Firestore collections and security rules
-- [ ] Seed database with test data
+- [x] Seed database with test data
 
 ### 4. Client Dashboard & Pet Management
-- [ ] Create client dashboard layout (RSC)
+- [x] Create client dashboard layout (RSC)
 - [ ] Implement profile update form
-- [ ] Build pet management UI (add/edit/remove pets)
+- [x] Build pet management UI (add/edit/remove pets)
 - [ ] Integrate payment method management (Stripe)
 - [ ] Display previous bookings
 - [ ] Create booking request form (work order)
