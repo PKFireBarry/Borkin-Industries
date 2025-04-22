@@ -133,9 +133,14 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
 - [ ] Implement profile update form
 - [x] Build pet management UI (add/edit/remove pets)
 - [ ] Integrate payment method management (Stripe)
-- [ ] Display previous bookings
-- [ ] Create booking request form (work order)
-- [ ] Show available contractors and their availability
+- [x] Display previous bookings
+- [x] Create booking request form (work order)
+- [x] Show available contractors and their availability
+- [ ] Show contractor reviews/ratings
+- [x] Filter contractors by service type and date
+- [x] Book directly from contractor card
+- [x] Booking status display in dashboard
+- [x] Notification stubs
 
 ### 5. Contractor Application & Onboarding
 - [ ] Build contractor application form (resume, experience, education, address, driving range, certifications, references)

@@ -1,20 +1,56 @@
 'use client'
 
 import type { Booking } from '@/types/client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { removeBooking } from '@/lib/firebase/bookings'
+import { removeBooking, getBookingsForClient } from '@/lib/firebase/bookings'
+import { BookingRequestForm } from './booking-request-form'
+import { useUser } from '@clerk/nextjs'
+import { getAllContractors } from '@/lib/firebase/contractors'
+import type { Contractor } from '@/types/contractor'
+import { getClientProfile } from '@/lib/firebase/client'
 
 interface BookingListProps {
   bookings: Booking[]
 }
 
 export function BookingList({ bookings: initialBookings }: BookingListProps) {
+  const { user } = useUser()
   const [bookings, setBookings] = useState(initialBookings)
+  const [contractors, setContractors] = useState<Contractor[]>([])
   const [cancelId, setCancelId] = useState<string | null>(null)
   const [isPending, setIsPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isRequestOpen, setIsRequestOpen] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [detailBooking, setDetailBooking] = useState<Booking | null>(null)
+  const [petNames, setPetNames] = useState<string[]>([])
+
+  useEffect(() => {
+    async function fetchContractors() {
+      const all = await getAllContractors()
+      setContractors(all)
+    }
+    fetchContractors()
+  }, [])
+
+  useEffect(() => {
+    async function fetchPetNames() {
+      if (!detailBooking || !user) return
+      const profile = await getClientProfile(user.id)
+      if (!profile) return
+      const names = detailBooking.petIds?.map(pid => profile.pets?.find(p => p.id === pid)?.name || pid) || []
+      setPetNames(names)
+    }
+    fetchPetNames()
+  }, [detailBooking, user])
+
+  const contractorNameById = (id?: string) => {
+    if (!id) return 'Unassigned'
+    const c = contractors.find(c => c.id === id)
+    return c ? c.name : id
+  }
 
   const handleCancel = async () => {
     if (!cancelId) return
@@ -31,13 +67,54 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
     }
   }
 
+  const handleRequestSuccess = async () => {
+    setIsRequestOpen(false)
+    if (!user) return
+    setIsRefreshing(true)
+    try {
+      const latest = await getBookingsForClient(user.id)
+      setBookings(latest)
+    } catch (err) {
+      // Optionally handle error
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
+
+  // Add a helper for status badge
+  function StatusBadge({ status }: { status: string }) {
+    let color = 'bg-gray-200 text-gray-700'
+    if (status === 'pending') color = 'bg-yellow-100 text-yellow-800'
+    if (status === 'approved') color = 'bg-blue-100 text-blue-800'
+    if (status === 'completed') color = 'bg-green-100 text-green-800'
+    if (status === 'cancelled') color = 'bg-red-100 text-red-800'
+    return <span className={`px-2 py-0.5 rounded text-xs font-medium ${color}`}>{status.charAt(0).toUpperCase() + status.slice(1)}</span>
+  }
+
   if (!bookings.length) {
-    return <div className="text-muted-foreground">No bookings found.</div>
+    return (
+      <>
+        <div className="flex justify-end mb-4">
+          <Button onClick={() => setIsRequestOpen(true)}>New Booking</Button>
+        </div>
+        <div className="text-muted-foreground">No bookings found.</div>
+        <Dialog open={isRequestOpen} onOpenChange={setIsRequestOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>New Booking Request</DialogTitle>
+            </DialogHeader>
+            <BookingRequestForm onSuccess={handleRequestSuccess} />
+          </DialogContent>
+        </Dialog>
+      </>
+    )
   }
 
   return (
     <section className="max-w-3xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">Your Bookings</h1>
+      <div className="flex justify-end mb-4">
+        <Button onClick={() => setIsRequestOpen(true)}>New Booking</Button>
+      </div>
       <div className="overflow-x-auto">
         <table className="min-w-full border rounded-lg bg-background">
           <thead>
@@ -57,8 +134,8 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
               <tr key={b.id} className="border-t">
                 <td className="px-4 py-2">{b.serviceType}</td>
                 <td className="px-4 py-2">{new Date(b.date).toLocaleString()}</td>
-                <td className="px-4 py-2 capitalize">{b.status}</td>
-                <td className="px-4 py-2">{b.contractorId}</td>
+                <td className="px-4 py-2 capitalize"><StatusBadge status={b.status} /></td>
+                <td className="px-4 py-2">{contractorNameById(b.contractorId)}</td>
                 <td className="px-4 py-2">{b.petIds?.length ?? 0}</td>
                 <td className="px-4 py-2 capitalize">{b.paymentStatus}</td>
                 <td className="px-4 py-2">
@@ -72,7 +149,10 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
                   )}
                 </td>
                 <td className="px-4 py-2">
-                  <Button variant="destructive" size="sm" onClick={() => setCancelId(b.id)} disabled={isPending}>
+                  <Button variant="outline" className="text-sm px-2 py-1 mr-2" onClick={() => setDetailBooking(b)}>
+                    View Details
+                  </Button>
+                  <Button variant="destructive" className="text-sm px-2 py-1" onClick={() => setCancelId(b.id)} disabled={isPending || b.status !== 'pending'}>
                     Cancel
                   </Button>
                 </td>
@@ -93,6 +173,43 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
             <Button variant="destructive" onClick={handleCancel} disabled={isPending}>
               {isPending ? 'Cancelling...' : 'Cancel Booking'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={isRequestOpen} onOpenChange={setIsRequestOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New Booking Request</DialogTitle>
+          </DialogHeader>
+          <BookingRequestForm onSuccess={handleRequestSuccess} />
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!detailBooking} onOpenChange={() => setDetailBooking(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Booking Details</DialogTitle>
+          </DialogHeader>
+          {detailBooking && (
+            <div className="space-y-2">
+              <div><span className="font-medium">Service:</span> {detailBooking.serviceType}</div>
+              <div><span className="font-medium">Date:</span> {new Date(detailBooking.date).toLocaleString()}</div>
+              <div><span className="font-medium">Status:</span> <StatusBadge status={detailBooking.status} /></div>
+              <div><span className="font-medium">Contractor:</span> {contractorNameById(detailBooking.contractorId)}</div>
+              <div><span className="font-medium">Pets:</span> {petNames.join(', ')}</div>
+              <div><span className="font-medium">Payment Status:</span> {detailBooking.paymentStatus}</div>
+              <div><span className="font-medium">Payment Amount:</span> ${detailBooking.paymentAmount}</div>
+              {detailBooking.review && (
+                <div><span className="font-medium">Review:</span> {detailBooking.review.rating}★ {detailBooking.review.comment}</div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDetailBooking(null)}>Close</Button>
+            {detailBooking?.status === 'pending' && (
+              <Button variant="destructive" onClick={() => { setCancelId(detailBooking.id); setDetailBooking(null); }} disabled={isPending}>
+                Cancel Booking
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

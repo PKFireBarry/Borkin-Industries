@@ -14,6 +14,14 @@ export async function addTestBooking(booking: Booking): Promise<void> {
   await setDoc(bookingRef, booking)
 }
 
+export async function addBooking(data: Omit<Booking, 'id'>): Promise<string> {
+  const bookingsRef = collection(db, 'bookings')
+  const newDoc = doc(bookingsRef)
+  const booking: Booking = { ...data, id: newDoc.id }
+  await setDoc(newDoc, booking)
+  return newDoc.id
+}
+
 export async function removeBooking(bookingId: string): Promise<void> {
   const bookingRef = doc(db, 'bookings', bookingId)
   await deleteDoc(bookingRef)
