@@ -14,10 +14,46 @@ export async function addTestBooking(booking: Booking): Promise<void> {
   await setDoc(bookingRef, booking)
 }
 
-export async function addBooking(data: Omit<Booking, 'id'>): Promise<string> {
+export async function addBooking(data: Omit<Booking, 'id'> & { stripeCustomerId: string }): Promise<string> {
+  // Fetch default payment method for the customer
+  let paymentMethodId: string | undefined = undefined
+  try {
+    const res = await fetch('/api/stripe/list-payment-methods', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customerId: data.stripeCustomerId }),
+    })
+    if (res.ok) {
+      const { paymentMethods } = await res.json()
+      const defaultCard = paymentMethods.find((pm: any) => pm.isDefault) || paymentMethods[0]
+      if (defaultCard) paymentMethodId = defaultCard.id
+    }
+  } catch (err) {
+    // ignore, fallback to no payment method
+  }
+  // Create PaymentIntent in Stripe
+  const res = await fetch('/api/stripe/create-payment-intent', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      amount: Math.round((data.paymentAmount || 0) * 100),
+      currency: 'usd',
+      customerId: data.stripeCustomerId,
+      ...(paymentMethodId ? { paymentMethodId } : {}),
+    }),
+  })
+  if (!res.ok) throw new Error('Failed to create payment intent')
+  const { id: paymentIntentId, clientSecret } = await res.json()
+
   const bookingsRef = collection(db, 'bookings')
   const newDoc = doc(bookingsRef)
-  const booking: Booking = { ...data, id: newDoc.id }
+  const booking: Booking = {
+    ...data,
+    id: newDoc.id,
+    paymentIntentId,
+    paymentClientSecret: clientSecret,
+    paymentStatus: 'pending',
+  }
   await setDoc(newDoc, booking)
   return newDoc.id
 }

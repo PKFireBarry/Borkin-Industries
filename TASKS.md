@@ -151,6 +151,7 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
 - [ ] Contractor dashboard: profile update, experience/skills, availability calendar
 - [ ] Show available gigs and allow contractor to accept/decline
 - [ ] Display work/payment history and reviews
+- [ ] Implement booking completion and payment release flow (contractor marks as completed, app captures PaymentIntent)
 
 ### 6. Booking & Calendar Features
 - [ ] Implement booking creation and status tracking

@@ -76,16 +76,25 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
     }
     setIsPending(true)
     try {
-      await addBooking({
+      const profile = await getClientProfile(user.id)
+      if (!profile?.stripeCustomerId) {
+        setError('No Stripe customer ID found for this user.')
+        setIsPending(false)
+        return
+      }
+      const bookingData = {
         clientId: user.id,
         contractorId: selectedContractor,
         petIds: selectedPets,
-        serviceType,
+        serviceType: serviceType || 'Dog Walking',
         date,
-        status: 'pending',
-        paymentStatus: 'pending',
-        paymentAmount: 0,
-      })
+        status: 'pending' as const,
+        paymentStatus: 'pending' as const,
+        paymentAmount: 50, // $50 for testing
+        stripeCustomerId: profile.stripeCustomerId,
+      }
+      console.log('[booking] Creating booking with data:', bookingData)
+      await addBooking(bookingData)
       setSuccess(true)
       onSuccess()
     } catch (err) {

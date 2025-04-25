@@ -81,6 +81,24 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
     }
   }
 
+  async function handleConfirmPayment(booking: Booking, setIsPending: (v: boolean) => void, setError: (v: string | null) => void, setBookings: (fn: (prev: Booking[]) => Booking[]) => void) {
+    setIsPending(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/stripe/capture-payment-intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paymentIntentId: booking.paymentIntentId, bookingId: booking.id }),
+      })
+      if (!res.ok) throw new Error('Failed to capture payment')
+      setBookings(prev => prev.map(b => b.id === booking.id ? { ...b, paymentStatus: 'paid', status: 'completed' } : b))
+    } catch (err) {
+      setError('Failed to confirm payment')
+    } finally {
+      setIsPending(false)
+    }
+  }
+
   // Add a helper for status badge
   function StatusBadge({ status }: { status: string }) {
     let color = 'bg-gray-200 text-gray-700'
@@ -152,9 +170,19 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
                   <Button variant="outline" className="text-sm px-2 py-1 mr-2" onClick={() => setDetailBooking(b)}>
                     View Details
                   </Button>
-                  <Button variant="destructive" className="text-sm px-2 py-1" onClick={() => setCancelId(b.id)} disabled={isPending || b.status !== 'pending'}>
+                  <Button variant="destructive" className="text-sm px-2 py-1 mr-2" onClick={() => setCancelId(b.id)} disabled={isPending || b.status !== 'pending'}>
                     Cancel
                   </Button>
+                  {b.status === 'approved' && b.paymentStatus === 'pending' && (
+                    <Button
+                      variant="default"
+                      className="text-sm px-2 py-1"
+                      onClick={() => handleConfirmPayment(b, setIsPending, setError, setBookings)}
+                      disabled={isPending}
+                    >
+                      {isPending ? 'Confirming...' : 'Confirm Payment'}
+                    </Button>
+                  )}
                 </td>
               </tr>
             ))}

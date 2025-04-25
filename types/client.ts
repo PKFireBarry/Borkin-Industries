@@ -33,6 +33,8 @@ export interface Booking {
     rating: number
     comment?: string
   }
+  paymentIntentId?: string
+  paymentClientSecret?: string
 }
 
 export interface Client {
@@ -44,4 +46,5 @@ export interface Client {
   pets: Pet[]
   paymentMethods: PaymentMethod[]
   bookingHistory: Booking[]
+  stripeCustomerId?: string
 } 
