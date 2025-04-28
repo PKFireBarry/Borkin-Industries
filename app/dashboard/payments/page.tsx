@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useUser } from '@clerk/nextjs'
 import { getClientProfile } from '@/lib/firebase/client'
+import { useRequireRole } from '../use-require-role'
 
 interface PaymentMethod {
   id: string
@@ -13,6 +14,8 @@ interface PaymentMethod {
 }
 
 export default function PaymentsPage() {
+  const { isLoaded, isAuthorized } = useRequireRole('client')
+  if (!isLoaded || !isAuthorized) return null
   const { user } = useUser()
   const [methods, setMethods] = useState<PaymentMethod[]>([])
   const [loading, setLoading] = useState(false)

@@ -42,6 +42,13 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
   }, [user])
 
   useEffect(() => {
+    // Sync selectedContractor with preselectedContractorId when it changes
+    if (preselectedContractorId) {
+      setSelectedContractor(preselectedContractorId)
+    }
+  }, [preselectedContractorId])
+
+  useEffect(() => {
     if (!serviceType && !date) {
       setFilteredContractors(contractors)
       return

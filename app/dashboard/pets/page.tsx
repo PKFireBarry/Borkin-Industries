@@ -1,5 +1,8 @@
+'use client'
+
 import { PetManagement } from './pet-management'
 import type { Pet } from '@/types/client'
+import { useRequireRole } from '../use-require-role'
 
 // TODO: Replace with real data fetching from Firebase
 const mockPets: Pet[] = [
@@ -26,5 +29,7 @@ const mockPets: Pet[] = [
 ]
 
 export default function PetsPage() {
+  const { isLoaded, isAuthorized } = useRequireRole('client')
+  if (!isLoaded || !isAuthorized) return null
   return <PetManagement initialPets={mockPets} />
 } 

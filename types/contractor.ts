@@ -14,6 +14,7 @@ export interface Availability {
   // ISO date strings for available days/times
   availableSlots: string[]
   unavailableDates?: string[]
+  ranges?: { start: string; end: string; type: 'available' | 'unavailable' }[]
 }
 
 export interface PaymentInfo {
@@ -66,4 +67,5 @@ export interface Contractor {
   paymentInfo: PaymentInfo[]
   workHistory: WorkHistory[]
   ratings: Rating[]
+  stripeAccountId?: string
 } 

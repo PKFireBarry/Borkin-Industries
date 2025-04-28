@@ -1,10 +1,25 @@
+"use client"
+import { useEffect, useState } from 'react'
+import { useUser } from '@clerk/nextjs'
 import { getClientProfile } from '@/lib/firebase/client'
 import { ProfileForm } from './profile-form'
-import { currentUser } from '@clerk/nextjs/server'
+import { useRequireRole } from '../use-require-role'
 
-export default async function ProfilePage() {
-  const user = await currentUser()
-  const profile = user ? await getClientProfile(user.id) : null
+export default function ProfilePage() {
+  const { isLoaded, isAuthorized } = useRequireRole('client')
+  const { user } = useUser()
+  const [profile, setProfile] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!user) return
+    setLoading(true)
+    getClientProfile(user.id)
+      .then((data) => setProfile(data))
+      .finally(() => setLoading(false))
+  }, [user])
+
+  if (!isLoaded || !isAuthorized || loading) return null
 
   return (
     <section className="max-w-xl mx-auto">

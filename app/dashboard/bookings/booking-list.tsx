@@ -4,7 +4,7 @@ import type { Booking } from '@/types/client'
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { removeBooking, getBookingsForClient } from '@/lib/firebase/bookings'
+import { removeBooking, getBookingsForClient, setClientCompleted } from '@/lib/firebase/bookings'
 import { BookingRequestForm } from './booking-request-form'
 import { useUser } from '@clerk/nextjs'
 import { getAllContractors } from '@/lib/firebase/contractors'
@@ -99,6 +99,19 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
     }
   }
 
+  async function handleClientComplete(bookingId: string) {
+    setIsPending(true)
+    setError(null)
+    try {
+      await setClientCompleted(bookingId, true)
+      setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, clientCompleted: true } : b))
+    } catch (err) {
+      setError('Failed to mark as completed')
+    } finally {
+      setIsPending(false)
+    }
+  }
+
   // Add a helper for status badge
   function StatusBadge({ status }: { status: string }) {
     let color = 'bg-gray-200 text-gray-700'
@@ -173,14 +186,27 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
                   <Button variant="destructive" className="text-sm px-2 py-1 mr-2" onClick={() => setCancelId(b.id)} disabled={isPending || b.status !== 'pending'}>
                     Cancel
                   </Button>
-                  {b.status === 'approved' && b.paymentStatus === 'pending' && (
+                  {b.status === 'approved' && b.paymentStatus === 'pending' && !b.clientCompleted && (
+                    <Button
+                      variant="default"
+                      className="text-sm px-2 py-1"
+                      onClick={() => handleClientComplete(b.id)}
+                      disabled={isPending}
+                    >
+                      {isPending ? 'Marking...' : 'Mark as Completed'}
+                    </Button>
+                  )}
+                  {b.status === 'approved' && b.paymentStatus === 'pending' && b.clientCompleted && !b.contractorCompleted && (
+                    <span className="text-xs text-muted-foreground">Waiting for contractor...</span>
+                  )}
+                  {b.status === 'approved' && b.paymentStatus === 'pending' && b.clientCompleted && b.contractorCompleted && (
                     <Button
                       variant="default"
                       className="text-sm px-2 py-1"
                       onClick={() => handleConfirmPayment(b, setIsPending, setError, setBookings)}
                       disabled={isPending}
                     >
-                      {isPending ? 'Confirming...' : 'Confirm Payment'}
+                      {isPending ? 'Confirming...' : 'Release Payment'}
                     </Button>
                   )}
                 </td>

@@ -130,6 +130,7 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
 
 ### 4. Client Dashboard & Pet Management
 - [x] Create client dashboard layout (RSC)
+- [x] Fix dashboard layout to support client hooks and conditional sidebar rendering
 - [ ] Implement profile update form
 - [x] Build pet management UI (add/edit/remove pets)
 - [ ] Integrate payment method management (Stripe)

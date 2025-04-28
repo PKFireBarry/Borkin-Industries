@@ -61,4 +61,26 @@ export async function addBooking(data: Omit<Booking, 'id'> & { stripeCustomerId:
 export async function removeBooking(bookingId: string): Promise<void> {
   const bookingRef = doc(db, 'bookings', bookingId)
   await deleteDoc(bookingRef)
+}
+
+export async function getGigsForContractor(contractorId: string): Promise<Booking[]> {
+  const bookingsRef = collection(db, 'bookings')
+  const q = query(bookingsRef, where('contractorId', '==', contractorId))
+  const snapshot = await getDocs(q)
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Booking))
+}
+
+export async function updateBookingStatus(bookingId: string, status: 'pending' | 'approved' | 'completed' | 'cancelled'): Promise<void> {
+  const bookingRef = doc(db, 'bookings', bookingId)
+  await setDoc(bookingRef, { status }, { merge: true })
+}
+
+export async function setClientCompleted(bookingId: string, completed: boolean): Promise<void> {
+  const bookingRef = doc(db, 'bookings', bookingId)
+  await setDoc(bookingRef, { clientCompleted: completed }, { merge: true })
+}
+
+export async function setContractorCompleted(bookingId: string, completed: boolean): Promise<void> {
+  const bookingRef = doc(db, 'bookings', bookingId)
+  await setDoc(bookingRef, { contractorCompleted: completed }, { merge: true })
 } 

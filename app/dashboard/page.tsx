@@ -1,10 +1,25 @@
+"use client"
+import { useEffect, useState } from 'react'
 import { Card, CardContent, CardTitle } from '@/components/ui/card'
+import { useUser } from '@clerk/nextjs'
+import { useRequireRole } from './use-require-role'
 import { getClientProfile } from '@/lib/firebase/client'
-import { currentUser } from '@clerk/nextjs/server'
 
-export default async function DashboardHomePage() {
-  const user = await currentUser()
-  const profile = user ? await getClientProfile(user.id) : null
+export default function DashboardHomePage() {
+  const { isLoaded, isAuthorized } = useRequireRole('client')
+  const { user } = useUser()
+  const [profile, setProfile] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!user) return
+    setLoading(true)
+    getClientProfile(user.id)
+      .then((data) => setProfile(data))
+      .finally(() => setLoading(false))
+  }, [user])
+
+  if (!isLoaded || !isAuthorized || loading) return null
 
   const petCount = profile?.pets?.length ?? 0
   const upcomingBookings = profile?.bookingHistory?.length ?? 0 // Adjust logic if you want only future bookings

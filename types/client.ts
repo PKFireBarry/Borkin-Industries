@@ -28,6 +28,8 @@ export interface Booking {
   date: string // ISO string
   status: 'pending' | 'approved' | 'completed' | 'cancelled'
   paymentStatus: 'pending' | 'paid' | 'refunded'
+  clientCompleted?: boolean
+  contractorCompleted?: boolean
   paymentAmount: number
   review?: {
     rating: number

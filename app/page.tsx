@@ -10,7 +10,7 @@ export default async function Home() {
   const role = getUserRole(user);
 
   if (role === 'client') redirect('/dashboard');
-  if (role === 'contractor') redirect('/contractor');
+  if (role === 'contractor') redirect('/dashboard/contractor');
   if (role === 'admin') redirect('/admin');
 
   return (

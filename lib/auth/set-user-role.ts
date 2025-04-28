@@ -20,6 +20,6 @@ export async function setUserRole(role: AllowedRole) {
     publicMetadata: { role },
   })
   if (role === 'client') redirect('/dashboard')
-  if (role === 'contractor') redirect('/contractor')
+  if (role === 'contractor') redirect('/dashboard/contractor')
   redirect('/')
 } 

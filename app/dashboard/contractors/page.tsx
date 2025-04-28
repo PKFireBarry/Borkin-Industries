@@ -7,8 +7,12 @@ import type { Contractor } from '@/types/contractor'
 import { ContractorAvailabilityModal } from './contractor-availability-modal'
 import { BookingRequestForm } from '../bookings/booking-request-form'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { useRequireRole } from '../use-require-role'
 
 export default function ContractorsPageWrapper() {
+  const { isLoaded, isAuthorized } = useRequireRole('client')
+  if (!isLoaded || !isAuthorized) return null
+
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedContractor, setSelectedContractor] = useState<Contractor | null>(null)
   const [contractors, setContractors] = useState<Contractor[]>([])
