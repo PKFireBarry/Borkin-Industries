@@ -39,6 +39,7 @@ export async function addBooking(data: Omit<Booking, 'id'> & { stripeCustomerId:
       amount: Math.round((data.paymentAmount || 0) * 100),
       currency: 'usd',
       customerId: data.stripeCustomerId,
+      contractorId: data.contractorId,
       ...(paymentMethodId ? { paymentMethodId } : {}),
     }),
   })

@@ -1,5 +1,8 @@
 # Project Requirements Document (PRD): Borkin Industries Platform
 
+##TODO
+ - add cert image to application 
+
 ## Overview
 A web platform for Borkin Industries to connect clients seeking high-quality, luxury at-home pet care with accredited veterinary technicians (contractors). The platform will facilitate client/contractor onboarding, booking management, payment processing, and company oversight, with a focus on Southeast Florida.
 
@@ -163,9 +166,9 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
 - [ ] Booking detail view for both client and contractor
 
 ### 7. Payments (Stripe)
-- [ ] Integrate Stripe for client payments
+- [x] Integrate Stripe for client payments
 - [ ] Hold payment in escrow until gig completion
-- [ ] Release payment to contractor upon completion
+- [x] Release payment to contractor upon completion
 - [ ] Payment status tracking in booking flow
 - [ ] Payment history for contractors
 
