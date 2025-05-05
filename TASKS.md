@@ -147,16 +147,17 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
 - [x] Notification stubs
 
 ### 5. Contractor Application & Onboarding
-- [ ] Build contractor application form (resume, experience, education, address, driving range, certifications, references)
-- [ ] Store application data in Firebase
-- [ ] Notify admin of new application
-- [ ] Admin review UI for applications (approve/reject)
-- [ ] Onboarding flow for approved contractors (legal docs, email setup instructions)
-- [ ] Contractor dashboard: profile update, experience/skills, availability calendar
-- [ ] Show available gigs and allow contractor to accept/decline
-- [ ] Display work/payment history and reviews
-- [ ] Implement booking completion and payment release flow (contractor marks as completed, app captures PaymentIntent)
+- [x] Build contractor application form (resume, experience, education, address, driving range, certifications, references)
+- [x] Store application data in Firebase
+- [x] Notify admin of new application
+- [x] Admin review UI for applications (approve/reject)
+- [x] Onboarding flow for approved contractors (legal docs, email setup instructions)
+- [x] Contractor dashboard: profile update, experience/skills, availability calendar
+- [x] Show available gigs and allow contractor to accept/decline
+- [x] Display work/payment history and reviews
+- [x] Implement booking completion and payment release flow (contractor marks as completed, app captures PaymentIntent)
 - [x] Contractor can update payout method via Stripe Connect Express
+- [x] Fix contractor application redirect and error checking so new contractors are properly redirected to the application form and cannot submit multiple applications.
 
 ### 6. Booking & Calendar Features
 - [ ] Implement booking creation and status tracking
@@ -174,10 +175,13 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
 - [ ] Payment history for contractors
 
 ### 8. Admin/Owner Features
-- [ ] Protected admin route for reviewing contractor applications
-- [ ] Approve/reject contractor applications
+- [x] Protected admin route for reviewing contractor applications
+- [x] Approve/reject contractor applications
 - [ ] Initiate onboarding for approved contractors
-- [ ] Manage contractors and bookings overview
+- [x] Manage contractors and bookings overview
+- [x] Contractor management page (remove contractors, view payouts summary)
+- [x] Bookings summary with metrics and visualizations
+- [ ] Manage Clients
 
 ### 9. Notifications & Reviews
 - [ ] Set up email notifications for booking creation, updates, completion (clients & contractors)

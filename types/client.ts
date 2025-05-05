@@ -40,11 +40,30 @@ export interface Booking {
 }
 
 export interface Client {
-  id: string
+  id: string // User ID from Clerk
   name: string
-  address?: string
-  phone: string
   email: string
+  phone?: string
+  address?: string
+  city?: string
+  state?: string
+  postalCode?: string
+  country?: string
+  createdAt?: string // ISO date string
+  updatedAt?: string // ISO date string
+  status?: 'active' | 'inactive' | 'suspended'
+  avatar?: string // URL to avatar image
+  bio?: string
+  preferences?: {
+    notifications?: {
+      email?: boolean
+      sms?: boolean
+      app?: boolean
+    }
+    language?: string
+    timezone?: string
+  }
+  metadata?: Record<string, any> // For any additional data
   pets: Pet[]
   paymentMethods: PaymentMethod[]
   bookingHistory: Booking[]

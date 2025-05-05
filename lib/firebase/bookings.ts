@@ -102,4 +102,10 @@ export async function saveBookingReview(
     bookingId,
   }
   await updateDoc(contractorRef, { ratings: arrayUnion(reviewObj) })
+}
+
+export async function getAllBookings(): Promise<Booking[]> {
+  const bookingsRef = collection(db, 'bookings')
+  const snapshot = await getDocs(bookingsRef)
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Booking))
 } 

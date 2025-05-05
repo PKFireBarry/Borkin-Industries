@@ -9,6 +9,7 @@ import {
 } from '@clerk/nextjs'
 import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
+import { BanCheck } from '@/components/ban-check'
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -41,6 +42,7 @@ export default function RootLayout({
             </SignedOut>
             <SignedIn>
               <UserButton />
+              <BanCheck />
             </SignedIn>
           </header>
           {children}
