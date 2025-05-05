@@ -4,7 +4,7 @@ import type { Booking } from '@/types/client'
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { removeBooking, getBookingsForClient, setClientCompleted } from '@/lib/firebase/bookings'
+import { removeBooking, getBookingsForClient, setClientCompleted, saveBookingReview } from '@/lib/firebase/bookings'
 import { BookingRequestForm } from './booking-request-form'
 import { useUser } from '@clerk/nextjs'
 import { getAllContractors } from '@/lib/firebase/contractors'
@@ -26,6 +26,7 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [detailBooking, setDetailBooking] = useState<Booking | null>(null)
   const [petNames, setPetNames] = useState<string[]>([])
+  const [reviewModal, setReviewModal] = useState<{ open: boolean; booking: Booking | null }>({ open: false, booking: null })
 
   useEffect(() => {
     async function fetchContractors() {
@@ -209,6 +210,15 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
                       {isPending ? 'Confirming...' : 'Release Payment'}
                     </Button>
                   )}
+                  {b.status === 'completed' && b.paymentStatus === 'paid' && !b.review && (
+                    <Button
+                      variant="default"
+                      className="text-sm px-2 py-1"
+                      onClick={() => setReviewModal({ open: true, booking: b })}
+                    >
+                      Leave Review
+                    </Button>
+                  )}
                 </td>
               </tr>
             ))}
@@ -267,6 +277,64 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <Dialog open={reviewModal.open} onOpenChange={open => setReviewModal({ open, booking: open ? reviewModal.booking : null })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Leave a Review</DialogTitle>
+          </DialogHeader>
+          {reviewModal.booking && (
+            <ReviewForm
+              booking={reviewModal.booking}
+              onClose={() => setReviewModal({ open: false, booking: null })}
+              onSaved={async (review) => {
+                await saveBookingReview(reviewModal.booking!.id, review, reviewModal.booking!.contractorId)
+                setBookings(prev => prev.map(b => b.id === reviewModal.booking!.id ? { ...b, review } : b))
+                setReviewModal({ open: false, booking: null })
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </section>
+  )
+}
+
+function ReviewForm({ booking, onClose, onSaved }: { booking: Booking, onClose: () => void, onSaved: (review: { rating: number, comment?: string }) => void }) {
+  const [rating, setRating] = useState(5)
+  const [comment, setComment] = useState('')
+  const [isPending, setIsPending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  return (
+    <form
+      onSubmit={async e => {
+        e.preventDefault()
+        setIsPending(true)
+        setError(null)
+        try {
+          await onSaved({ rating, comment })
+        } catch (err) {
+          setError('Failed to save review')
+        } finally {
+          setIsPending(false)
+        }
+      }}
+      className="space-y-4"
+    >
+      <div>
+        <label className="block text-sm font-medium mb-1">Rating</label>
+        <select value={rating} onChange={e => setRating(Number(e.target.value))} className="w-full border rounded px-2 py-1">
+          {[5,4,3,2,1].map(n => <option key={n} value={n}>{n} Star{n > 1 ? 's' : ''}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className="block text-sm font-medium mb-1">Comment (optional)</label>
+        <textarea value={comment} onChange={e => setComment(e.target.value)} className="w-full border rounded px-2 py-1" rows={3} />
+      </div>
+      {error && <div className="text-destructive text-sm">{error}</div>}
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+        <Button type="submit" disabled={isPending}>{isPending ? 'Saving...' : 'Submit Review'}</Button>
+      </DialogFooter>
+    </form>
   )
 } 

@@ -136,6 +136,28 @@ export default function ContractorPaymentsPage() {
     }
   }
 
+  const handleUpdatePayoutMethod = async () => {
+    setActionLoading('update')
+    setError(null)
+    try {
+      const res = await fetch('/api/stripe/connect-onboard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const data = await res.json()
+      if (data.url) {
+        window.location.href = data.url
+      } else {
+        setError('Failed to get Stripe update link')
+      }
+    } catch {
+      setError('Failed to start payout update')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
   // Helper to compute payment summary
   const paymentSummary = gigs.reduce(
     (acc, gig) => {
@@ -216,7 +238,7 @@ export default function ContractorPaymentsPage() {
               {payoutMethod.brand} •••• {payoutMethod.last4}
             </div>
           </div>
-          <Button variant="outline" onClick={() => alert('TODO: Stripe Connect update')}>Update Payout Method</Button>
+          <Button variant="outline" onClick={handleUpdatePayoutMethod}>Update Payout Method</Button>
         </div>
       )}
       {success && <div className="text-success mb-4">{success}</div>}

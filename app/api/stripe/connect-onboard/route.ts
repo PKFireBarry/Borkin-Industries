@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     await setDoc(contractorRef, { stripeAccountId }, { merge: true })
   }
 
-  // 3. Generate onboarding link
+  // 3. Always use 'account_onboarding' for Express accounts
   const accountLink = await stripe.accountLinks.create({
     account: stripeAccountId,
     refresh_url: process.env.NEXT_PUBLIC_BASE_URL + '/dashboard/contractor/payments',
@@ -33,6 +33,6 @@ export async function POST(req: NextRequest) {
     type: 'account_onboarding',
   })
 
-  // 4. Return onboarding link
+  // 4. Return onboarding/update link
   return NextResponse.json({ url: accountLink.url })
 } 

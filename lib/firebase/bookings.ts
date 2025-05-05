@@ -1,5 +1,5 @@
 import { db } from '../../firebase'
-import { collection, query, where, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore'
+import { collection, query, where, getDocs, doc, setDoc, deleteDoc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore'
 import type { Booking } from '@/types/client'
 
 export async function getBookingsForClient(clientId: string): Promise<Booking[]> {
@@ -84,4 +84,22 @@ export async function setClientCompleted(bookingId: string, completed: boolean):
 export async function setContractorCompleted(bookingId: string, completed: boolean): Promise<void> {
   const bookingRef = doc(db, 'bookings', bookingId)
   await setDoc(bookingRef, { contractorCompleted: completed }, { merge: true })
+}
+
+export async function saveBookingReview(
+  bookingId: string,
+  review: { rating: number; comment?: string },
+  contractorId: string
+): Promise<void> {
+  // Save review to booking
+  const bookingRef = doc(db, 'bookings', bookingId)
+  await updateDoc(bookingRef, { review })
+  // Append review to contractor's ratings
+  const contractorRef = doc(db, 'contractors', contractorId)
+  const reviewObj = {
+    ...review,
+    date: new Date().toISOString(),
+    bookingId,
+  }
+  await updateDoc(contractorRef, { ratings: arrayUnion(reviewObj) })
 } 
