@@ -2,6 +2,12 @@
 
 ##TODO
  - add cert image to application 
+ - add phone number to application filters on admin side of app
+ - implement tier-based payment structure (entry, vet assistant, CVT) for pricing page on admin side
+ - add pricing page to admin dashboard
+ - add coupons to admin dashboard in the pricing page
+ - implement platform fees: 5% base fee for first three months, then 10% base fee after 3 months
+ - add internal messaging system for client-contractor communication about gigs
 
 ## Overview
 A web platform for Borkin Industries to connect clients seeking high-quality, luxury at-home pet care with accredited veterinary technicians (contractors). The platform will facilitate client/contractor onboarding, booking management, payment processing, and company oversight, with a focus on Southeast Florida.
@@ -17,9 +23,10 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
 ---
 
 ## 2. Data Models
-- **Client**: Name, address, phone, email, pets (name, age, photo, medications, food, temperament, schedule), payment method(s), booking history.
+- **Client**: Name, address, phone, email, pets (name, age, photo, medications, food, temperament, schedule), payment method(s), booking history, emergency contacts, primary care provider for pet, local emergency clinic for pet, profile picture.
 - **Contractor**: Name, address, phone, email, veterinary skills, experience, certifications, references, education, driving range, availability calendar, payment info, application status, booking/work history, ratings.
 - **Booking**: Client, contractor, pet(s), service type, date/time, status (pending, approved, completed, cancelled), payment status/amount, review/rating.
+- **Pet**: Name, age, photo, medications, amount of food, allergies, need-to-know information.
 
 ---
 
@@ -27,16 +34,18 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
 ### Client Side
 - Dashboard: Update profile, manage pets, add payment method, view previous bookings, create new work orders.
 - Booking: See contractor availability, request services, view/track booking status, leave reviews after gigs.
-- No direct messaging (handled externally).
+- Internal messaging system for communication with contractors about gigs.
 
 ### Contractor Side
 - Dashboard: Update profile, set availability (calendar), manage experience/skills, view/apply for gigs, see payment history, see reviews.
 - Application: Online form (basic info, experience, education, address, driving range, certifications, references), triggers admin review.
 - Onboarding: After approval, legal docs and email setup handled by admin.
+- Internal messaging system for communication with clients about gigs.
 
 ### Admin/Owner Side
 - Protected route to review contractor applications, approve/reject, and initiate onboarding.
 - Manage contractors and bookings.
+- Pricing page with tier-based payment structure and coupon management.
 
 ---
 
@@ -50,13 +59,15 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
 ## 5. Payments
 - Stripe integration for all payments.
 - Client payment held in escrow until gig completion, then released to contractor.
-- Platform fees/commission to be added in future phase.
+- Platform fees: 5% base fee for first three months, 10% base fee after 3 months.
+- Tier-based payment structure (entry, vet assistant, CVT).
+- Coupon system for discounts.
 
 ---
 
 ## 6. Notifications
 - Email notifications for booking creation, updates, and completion (to both clients and contractors).
-- No in-app messaging or notification center at launch.
+- In-app messaging system for client-contractor communication about gigs.
 
 ---
 
@@ -136,6 +147,8 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
 - [x] Fix dashboard layout to support client hooks and conditional sidebar rendering
 - [ ] Implement profile update form
 - [x] Build pet management UI (add/edit/remove pets)
+- [ ] Add pet profile fields: medications, amount of food, allergies, need-to-know information
+- [ ] Add client profile fields: emergency contacts, primary care provider for pet, local emergency clinic for pet, profile picture
 - [ ] Integrate payment method management (Stripe)
 - [x] Display previous bookings
 - [x] Create booking request form (work order)
@@ -173,6 +186,9 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
 - [x] Release payment to contractor upon completion
 - [ ] Payment status tracking in booking flow
 - [ ] Payment history for contractors
+- [ ] Implement platform fees: 5% for first three months, 10% after
+- [ ] Implement tier-based payment structure (entry, vet assistant, CVT)
+- [ ] Add coupon system for discounts
 
 ### 8. Admin/Owner Features
 - [x] Protected admin route for reviewing contractor applications
@@ -182,11 +198,15 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
 - [x] Contractor management page (remove contractors, view payouts summary)
 - [x] Bookings summary with metrics and visualizations
 - [ ] Manage Clients
+- [ ] Add phone number filter to contractor application filters
+- [ ] Create pricing page with tier-based payment structure management
+- [ ] Add coupon management to pricing page
 
 ### 9. Notifications & Reviews
 - [ ] Set up email notifications for booking creation, updates, completion (clients & contractors)
 - [ ] Prompt clients for review/rating after gig completion
 - [ ] Store and display contractor ratings
+- [ ] Implement internal messaging system for client-contractor communication
 
 ### 10. FAQ & Resource Section
 - [ ] Create FAQ page for clients and contractors
