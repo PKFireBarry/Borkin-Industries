@@ -15,7 +15,7 @@ interface Gig {
   date: string
   time: string
   status: 'pending' | 'approved' | 'completed' | 'cancelled'
-  paymentStatus: 'unpaid' | 'escrow' | 'paid'
+  paymentStatus: 'unpaid' | 'escrow' | 'paid' | 'cancelled'
   contractorCompleted: boolean
 }
 
@@ -139,7 +139,15 @@ export default function ContractorGigsPage() {
                   <div className="text-sm mb-1"><span className="font-medium">Pets:</span> {gig.pets.join(', ')}</div>
                   <div className="text-sm mb-1"><span className="font-medium">Date:</span> {gig.date}{gig.time ? ` at ${gig.time}` : ''}</div>
                   <div className="text-sm mb-1"><span className="font-medium">Status:</span> <span className={`capitalize ${gig.status === 'pending' ? 'text-yellow-600' : gig.status === 'approved' ? 'text-blue-600' : gig.status === 'completed' ? 'text-green-600' : 'text-muted-foreground'}`}>{statusLabels[gig.status]}</span></div>
-                  <div className="text-sm"><span className="font-medium">Payment:</span> <span className={`capitalize ${gig.paymentStatus === 'paid' ? 'text-green-600' : gig.paymentStatus === 'escrow' ? 'text-blue-600' : 'text-muted-foreground'}`}>{gig.paymentStatus}</span></div>
+                  <div className="text-sm"><span className="font-medium">Payment:</span> <span className={`capitalize ${gig.paymentStatus === 'paid' ? 'text-green-600' : gig.paymentStatus === 'escrow' ? 'text-blue-600' : gig.paymentStatus === 'cancelled' ? 'text-red-600' : 'text-muted-foreground'}`}>{gig.paymentStatus}</span></div>
+                  {typeof (gig as any).paymentAmount === 'number' && (
+                    <div className="text-xs mt-1">
+                      <div>Total: <span className="font-semibold">${(gig as any).paymentAmount.toFixed(2)}</span></div>
+                      <div>Platform Fee (5%): <span className="text-red-600">-${((gig as any).platformFee ?? ((gig as any).paymentAmount * 0.05)).toFixed(2)}</span></div>
+                      <div>Stripe Fee (2.9% + $0.30): <span className="text-red-600">-${((gig as any).paymentAmount * 0.029 + 0.3).toFixed(2)}</span></div>
+                      <div>Net to You: <span className="text-green-700">${((gig as any).paymentAmount - ((gig as any).platformFee ?? ((gig as any).paymentAmount * 0.05)) - ((gig as any).paymentAmount * 0.029 + 0.3)).toFixed(2)}</span></div>
+                    </div>
+                  )}
                 </div>
                 {/* Actions */}
                 <div className="flex gap-2 mt-4 md:mt-0">

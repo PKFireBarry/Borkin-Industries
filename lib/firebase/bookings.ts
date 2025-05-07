@@ -31,6 +31,8 @@ export async function addBooking(data: Omit<Booking, 'id'> & { stripeCustomerId:
   } catch (err) {
     // ignore, fallback to no payment method
   }
+  // Calculate 5% platform fee
+  const platformFee = Math.round((data.paymentAmount || 0) * 0.05 * 100) / 100
   // Create PaymentIntent in Stripe
   const res = await fetch('/api/stripe/create-payment-intent', {
     method: 'POST',
@@ -41,6 +43,7 @@ export async function addBooking(data: Omit<Booking, 'id'> & { stripeCustomerId:
       customerId: data.stripeCustomerId,
       contractorId: data.contractorId,
       ...(paymentMethodId ? { paymentMethodId } : {}),
+      platformFee,
     }),
   })
   if (!res.ok) throw new Error('Failed to create payment intent')
@@ -54,6 +57,7 @@ export async function addBooking(data: Omit<Booking, 'id'> & { stripeCustomerId:
     paymentIntentId,
     paymentClientSecret: clientSecret,
     paymentStatus: 'pending',
+    platformFee,
   }
   await setDoc(newDoc, booking)
   return newDoc.id
@@ -73,6 +77,38 @@ export async function getGigsForContractor(contractorId: string): Promise<Bookin
 
 export async function updateBookingStatus(bookingId: string, status: 'pending' | 'approved' | 'completed' | 'cancelled'): Promise<void> {
   const bookingRef = doc(db, 'bookings', bookingId)
+  if (status === 'cancelled') {
+    // Fetch booking to get paymentIntentId and paymentStatus
+    const snap = await getDoc(bookingRef)
+    if (snap.exists()) {
+      const booking = snap.data() as Booking
+      let paymentStatus: Booking['paymentStatus'] = booking.paymentStatus
+      // Cancel Stripe PaymentIntent if pending
+      if (booking.paymentIntentId && paymentStatus === 'pending') {
+        try {
+          const res = await fetch('/api/stripe/cancel-payment-intent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ paymentIntentId: booking.paymentIntentId }),
+          })
+          const data = await res.json()
+          if (res.ok && data.status === 'canceled') {
+            paymentStatus = 'cancelled' as any
+          } else {
+            // If Stripe did not cancel, keep as pending
+            paymentStatus = 'pending'
+          }
+        } catch {
+          // If error, keep as pending
+          paymentStatus = 'pending'
+        }
+      } else if (paymentStatus === 'pending') {
+        paymentStatus = 'cancelled' as any
+      }
+      await setDoc(bookingRef, { status, paymentStatus }, { merge: true })
+      return
+    }
+  }
   await setDoc(bookingRef, { status }, { merge: true })
 }
 

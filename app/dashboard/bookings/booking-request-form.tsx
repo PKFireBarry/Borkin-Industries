@@ -24,7 +24,10 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
   const [selectedContractor, setSelectedContractor] = useState(preselectedContractorId || '')
   const [selectedPets, setSelectedPets] = useState<string[]>([])
   const [serviceType, setServiceType] = useState('Dog Walking')
-  const [date, setDate] = useState('')
+  const [startDate, setStartDate] = useState('') // yyyy-mm-dd
+  const [startTime, setStartTime] = useState('') // hh:mm
+  const [endDate, setEndDate] = useState('') // yyyy-mm-dd
+  const [endTime, setEndTime] = useState('') // hh:mm
   const [isPending, setIsPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
@@ -49,18 +52,18 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
   }, [preselectedContractorId])
 
   useEffect(() => {
-    if (!serviceType && !date) {
+    if (!serviceType && !startDate) {
       setFilteredContractors(contractors)
       return
     }
     setFilteredContractors(
       contractors.filter(c => {
         const matchesSkill = !serviceType || (c.veterinarySkills || []).includes(serviceType)
-        const matchesDate = !date || (c.availability?.availableSlots || []).some(slot => slot.slice(0, 10) === date)
+        const matchesDate = !startDate || (c.availability?.availableSlots || []).some(slot => slot.slice(0, 10) === startDate.slice(0, 10))
         return matchesSkill && matchesDate
       })
     )
-  }, [contractors, serviceType, date])
+  }, [contractors, serviceType, startDate])
 
   const handlePetToggle = (petId: string) => {
     setSelectedPets((prev) =>
@@ -77,8 +80,14 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
       setError('Please select at least one pet.')
       return
     }
-    if (!date) {
-      setError('Please select a date and time.')
+    if (!startDate || !startTime || !endDate || !endTime) {
+      setError('Please select a start and end date and time.')
+      return
+    }
+    const startDateTime = new Date(`${startDate}T${startTime}`)
+    const endDateTime = new Date(`${endDate}T${endTime}`)
+    if (endDateTime <= startDateTime) {
+      setError('End date/time must be after start date/time.')
       return
     }
     setIsPending(true)
@@ -94,7 +103,8 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
         contractorId: selectedContractor,
         petIds: selectedPets,
         serviceType: serviceType || 'Dog Walking',
-        date,
+        startDate: startDateTime.toISOString(),
+        endDate: endDateTime.toISOString(),
         status: 'pending' as const,
         paymentStatus: 'pending' as const,
         paymentAmount: 50, // $50 for testing
@@ -141,15 +151,45 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
           ))}
         </select>
       </div>
-      <div>
-        <label className="block text-sm font-medium mb-1">Date & Time</label>
-        <Input
-          type="datetime-local"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          required
-        />
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="flex-1">
+          <label className="block text-sm font-medium mb-1">Start Date</label>
+          <Input
+            type="date"
+            value={startDate}
+            onChange={e => setStartDate(e.target.value)}
+            required
+          />
+          <label className="block text-sm font-medium mb-1 mt-2">Start Time</label>
+          <Input
+            type="time"
+            value={startTime}
+            onChange={e => setStartTime(e.target.value)}
+            required
+          />
+        </div>
+        <div className="flex-1">
+          <label className="block text-sm font-medium mb-1">End Date</label>
+          <Input
+            type="date"
+            value={endDate}
+            onChange={e => setEndDate(e.target.value)}
+            required
+          />
+          <label className="block text-sm font-medium mb-1 mt-2">End Time</label>
+          <Input
+            type="time"
+            value={endTime}
+            onChange={e => setEndTime(e.target.value)}
+            required
+          />
+        </div>
       </div>
+      {(startDate && startTime && endDate && endTime) && (
+        <div className="mt-2 text-sm text-muted-foreground">
+          You've selected: {new Date(`${startDate}T${startTime}`).toLocaleString()} to {new Date(`${endDate}T${endTime}`).toLocaleString()}
+        </div>
+      )}
       <div>
         <label className="block text-sm font-medium mb-1">Contractor (optional)</label>
         <select

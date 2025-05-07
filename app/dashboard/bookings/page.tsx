@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react'
 import { useUser } from '@clerk/nextjs'
 import { getBookingsForClient } from '@/lib/firebase/bookings'
 import { BookingList } from './booking-list'
-import { GenerateTestBookingButton } from './generate-test-booking-button'
 import { useRequireRole } from '../use-require-role'
 
 export default function BookingsPage() {
@@ -24,7 +23,6 @@ export default function BookingsPage() {
 
   return (
     <>
-      <GenerateTestBookingButton />
       <BookingList bookings={bookings} />
     </>
   )

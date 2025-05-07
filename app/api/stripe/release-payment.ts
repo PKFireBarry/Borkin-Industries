@@ -35,14 +35,20 @@ export async function POST(req: NextRequest) {
 
   // 4. Create a Stripe transfer to contractor
   try {
-    // For a real escrow flow, you may want to capture a PaymentIntent here if using manual capture
-    // For now, assume funds are in platform balance and transfer to contractor
+    // Calculate platform fee
+    const platformFee = typeof gig.platformFee === 'number'
+      ? gig.platformFee
+      : Math.round((gig.paymentAmount || 0) * 0.05 * 100) / 100
+    // Calculate Stripe fee (2.9% + $0.30)
+    const stripeFee = Math.round(((gig.paymentAmount || 0) * 0.029 + 0.3) * 100) / 100
+    // Net payout to contractor
+    const netAmount = (gig.paymentAmount || 0) - platformFee - stripeFee
     const transfer = await stripe.transfers.create({
-      amount: Math.round((gig.paymentAmount || 0) * 100),
+      amount: Math.round(netAmount * 100),
       currency: 'usd',
       destination: stripeAccountId,
       transfer_group: gig.paymentIntentId || undefined,
-      description: `Payout for gig ${gigId}`,
+      description: `Payout for gig ${gigId} (net after platform fee $${platformFee.toFixed(2)} and Stripe fee $${stripeFee.toFixed(2)})`,
     })
     // 5. Update gig paymentStatus to 'paid' and status to 'completed'
     await setDoc(gigRef, { paymentStatus: 'paid', status: 'completed' }, { merge: true })

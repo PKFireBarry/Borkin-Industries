@@ -5,8 +5,14 @@ export interface Pet {
   photoUrl?: string
   medications?: string
   food?: string
+  foodSchedule?: string
+  animalType?: string
+  breed?: string
+  weight?: string
   temperament?: string
   schedule?: string
+  allergies?: string
+  needToKnow?: string
 }
 
 export interface PaymentMethod {
@@ -25,12 +31,15 @@ export interface Booking {
   contractorId: string
   petIds: string[]
   serviceType: string
-  date: string // ISO string
+  startDate?: string // ISO string
+  endDate?: string // ISO string
+  date?: string // ISO string
   status: 'pending' | 'approved' | 'completed' | 'cancelled'
-  paymentStatus: 'pending' | 'paid' | 'refunded'
+  paymentStatus: 'pending' | 'paid' | 'refunded' | 'cancelled'
   clientCompleted?: boolean
   contractorCompleted?: boolean
   paymentAmount: number
+  platformFee?: number // 5% platform fee
   review?: {
     rating: number
     comment?: string
@@ -54,6 +63,21 @@ export interface Client {
   status?: 'active' | 'inactive' | 'suspended'
   avatar?: string // URL to avatar image
   bio?: string
+  emergencyContact?: {
+    name: string
+    phone: string
+    relationship: string
+  }
+  petCareProvider?: {
+    name: string
+    phone: string
+    address?: string
+  }
+  emergencyClinic?: {
+    name: string
+    phone: string
+    address?: string
+  }
   preferences?: {
     notifications?: {
       email?: boolean

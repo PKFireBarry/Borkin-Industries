@@ -25,8 +25,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Contractor has no Stripe account' }, { status: 400 })
   }
   try {
-    let paymentIntent
     const transferData = { destination: contractor.stripeAccountId }
+    // Calculate 5% platform fee in cents
+    const applicationFeeAmount = Math.round(amount * 0.05)
+    let paymentIntent
     if (paymentMethodId) {
       paymentIntent = await stripe.paymentIntents.create({
         amount,
@@ -37,6 +39,7 @@ export async function POST(req: NextRequest) {
         confirm: true,
         capture_method: 'manual',
         transfer_data: transferData,
+        application_fee_amount: applicationFeeAmount,
         metadata: { app: 'boorkin', contractorId },
       })
     } else {
@@ -46,6 +49,7 @@ export async function POST(req: NextRequest) {
         customer: customerId,
         capture_method: 'manual',
         transfer_data: transferData,
+        application_fee_amount: applicationFeeAmount,
         metadata: { app: 'boorkin', contractorId },
       })
     }

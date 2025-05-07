@@ -147,9 +147,11 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
 - [x] Fix dashboard layout to support client hooks and conditional sidebar rendering
 - [ ] Implement profile update form
 - [x] Build pet management UI (add/edit/remove pets)
-- [ ] Add pet profile fields: medications, amount of food, allergies, need-to-know information
-- [ ] Add client profile fields: emergency contacts, primary care provider for pet, local emergency clinic for pet, profile picture
-- [ ] Integrate payment method management (Stripe)
+- [x] Add pet profile fields: medications, amount of food, allergies, need-to-know information
+- [x] Add animal type and feeding schedule to pets
+- [x] Add breed and weight fields to pet profiles
+- [x] Add client profile fields: emergency contacts, primary care provider for pet, local emergency clinic for pet, profile picture
+- [x] Integrate payment method management (Stripe)
 - [x] Display previous bookings
 - [x] Create booking request form (work order)
 - [x] Show available contractors and their availability
@@ -158,6 +160,8 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
 - [x] Book directly from contractor card
 - [x] Booking status display in dashboard
 - [x] Notification stubs
+- [x] Cancel uncaptured Stripe payment when pending booking is canceled
+  - Pending bookings now cancel the associated Stripe PaymentIntent when canceled, ensuring no lingering payments in Stripe or the UI.
 
 ### 5. Contractor Application & Onboarding
 - [x] Build contractor application form (resume, experience, education, address, driving range, certifications, references)
