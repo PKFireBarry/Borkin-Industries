@@ -24,7 +24,7 @@ export default function ProfilePage() {
   return (
     <section className="max-w-xl mx-auto">
       <h1 className="text-2xl font-bold mb-6">Update Profile</h1>
-      <ProfileForm initialProfile={profile} />
+      <ProfileForm initialProfile={profile} isEditing={false} />
     </section>
   )
 } 

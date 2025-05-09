@@ -1,3 +1,5 @@
+import { ContractorServiceOffering } from './service';
+
 export interface ContractorApplication {
   status: 'pending' | 'approved' | 'rejected'
   submittedAt: string // ISO date
@@ -54,14 +56,21 @@ export interface Contractor {
   id: string
   name: string
   address: string
+  city?: string
+  state?: string
+  postalCode?: string
   phone: string
   email: string
+  profileImage?: string
   veterinarySkills: string[]
   experience: string
   certifications: string[]
   references: string[]
   education: string
   drivingRange: string
+  locationLat?: number
+  locationLng?: number
+  bio?: string // Short profile summary
   application: ContractorApplication
   availability: Availability
   paymentInfo: PaymentInfo[]

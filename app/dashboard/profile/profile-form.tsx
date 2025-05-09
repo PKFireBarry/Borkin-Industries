@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { Client } from '@/types/client'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label'
 
 interface ProfileFormProps {
   initialProfile: Client | null
+  isEditing?: boolean
 }
 
 interface ProfileFormState {
@@ -42,7 +43,7 @@ interface ProfileFormState {
   }
 }
 
-export function ProfileForm({ initialProfile }: ProfileFormProps) {
+export function ProfileForm({ initialProfile, isEditing }: ProfileFormProps) {
   const { user } = useUser()
   const [form, setForm] = useState<ProfileFormState>({
     name: initialProfile?.name || '',
@@ -73,6 +74,63 @@ export function ProfileForm({ initialProfile }: ProfileFormProps) {
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [editing, setEditing] = useState(isEditing ?? false)
+  const [originalForm, setOriginalForm] = useState(form)
+
+  useEffect(() => {
+    setForm({
+      name: initialProfile?.name || '',
+      address: initialProfile?.address || '',
+      city: initialProfile?.city || '',
+      state: initialProfile?.state || '',
+      postalCode: initialProfile?.postalCode || '',
+      phone: initialProfile?.phone || '',
+      email: initialProfile?.email || '',
+      bio: initialProfile?.bio || '',
+      avatar: initialProfile?.avatar || user?.imageUrl || '',
+      emergencyContact: {
+        name: initialProfile?.emergencyContact?.name || '',
+        phone: initialProfile?.emergencyContact?.phone || '',
+        relationship: initialProfile?.emergencyContact?.relationship || '',
+      },
+      petCareProvider: {
+        name: initialProfile?.petCareProvider?.name || '',
+        phone: initialProfile?.petCareProvider?.phone || '',
+        address: initialProfile?.petCareProvider?.address || '',
+      },
+      emergencyClinic: {
+        name: initialProfile?.emergencyClinic?.name || '',
+        phone: initialProfile?.emergencyClinic?.phone || '',
+        address: initialProfile?.emergencyClinic?.address || '',
+      },
+    })
+    setOriginalForm({
+      name: initialProfile?.name || '',
+      address: initialProfile?.address || '',
+      city: initialProfile?.city || '',
+      state: initialProfile?.state || '',
+      postalCode: initialProfile?.postalCode || '',
+      phone: initialProfile?.phone || '',
+      email: initialProfile?.email || '',
+      bio: initialProfile?.bio || '',
+      avatar: initialProfile?.avatar || user?.imageUrl || '',
+      emergencyContact: {
+        name: initialProfile?.emergencyContact?.name || '',
+        phone: initialProfile?.emergencyContact?.phone || '',
+        relationship: initialProfile?.emergencyContact?.relationship || '',
+      },
+      petCareProvider: {
+        name: initialProfile?.petCareProvider?.name || '',
+        phone: initialProfile?.petCareProvider?.phone || '',
+        address: initialProfile?.petCareProvider?.address || '',
+      },
+      emergencyClinic: {
+        name: initialProfile?.emergencyClinic?.name || '',
+        phone: initialProfile?.emergencyClinic?.phone || '',
+        address: initialProfile?.emergencyClinic?.address || '',
+      },
+    })
+  }, [initialProfile, user])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -108,6 +166,67 @@ export function ProfileForm({ initialProfile }: ProfileFormProps) {
     }
   }
 
+  if (!editing) {
+    // VIEW MODE
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Personal Information</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-col items-center mb-6 space-y-4">
+              <Avatar className="h-24 w-24">
+                {form.avatar ? (
+                  <AvatarImage src={form.avatar} alt={form.name} />
+                ) : (
+                  <AvatarFallback>{form.name.charAt(0)}</AvatarFallback>
+                )}
+              </Avatar>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div><Label>Full Name</Label><div>{form.name}</div></div>
+              <div><Label>Phone</Label><div>{form.phone}</div></div>
+            </div>
+            <div><Label>Email</Label><div>{form.email}</div></div>
+            <div><Label>Bio</Label><div>{form.bio}</div></div>
+            <div><Label>Address</Label><div>{form.address}</div></div>
+            <div className="grid grid-cols-2 gap-4">
+              <div><Label>City</Label><div>{form.city}</div></div>
+              <div><Label>State</Label><div>{form.state}</div></div>
+            </div>
+            <div><Label>Postal Code</Label><div>{form.postalCode}</div></div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle>Emergency Contact</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <div><Label>Name</Label><div>{form.emergencyContact.name}</div></div>
+            <div><Label>Phone</Label><div>{form.emergencyContact.phone}</div></div>
+            <div><Label>Relationship</Label><div>{form.emergencyContact.relationship}</div></div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle>Primary Care Provider</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <div><Label>Name</Label><div>{form.petCareProvider.name}</div></div>
+            <div><Label>Phone</Label><div>{form.petCareProvider.phone}</div></div>
+            <div><Label>Address</Label><div>{form.petCareProvider.address}</div></div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle>Emergency Clinic</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <div><Label>Name</Label><div>{form.emergencyClinic.name}</div></div>
+            <div><Label>Phone</Label><div>{form.emergencyClinic.phone}</div></div>
+            <div><Label>Address</Label><div>{form.emergencyClinic.address}</div></div>
+          </CardContent>
+        </Card>
+        <Button type="button" className="mt-4" onClick={() => setEditing(true)}>Edit Profile</Button>
+      </div>
+    )
+  }
+  // EDIT MODE
   return (
     <form onSubmit={handleSubmit} className="space-y-6" aria-label="Update profile form">
       <Card>
@@ -297,9 +416,10 @@ export function ProfileForm({ initialProfile }: ProfileFormProps) {
 
       {error && <div className="text-destructive text-sm">{error}</div>}
       {success && <div className="text-green-600 text-sm">Profile updated!</div>}
-      <Button type="submit" disabled={isSaving} className="w-full">
-        {isSaving ? 'Saving...' : 'Save Changes'}
-      </Button>
+      <div className="flex gap-2">
+        <Button type="submit" disabled={isSaving}>{isSaving ? 'Saving...' : 'Save Changes'}</Button>
+        <Button type="button" variant="outline" onClick={() => { setForm(originalForm); setEditing(false); setSuccess(false); setError(null); }}>Cancel</Button>
+      </div>
     </form>
   )
 } 

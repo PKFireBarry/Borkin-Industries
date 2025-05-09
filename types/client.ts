@@ -46,6 +46,8 @@ export interface Booking {
   }
   paymentIntentId?: string
   paymentClientSecret?: string
+  stripeFee?: number // Actual Stripe fee for the transaction
+  netPayout?: number // Actual net payout to contractor
 }
 
 export interface Client {

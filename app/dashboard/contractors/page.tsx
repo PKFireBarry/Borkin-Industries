@@ -4,13 +4,17 @@ import React, { useState } from 'react'
 import { getAllContractors } from '@/lib/firebase/contractors'
 import { Card, CardContent, CardTitle } from '@/components/ui/card'
 import type { Contractor } from '@/types/contractor'
-import { ContractorAvailabilityModal } from './contractor-availability-modal'
+import { ContractorProfileModal } from './contractor-profile-modal'
 import { BookingRequestForm } from '../bookings/booking-request-form'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useRequireRole } from '../use-require-role'
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
+import { useUser } from '@clerk/nextjs'
+import { getClientProfile } from '@/lib/firebase/client'
 
 export default function ContractorsPageWrapper() {
   const { isLoaded, isAuthorized } = useRequireRole('client')
+  const { user } = useUser()
   if (!isLoaded || !isAuthorized) return null
 
   const [modalOpen, setModalOpen] = useState(false)
@@ -19,12 +23,26 @@ export default function ContractorsPageWrapper() {
   const [filterSkill, setFilterSkill] = useState('')
   const [filterDate, setFilterDate] = useState('')
   const [isBookingOpen, setIsBookingOpen] = useState(false)
-  const [preselectedContractorId, setPreselectedContractorId] = useState<string | null>(null)
+  const [bookingForContractorId, setBookingForContractorId] = useState<string | null>(null)
+  const [clientLocation, setClientLocation] = useState<{ address?: string; city?: string; state?: string; postalCode?: string } | null>(null)
 
   // Fetch contractors on mount (client component)
   React.useEffect(() => {
     getAllContractors().then(setContractors)
   }, [])
+
+  // Fetch client location on mount
+  React.useEffect(() => {
+    if (!user) return
+    getClientProfile(user.id).then(profile => {
+      if (profile) setClientLocation({
+        address: profile.address,
+        city: profile.city,
+        state: profile.state,
+        postalCode: profile.postalCode,
+      })
+    })
+  }, [user])
 
   // Get all unique skills for filter dropdown
   const allSkills = Array.from(new Set(contractors.flatMap(c => c.veterinarySkills || [])))
@@ -46,19 +64,21 @@ export default function ContractorsPageWrapper() {
     setSelectedContractor(null)
   }
 
-  const handleBookNow = (contractor: Contractor) => {
-    setPreselectedContractorId(contractor.id)
+  const handleBookNowFromModal = (contractorId: string) => {
+    setModalOpen(false)
+    setSelectedContractor(null)
+    setBookingForContractorId(contractorId)
     setIsBookingOpen(true)
   }
 
   const handleBookingClose = () => {
     setIsBookingOpen(false)
-    setPreselectedContractorId(null)
+    setBookingForContractorId(null)
   }
 
   return (
-    <main className="max-w-4xl mx-auto py-8 px-4">
-      <h1 className="text-2xl font-bold mb-6">Available Contractors</h1>
+    <main className="container mx-auto p-4 md:p-6 lg:p-8">
+      <h1 className="text-2xl font-bold mb-6 text-gray-800">Available Contractors</h1>
       <div className="flex flex-wrap gap-4 mb-6 items-end">
         <div>
           <label className="block text-xs font-medium mb-1">Service Type</label>
@@ -93,65 +113,62 @@ export default function ContractorsPageWrapper() {
         )}
       </div>
       {filteredContractors.length === 0 ? (
-        <div className="text-muted-foreground">No contractors found.</div>
+        <div className="text-center py-12 text-gray-500">No contractors found matching your criteria.</div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredContractors.map((contractor) => (
-            <Card key={contractor.id}>
-              <CardContent>
-                <CardTitle>{contractor.name}</CardTitle>
-                <div className="mb-1 text-xs">Experience: <span className="font-medium">{contractor.experience}</span></div>
-                <div className="mb-1 text-xs">Driving Range: <span className="font-medium">{contractor.drivingRange}</span></div>
-                <div className="mb-2 text-sm text-muted-foreground">
-                  {contractor.veterinarySkills?.join(', ') || 'No skills listed'}
-                </div>
-                <div className="mb-2 text-xs">Rating: {contractor.ratings?.length ? (contractor.ratings.reduce((sum, r) => sum + r.rating, 0) / contractor.ratings.length).toFixed(1) : 'N/A'}</div>
-                <div className="mb-2 text-xs">
-                  {contractor.ratings && contractor.ratings.length > 0 ? (
-                    contractor.ratings.slice(-2).reverse().map((review, idx) => (
-                      <div key={idx} className="mb-1 p-2 bg-muted rounded">
-                        <span className="font-semibold text-yellow-600">{review.rating}★</span>
-                        {review.comment && <span className="ml-2">{review.comment}</span>}
-                        <span className="ml-2 text-xs text-muted-foreground">{new Date(review.date).toLocaleDateString()}</span>
-                      </div>
-                    ))
-                  ) : (
-                    <span className="text-muted-foreground">No reviews yet.</span>
-                  )}
-                </div>
+            <Card key={contractor.id} className="flex flex-col bg-white shadow-lg rounded-xl overflow-hidden hover:shadow-xl transition-shadow duration-300">
+              <div className="p-5 flex flex-col items-center text-center">
+                <Avatar className="w-24 h-24 mb-4 border-4 border-primary/20 shadow-md">
+                  <AvatarImage src={contractor.profileImage || '/avatars/default.png'} alt={contractor.name || 'Contractor'} className="object-cover" />
+                  <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                    {contractor.name ? contractor.name[0].toUpperCase() : 'C'}
+                  </AvatarFallback>
+                </Avatar>
+                <CardTitle className="text-xl font-semibold text-gray-900 mb-1">{contractor.name || 'Unnamed Contractor'}</CardTitle>
+                {(contractor.city || contractor.state) && (
+                  <p className="text-xs text-gray-500 mb-2">
+                    {[contractor.city, contractor.state].filter(Boolean).join(', ')}
+                  </p>
+                )}
+                 <p className="text-xs text-gray-500 mb-3">
+                  Driving Range: <span className="font-medium text-gray-700">{contractor.drivingRange || 'N/A'}</span>
+                </p>
+                <p className="text-sm text-gray-600 mb-4 min-h-[40px] line-clamp-2">
+                  {contractor.bio || contractor.experience?.substring(0,100) || 'Experienced pet care professional.'}
+                </p>
+              </div>
+
+              <div className="mt-auto p-4 border-t">
                 <button
-                  className="mt-2 px-3 py-1 rounded bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-medium"
+                  className="w-full py-2.5 px-4 rounded-lg bg-primary text-primary-foreground font-semibold text-sm shadow-md transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2"
                   onClick={() => handleOpenModal(contractor)}
                   type="button"
                 >
-                  View Availability
+                  View Profile & Book
                 </button>
-                <button
-                  className="mt-2 ml-2 px-3 py-1 rounded bg-green-600 text-white hover:bg-green-700 text-xs font-medium"
-                  onClick={() => handleBookNow(contractor)}
-                  type="button"
-                >
-                  Book Now
-                </button>
-              </CardContent>
+              </div>
             </Card>
           ))}
         </div>
       )}
-      {selectedContractor && (
-        <ContractorAvailabilityModal
-          contractor={selectedContractor}
-          open={modalOpen}
-          onClose={handleCloseModal}
-        />
-      )}
+      <ContractorProfileModal
+        contractor={selectedContractor}
+        open={modalOpen}
+        onClose={handleCloseModal}
+        onBookNow={handleBookNowFromModal}
+        clientLocation={clientLocation}
+      />
       {isBookingOpen && (
         <Dialog open={isBookingOpen} onOpenChange={handleBookingClose}>
-          <DialogContent>
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle>New Booking for Contractor</DialogTitle>
+              <DialogTitle>New Booking Request</DialogTitle>
             </DialogHeader>
-            <BookingRequestForm onSuccess={handleBookingClose} preselectedContractorId={preselectedContractorId} />
+            <BookingRequestForm 
+                onSuccess={handleBookingClose} 
+                preselectedContractorId={bookingForContractorId} 
+            />
           </DialogContent>
         </Dialog>
       )}

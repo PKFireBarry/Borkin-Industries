@@ -155,13 +155,14 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
 - [x] Display previous bookings
 - [x] Create booking request form (work order)
 - [x] Show available contractors and their availability
-- [ ] Show contractor reviews/ratings
+- [x] Show contractor reviews/ratings
 - [x] Filter contractors by service type and date
 - [x] Book directly from contractor card
 - [x] Booking status display in dashboard
 - [x] Notification stubs
 - [x] Cancel uncaptured Stripe payment when pending booking is canceled
   - Pending bookings now cancel the associated Stripe PaymentIntent when canceled, ensuring no lingering payments in Stripe or the UI.
+- [x] Map gigs to payouts in contractor payments API (backend returns payouts and all paid gigs)
 
 ### 5. Contractor Application & Onboarding
 - [x] Build contractor application form (resume, experience, education, address, driving range, certifications, references)
@@ -176,13 +177,30 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
 - [x] Contractor can update payout method via Stripe Connect Express
 - [x] Fix contractor application redirect and error checking so new contractors are properly redirected to the application form and cannot submit multiple applications.
 
+### 5A. Contractor Service & Pricing Management
+- [x] Define TypeScript interfaces for PlatformService and ContractorServiceOffering (`types/service.ts`)
+- [x] Update Contractor data model to include `serviceOfferings` (`types/contractor.ts`)
+- [x] Implement server actions for CRUD operations on service offerings (`app/dashboard/contractor/services/actions.ts`)
+- [x] Integrate service & pricing management into Contractor Profile page (`app/dashboard/contractor/profile/page.tsx`)
+  - [x] Update profile page state to include `serviceOfferings`.
+  - [x] Create `ContractorProfileServiceManager` component (`app/dashboard/contractor/profile/components/contractor-profile-service-manager.tsx`) to handle display and forms for services.
+  - [x] Integrate this component into the profile page for viewing and editing services.
+- [x] Update Stripe integration to use dynamic service prices from `ContractorServiceOffering`.
+  - [x] Implement multi-day bookings with per-day service pricing.
+    - [x] Update `Booking` type to use `startDate` and `endDate`.
+    - [x] Modify `addBooking` action to calculate total price based on daily rate and number of days.
+    - [x] Update `BookingRequestForm` to collect date range and display per-day rates and calculated total.
+    - [x] Ensure `ContractorProfileServiceManager` labels clarify "price per day".
+- [ ] (TODO) Update net proceeds calculations for contractors to use their specific service prices.
+- [x] Remove redundant service management page: `app/dashboard/contractor/services/page.tsx` and its component `app/dashboard/contractor/services/components/contractor-service-management.tsx`.
+
 ### 6. Booking & Calendar Features
 - [ ] Implement booking creation and status tracking
 - [ ] Contractor approval flow for bookings
 - [ ] Build contractor availability calendar (set unavailable days)
 - [ ] Display contractor calendar to clients
 - [ ] Booking status updates (pending, approved, completed, cancelled)
-- [ ] Booking detail view for both client and contractor
+- [x] Booking detail view for both client and contractor
 
 ### 7. Payments (Stripe)
 - [x] Integrate Stripe for client payments

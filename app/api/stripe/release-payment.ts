@@ -33,28 +33,32 @@ export async function POST(req: NextRequest) {
   const stripeAccountId = contractor.stripeAccountId
   if (!stripeAccountId) return NextResponse.json({ error: 'Contractor has no Stripe account' }, { status: 400 })
 
-  // 4. Create a Stripe transfer to contractor
+  // 4. Capture the PaymentIntent to release funds
   try {
-    // Calculate platform fee
-    const platformFee = typeof gig.platformFee === 'number'
-      ? gig.platformFee
-      : Math.round((gig.paymentAmount || 0) * 0.05 * 100) / 100
-    // Calculate Stripe fee (2.9% + $0.30)
-    const stripeFee = Math.round(((gig.paymentAmount || 0) * 0.029 + 0.3) * 100) / 100
-    // Net payout to contractor
-    const netAmount = (gig.paymentAmount || 0) - platformFee - stripeFee
-    const transfer = await stripe.transfers.create({
-      amount: Math.round(netAmount * 100),
-      currency: 'usd',
-      destination: stripeAccountId,
-      transfer_group: gig.paymentIntentId || undefined,
-      description: `Payout for gig ${gigId} (net after platform fee $${platformFee.toFixed(2)} and Stripe fee $${stripeFee.toFixed(2)})`,
-    })
+    // Capture the PaymentIntent (release funds to contractor and pay platform fee)
+    const paymentIntentId = gig.paymentIntentId
+    if (!paymentIntentId) return NextResponse.json({ error: 'No PaymentIntent ID' }, { status: 400 })
+    const paymentIntent = await stripe.paymentIntents.capture(paymentIntentId)
+    // Get the charge ID from the PaymentIntent
+    const charges = (paymentIntent as any).charges?.data
+    const chargeId = Array.isArray(charges) && charges.length > 0 ? charges[0].id : null
+    let stripeFee = null
+    let netPayout = null
+    if (chargeId) {
+      // Fetch the charge to get the balance transaction
+      const charge = await stripe.charges.retrieve(chargeId, { stripeAccount: contractor.stripeAccountId })
+      const balanceTxId = typeof charge.balance_transaction === 'string' ? charge.balance_transaction : null
+      if (balanceTxId) {
+        const balanceTx = await stripe.balanceTransactions.retrieve(balanceTxId, { stripeAccount: contractor.stripeAccountId })
+        stripeFee = balanceTx.fee / 100
+        netPayout = balanceTx.net / 100
+      }
+    }
     // 5. Update gig paymentStatus to 'paid' and status to 'completed'
-    await setDoc(gigRef, { paymentStatus: 'paid', status: 'completed' }, { merge: true })
-    return NextResponse.json({ success: true, transferId: transfer.id })
+    await setDoc(gigRef, { paymentStatus: 'paid', status: 'completed', stripeFee, netPayout }, { merge: true })
+    return NextResponse.json({ success: true, paymentIntentId, stripeFee, netPayout })
   } catch (err) {
     console.error('Failed to release payment:', err)
-    return NextResponse.json({ error: 'Stripe transfer failed' }, { status: 500 })
+    return NextResponse.json({ error: 'Stripe capture failed' }, { status: 500 })
   }
 } 

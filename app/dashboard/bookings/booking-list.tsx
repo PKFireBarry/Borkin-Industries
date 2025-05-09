@@ -406,12 +406,12 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
                     <div className="font-semibold text-base text-red-600">-${detailBooking?.platformFee?.toFixed(2) ?? ((detailBooking?.paymentAmount || 0) * 0.05).toFixed(2)}</div>
                   </div>
                   <div>
-                    <div className="text-xs text-muted-foreground mb-1">Stripe Fee (2.9% + $0.30)</div>
-                    <div className="font-semibold text-base text-red-600">-${((detailBooking?.paymentAmount || 0) * 0.029 + 0.3).toFixed(2)}</div>
+                    <div className="text-xs text-muted-foreground mb-1">Stripe Fee</div>
+                    <div className="font-semibold text-base text-red-600">-${detailBooking?.stripeFee?.toFixed(2) ?? (((detailBooking?.paymentAmount || 0) * 0.029 + 0.3).toFixed(2))}</div>
                   </div>
                   <div className="col-span-2">
                     <div className="text-xs text-muted-foreground mb-1">Net to Contractor</div>
-                    <div className="font-semibold text-base text-green-700">${((detailBooking?.paymentAmount || 0) - (detailBooking?.platformFee || (detailBooking?.paymentAmount || 0) * 0.05) - ((detailBooking?.paymentAmount || 0) * 0.029 + 0.3)).toFixed(2)}</div>
+                    <div className="font-semibold text-base text-green-700">${detailBooking?.netPayout?.toFixed(2) ?? (((detailBooking?.paymentAmount || 0) - (detailBooking?.platformFee || (detailBooking?.paymentAmount || 0) * 0.05) - ((detailBooking?.paymentAmount || 0) * 0.029 + 0.3)).toFixed(2))}</div>
                   </div>
                   <div className="col-span-2">
                     <div className="text-xs text-muted-foreground mb-1">Payment Method</div>
