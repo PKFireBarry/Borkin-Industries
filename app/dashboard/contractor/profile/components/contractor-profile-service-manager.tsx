@@ -14,6 +14,7 @@ import {
   deleteServiceOfferingAction,
 } from "../actions";
 import type { ActionResponse } from "../actions";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 interface ContractorProfileServiceManagerProps {
   contractorId: string;
@@ -80,22 +81,33 @@ export function ContractorProfileServiceManager({
   const handleAddServiceSubmit = (formData: FormData) => {
     const serviceId = formData.get('serviceId') as string;
     const price = formData.get('price') as string;
-    if (!serviceId || !price || parseFloat(price) <= 0) return;
+    const paymentType = formData.get('paymentType') as string;
+    
+    if (!serviceId || !price || parseFloat(price) <= 0 || !paymentType) return;
+    
     const serviceData = new FormData();
     serviceData.append('contractorId', contractorId);
     serviceData.append('serviceId', serviceId);
     serviceData.append('price', (parseFloat(price) * 100).toString());
+    serviceData.append('paymentType', paymentType);
+    
     submitAddAction(serviceData);
   };
   
   const handleUpdateServiceSubmit = (formData: FormData) => {
     if (!editingOffering) return;
+    
     const price = formData.get('price') as string;
-    if (!price || parseFloat(price) <= 0) return;
+    const paymentType = formData.get('paymentType') as string;
+    
+    if (!price || parseFloat(price) <= 0 || !paymentType) return;
+    
     const serviceData = new FormData();
     serviceData.append('contractorId', contractorId);
     serviceData.append('serviceId', editingOffering.serviceId);
     serviceData.append('price', (parseFloat(price) * 100).toString());
+    serviceData.append('paymentType', paymentType);
+    
     submitEditAction(serviceData);
   };
 
@@ -108,6 +120,13 @@ export function ContractorProfileServiceManager({
   };
   
   const getServiceName = (serviceId: string) => platformServices.find(ps => ps.id === serviceId)?.name || 'Unknown Service';
+  
+  const formatPriceWithType = (offering: ContractorServiceOffering) => {
+    const formattedPrice = `$${(offering.price / 100).toFixed(2)}`;
+    return offering.paymentType === 'daily' 
+      ? `${formattedPrice}/day`
+      : formattedPrice;
+  };
 
   if (!isEditing) {
     return (
@@ -123,8 +142,9 @@ export function ContractorProfileServiceManager({
                     <li key={offering.serviceId} className="flex items-center justify-between p-3 border rounded-md bg-gray-50">
                         <div>
                         <p className="font-medium text-gray-700">{getServiceName(offering.serviceId)}</p>
+                        <p className="text-sm text-gray-500">{offering.paymentType === 'daily' ? 'Daily rate' : 'One-time fee'}</p>
                         </div>
-                        <p className="font-semibold text-lg text-primary">${(offering.price / 100).toFixed(2)}</p>
+                        <p className="font-semibold text-lg text-primary">{formatPriceWithType(offering)}</p>
                     </li>
                     ))}
                 </ul>
@@ -159,8 +179,13 @@ export function ContractorProfileServiceManager({
                 {localOfferings.map((offering) => (
                 <li key={offering.serviceId} className="flex items-center justify-between p-4 border rounded-md shadow-sm">
                     <div>
-                    <p className="font-semibold">{getServiceName(offering.serviceId)}</p>
-                    <p className="text-sm text-muted-foreground">Current Price: ${(offering.price / 100).toFixed(2)}</p>
+                      <p className="font-semibold">{getServiceName(offering.serviceId)}</p>
+                      <p className="text-sm text-muted-foreground">
+                        Current Price: {formatPriceWithType(offering)}
+                        <span className="ml-2 px-2 py-0.5 bg-gray-100 rounded-md text-xs">
+                          {offering.paymentType === 'daily' ? 'Daily rate' : 'One-time fee'}
+                        </span>
+                      </p>
                     </div>
                     <div className="space-x-2 flex items-center">
                     <Button variant="outline" onClick={() => { setEditingOffering(offering); setShowAddForm(false); }} disabled={isEditPending || isDeletePending || isAddPending}>
@@ -213,6 +238,19 @@ export function ContractorProfileServiceManager({
                 <Label htmlFor="price">Your Price (USD)</Label>
                 <Input name="price" type="number" step="0.01" min="0.01" placeholder="e.g., 25.00" required />
               </div>
+              <div>
+                <Label>Payment Type</Label>
+                <RadioGroup name="paymentType" defaultValue="daily" className="mt-2">
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="daily" id="daily" />
+                    <Label htmlFor="daily" className="cursor-pointer">Daily Rate (charged per day)</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="one_time" id="one_time" />
+                    <Label htmlFor="one_time" className="cursor-pointer">One-time Fee (flat rate)</Label>
+                  </div>
+                </RadioGroup>
+              </div>
             </CardContent>
             <div className="flex justify-end space-x-2 p-6 pt-0">
                 <Button type="button" variant="outline" onClick={() => setShowAddForm(false)} disabled={isAddPending}>Cancel</Button>
@@ -228,14 +266,27 @@ export function ContractorProfileServiceManager({
       {editingOffering && (
         <Card className="border-primary border-2">
           <CardHeader>
-            <CardTitle>Edit Price for: {getServiceName(editingOffering.serviceId)}</CardTitle>
+            <CardTitle>Edit {getServiceName(editingOffering.serviceId)}</CardTitle>
             {editFormState?.message && <p className="text-sm text-green-600 mt-1">{editFormState.message}</p>}
           </CardHeader>
           <form action={handleUpdateServiceSubmit}>
             <CardContent className="space-y-4">
               <div>
-                <Label htmlFor="price">New Price (USD)</Label>
+                <Label htmlFor="price">Price (USD)</Label>
                 <Input name="price" type="number" step="0.01" min="0.01" defaultValue={(editingOffering.price / 100).toFixed(2)} required />
+              </div>
+              <div>
+                <Label>Payment Type</Label>
+                <RadioGroup name="paymentType" defaultValue={editingOffering.paymentType || 'daily'} className="mt-2">
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="daily" id="edit-daily" />
+                    <Label htmlFor="edit-daily" className="cursor-pointer">Daily Rate (charged per day)</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="one_time" id="edit-one_time" />
+                    <Label htmlFor="edit-one_time" className="cursor-pointer">One-time Fee (flat rate)</Label>
+                  </div>
+                </RadioGroup>
               </div>
             </CardContent>
             <div className="flex justify-end space-x-2 p-6 pt-0">

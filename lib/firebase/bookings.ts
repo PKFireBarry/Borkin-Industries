@@ -21,8 +21,8 @@ function calculateNumberOfDays(startDateISO: string, endDateISO: string): number
   return diffDays
 }
 
-// Replace placeholder with actual Firestore fetch
-async function getContractorServiceDailyRate(contractorId: string, serviceId: string): Promise<number> {
+// Fetch the service offering and calculate the amount
+async function calculatePaymentAmount(contractorId: string, serviceId: string, numberOfDays: number): Promise<{amount: number, paymentType: 'one_time' | 'daily'}> {
   const serviceOfferingPath = `contractors/${contractorId}/serviceOfferings/${serviceId}`;
   const serviceOfferingRef = doc(db, serviceOfferingPath);
   
@@ -31,7 +31,14 @@ async function getContractorServiceDailyRate(contractorId: string, serviceId: st
     if (serviceOfferingSnap.exists()) {
       const offeringData = serviceOfferingSnap.data() as ContractorServiceOffering;
       if (typeof offeringData.price === 'number' && offeringData.price > 0) {
-        return offeringData.price; // Assuming price is stored in cents
+        const paymentType = offeringData.paymentType || 'daily';
+        
+        // If it's a one-time fee, ignore numberOfDays
+        const amount = paymentType === 'one_time' 
+          ? offeringData.price 
+          : offeringData.price * numberOfDays;
+          
+        return { amount, paymentType };
       } else {
         console.error(`Invalid price for service offering: ${serviceOfferingPath}`, offeringData);
         throw new Error(`Invalid price configured for service ID: ${serviceId}`);
@@ -42,8 +49,16 @@ async function getContractorServiceDailyRate(contractorId: string, serviceId: st
     }
   } catch (error) {
     console.error(`Error fetching service offering ${serviceOfferingPath}:`, error);
-    throw new Error(`Could not fetch service details for ID: ${serviceId}.`); // Re-throw or handle as appropriate
+    throw new Error(`Could not fetch service details for ID: ${serviceId}.`);
   }
+}
+
+// Service information including payment type, price, etc.
+interface BookingService {
+  serviceId: string;
+  paymentType: 'one_time' | 'daily';
+  price: number; // in cents
+  name?: string;
 }
 
 export async function getBookingsForClient(clientId: string): Promise<Booking[]> {
@@ -67,10 +82,15 @@ export async function addTestBooking(booking: Booking): Promise<void> {
 // `review` is optional in Booking and not part of initial booking creation data.
 // `notes` (if it were a field) would be an example of an optional field passed in data.
 
-interface AddBookingDataInput extends Omit<Booking, 'id' | 'date' | 'numberOfDays' | 'paymentAmount' | 'platformFee' | 'paymentIntentId' | 'paymentClientSecret' | 'status' | 'paymentStatus' | 'createdAt' | 'updatedAt' | 'serviceType' | 'review'> {
+interface AddBookingDataInput extends Omit<Booking, 
+  'id' | 'numberOfDays' | 'paymentAmount' | 'platformFee' | 'paymentIntentId' | 
+  'paymentClientSecret' | 'status' | 'paymentStatus' | 'createdAt' | 'updatedAt'> {
   stripeCustomerId: string;
-  serviceId: string; // This will populate Booking.serviceType and is used to fetch the rate
-  // paymentMethodId is optional in Booking, so it can be here or not.
+  totalAmount?: number; // Optional pre-calculated total amount in cents
+  time?: {
+    startTime: string;
+    endTime: string;
+  };
 }
 
 export async function addBooking(data: AddBookingDataInput): Promise<string> {
@@ -97,18 +117,58 @@ export async function addBooking(data: AddBookingDataInput): Promise<string> {
     throw new Error("Booking must be for at least one day.");
   }
 
-  const dailyRateInCents = await getContractorServiceDailyRate(data.contractorId, data.serviceId);
-  if (dailyRateInCents <= 0) {
-    throw new Error("Invalid service daily rate.");
+  // Calculate total payment amount from services
+  let paymentAmountInCents = 0;
+  
+  if (data.totalAmount) {
+    // Use pre-calculated total if provided
+    paymentAmountInCents = data.totalAmount;
+  } else if (data.services && data.services.length > 0) {
+    // Calculate from services array
+    data.services.forEach(service => {
+      if (service.paymentType === 'one_time') {
+        paymentAmountInCents += service.price;
+      } else { // daily
+        paymentAmountInCents += service.price * numberOfDays;
+      }
+    });
+  } else if (data.serviceType) {
+    // Legacy support for single service
+    // If services array is not present but serviceType is, fetch the service
+    const contractorId = data.contractorId;
+    const serviceId = data.serviceType;
+    
+    try {
+      const serviceOfferingRef = doc(db, `contractors/${contractorId}/serviceOfferings/${serviceId}`);
+      const serviceSnap = await getDoc(serviceOfferingRef);
+      
+      if (serviceSnap.exists()) {
+        const offeringData = serviceSnap.data() as ContractorServiceOffering;
+        const paymentType = offeringData.paymentType || 'daily';
+        
+        if (paymentType === 'one_time') {
+          paymentAmountInCents = offeringData.price;
+        } else {
+          paymentAmountInCents = offeringData.price * numberOfDays;
+        }
+      } else {
+        throw new Error(`Service offering not found: ${serviceId}`);
+      }
+    } catch (error) {
+      console.error("Error calculating payment amount:", error);
+      throw new Error("Failed to calculate payment amount from service offering.");
+    }
+  } else {
+    throw new Error("No services specified for booking.");
   }
-
-  const paymentAmountInCents = dailyRateInCents * numberOfDays;
+  
   if (paymentAmountInCents <= 0) {
     throw new Error("Calculated payment amount is invalid.");
   }
 
   const platformFeeInCents = Math.round(paymentAmountInCents * 0.05);
 
+  // Fetch contractor stripe account ID
   let contractorStripeAccountId: string | undefined = undefined;
   try {
     const contractorDocRef = doc(db, "contractors", data.contractorId);
@@ -126,13 +186,20 @@ export async function addBooking(data: AddBookingDataInput): Promise<string> {
   
   const newBookingDocRef = doc(collection(db, 'bookings')); // Create ref to get ID first
 
+  // Create service breakdown for metadata
+  const servicesMetadata = data.services?.map(service => ({
+    id: service.serviceId,
+    type: service.paymentType,
+    price: service.price.toString()
+  })) || [];
+
   const stripeMetadata = {
     booking_id: newBookingDocRef.id, 
     client_id: data.clientId,
     contractor_id: data.contractorId,
-    service_id: data.serviceId,
     num_days: numberOfDays.toString(), // Stripe metadata values must be strings
-    daily_rate_cents: dailyRateInCents.toString()
+    total_services: (data.services?.length || 1).toString(),
+    services: JSON.stringify(servicesMetadata).slice(0, 500) // Limit metadata length
   };
 
   const stripePayload: any = {
@@ -160,21 +227,18 @@ export async function addBooking(data: AddBookingDataInput): Promise<string> {
   }
   const { id: paymentIntentId, clientSecret: piClientSecret } = await piResponse.json();
 
-  // Metadata is set at creation, but if an update is needed, call update API:
-  // (Example: if booking_id couldn't be known before PI creation)
-  // await fetch('/api/stripe/update-payment-intent-metadata', { /* ... */ });
+  // Set a default serviceType for backward compatibility if multiple services exist
+  const serviceType = data.serviceType || (data.services && data.services.length > 0 ? data.services[0].serviceId : null);
 
   const bookingToSave: Booking = {
+    id: newBookingDocRef.id,
     clientId: data.clientId,
     contractorId: data.contractorId,
     petIds: data.petIds,
     startDate: data.startDate,
     endDate: data.endDate,
-    serviceType: data.serviceId, 
-    ...(paymentMethodId && { paymentMethodId }),
-    // ...(data.notes && { notes: data.notes }), // If you add a notes field to AddBookingDataInput & Booking
-
-    id: newBookingDocRef.id,
+    services: data.services || [],
+    serviceType: serviceType || "", // Ensure serviceType is never undefined
     numberOfDays,
     paymentAmount: paymentAmountInCents / 100,
     platformFee: platformFeeInCents / 100,
@@ -184,6 +248,9 @@ export async function addBooking(data: AddBookingDataInput): Promise<string> {
     paymentStatus: 'pending',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+    ...(data.paymentType && { paymentType: data.paymentType }), // For backward compatibility
+    ...(paymentMethodId && { paymentMethodId }),
+    ...(data.time && { time: data.time }), // Add time information if provided
   };
 
   await setDoc(newBookingDocRef, bookingToSave);

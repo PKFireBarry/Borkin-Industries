@@ -25,6 +25,7 @@ async function getAllOfferingsForContractor(contractorId: string): Promise<Contr
     serviceId: docSnap.id,
     contractorUid: contractorId, // Add contractorId explicitly
     price: docSnap.data().price, // Assuming price is a field
+    paymentType: docSnap.data().paymentType || 'daily', // Default to daily if not specified
     // Spread other potential fields from the document data
     ...docSnap.data()
   } as ContractorServiceOffering));
@@ -37,6 +38,7 @@ export async function addServiceOfferingAction(
   const contractorId = formData.get("contractorId") as string;
   const serviceId = formData.get("serviceId") as string;
   const priceString = formData.get("price") as string;
+  const paymentType = formData.get("paymentType") as 'one_time' | 'daily' || 'daily';
 
   if (!contractorId || !serviceId || !priceString) {
     return { error: "Missing required fields." };
@@ -47,9 +49,14 @@ export async function addServiceOfferingAction(
     return { error: "Invalid price. Price must be a positive number." };
   }
 
+  if (paymentType !== 'one_time' && paymentType !== 'daily') {
+    return { error: "Invalid payment type. Must be 'one_time' or 'daily'." };
+  }
+
   const offeringData: Omit<ContractorServiceOffering, 'serviceId'> = { 
     contractorUid: contractorId, 
-    price, 
+    price,
+    paymentType,
   };
 
   try {
@@ -82,6 +89,7 @@ export async function updateServiceOfferingAction(
   const contractorId = formData.get("contractorId") as string;
   const serviceId = formData.get("serviceId") as string; 
   const priceString = formData.get("price") as string;
+  const paymentType = formData.get("paymentType") as 'one_time' | 'daily' || 'daily';
 
   if (!contractorId || !serviceId || !priceString) {
     return { error: "Missing required fields for update." };
@@ -92,6 +100,10 @@ export async function updateServiceOfferingAction(
     return { error: "Invalid price for update. Price must be a positive number." };
   }
 
+  if (paymentType !== 'one_time' && paymentType !== 'daily') {
+    return { error: "Invalid payment type. Must be 'one_time' or 'daily'." };
+  }
+
   try {
     const serviceOfferingRef = getServiceOfferingDocRef(contractorId, serviceId);
     const serviceSnap = await getDoc(serviceOfferingRef);
@@ -100,7 +112,10 @@ export async function updateServiceOfferingAction(
       return { error: "Service offering not found to update. It might have been deleted." };
     }
 
-    await setDoc(serviceOfferingRef, { price: newPrice }, { merge: true }); 
+    await setDoc(serviceOfferingRef, { 
+      price: newPrice,
+      paymentType: paymentType
+    }, { merge: true }); 
 
     const updatedOfferings = await getAllOfferingsForContractor(contractorId);
     revalidatePath("/dashboard/contractor/profile");

@@ -12,6 +12,7 @@ import dynamic from 'next/dynamic'
 import type { ContractorServiceOffering, PlatformService } from '@/types/service';
 import type { Contractor, ContractorApplication, Availability, PaymentInfo, WorkHistory, Rating } from '@/types/contractor';
 import { ContractorProfileServiceManager } from './components/contractor-profile-service-manager';
+import { getAllPlatformServices } from '@/lib/firebase/services'
 
 const MOCK_PLATFORM_SERVICES: PlatformService[] = [
   { id: "ps_1", name: "Dog Walking (30 mins)", description: "A 30-minute walk for your dog." },
@@ -65,6 +66,7 @@ export default function ContractorProfilePage() {
   const [form, setForm] = useState<Omit<Contractor, 'serviceOfferings'>>(initialContractorFormState);
   const [originalForm, setOriginalForm] = useState<Omit<Contractor, 'serviceOfferings'>>(initialContractorFormState);
   const [serviceOfferings, setServiceOfferings] = useState<ContractorServiceOffering[]>([]);
+  const [platformServices, setPlatformServices] = useState<PlatformService[]>([]);
   const [editing, setEditing] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -78,8 +80,9 @@ export default function ContractorProfilePage() {
     setError(null);
     Promise.all([
         getContractorProfile(user.id),
-        getContractorServiceOfferings(user.id)
-    ]).then(([profile, offerings]) => {
+        getContractorServiceOfferings(user.id),
+        getAllPlatformServices()
+    ]).then(([profile, offerings, platformServices]) => {
         if (profile) {
           const profileData: Omit<Contractor, 'serviceOfferings'> = {
             id: profile.id || '',
@@ -115,6 +118,7 @@ export default function ContractorProfilePage() {
             setOriginalForm(baseForm);
         }
         setServiceOfferings(offerings || []);
+        setPlatformServices(platformServices || []);
     }).catch((err) => {
         console.error("Failed to load profile or services:", err);
         setError('Failed to load profile data.')
@@ -266,7 +270,7 @@ export default function ContractorProfilePage() {
         <ContractorProfileServiceManager 
             contractorId={user.id}
             currentOfferings={serviceOfferings} 
-            platformServices={MOCK_PLATFORM_SERVICES}
+            platformServices={platformServices}
             isEditing={editing}
         />
     );

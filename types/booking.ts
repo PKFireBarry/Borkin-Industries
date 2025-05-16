@@ -3,12 +3,25 @@ export interface Booking {
   clientId: string
   contractorId: string
   petIds: string[]
-  serviceType: string // This is the platform service ID, e.g., ps_1
+  
+  // Updated for multiple services
+  services: {
+    serviceId: string
+    paymentType: 'one_time' | 'daily'
+    price: number // Price in cents
+    name?: string // Optional service name for display
+  }[]
   
   // Fields for multi-day booking
   startDate: string // ISO date string
   endDate: string // ISO date string
   numberOfDays: number
+  
+  // Time information
+  time?: {
+    startTime: string // HH:MM format
+    endTime: string // HH:MM format
+  }
 
   status: 'pending' | 'approved' | 'completed' | 'cancelled'
   
@@ -19,6 +32,10 @@ export interface Booking {
   paymentClientSecret?: string // Optional as client doesn't always need it after creation
   paymentMethodId?: string
   paymentStatus: 'pending' | 'paid' | 'refunded' | 'failed' | 'cancelled' // Added 'failed' and 'cancelled'
+  
+  // Keeping for backward compatibility
+  serviceType?: string // Deprecated: Use services array instead
+  paymentType?: 'one_time' | 'daily' // Deprecated: Use services array instead
 
   // Timestamps
   createdAt: string // ISO date string

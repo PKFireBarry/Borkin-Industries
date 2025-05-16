@@ -8,20 +8,8 @@ import dynamic from 'next/dynamic'
 import { useEffect, useState } from 'react'
 import { Button } from "@/components/ui/button";
 import { getContractorServiceOfferings } from "@/lib/firebase/contractors";
+import { getAllPlatformServices } from "@/lib/firebase/services";
 import type { ContractorServiceOffering, PlatformService } from "@/types/service";
-
-// TODO: Consider a shared utility or context for platform services if MOCK is used in multiple places
-const MOCK_PLATFORM_SERVICES_MODAL: PlatformService[] = [
-  { id: "ps_1", name: "Dog Walking (30 mins)", description: "A 30-minute walk for your dog." },
-  { id: "ps_2", name: "Pet Sitting (per hour)", description: "In-home pet sitting, billed hourly." },
-  { id: "ps_3", name: "Medication Administration", description: "Administering prescribed medication." },
-  { id: "ps_4", name: "Nail Trim", description: "Professional nail trimming service." },
-  { id: "dog_walking_30_mins", name: "Dog Walking (30 mins)"},
-  { id: "pet_sitting_hourly", name: "Pet Sitting (per hour)" },
-  { id: "medication_administration", name: "Medication Administration" },
-  { id: "nail_trim", name: "Nail Trim" },
-];
-const getServiceNameModal = (serviceId: string) => MOCK_PLATFORM_SERVICES_MODAL.find(ps => ps.id === serviceId)?.name || serviceId;
 
 interface ContractorProfileModalProps {
   contractor: Contractor | null
@@ -36,6 +24,7 @@ const ContractorMap = dynamic(() => import('@/components/contractor-map'), { ssr
 export function ContractorProfileModal({ contractor, open, onClose, onBookNow, clientLocation }: ContractorProfileModalProps) {
   const [clientLatLng, setClientLatLng] = useState<{ lat: number; lng: number } | null>(null)
   const [serviceOfferings, setServiceOfferings] = useState<ContractorServiceOffering[]>([])
+  const [platformServices, setPlatformServices] = useState<PlatformService[]>([])
   const [isLoadingServices, setIsLoadingServices] = useState(false)
 
   useEffect(() => {
@@ -53,38 +42,63 @@ export function ContractorProfileModal({ contractor, open, onClose, onBookNow, c
   useEffect(() => {
     if (open && contractor) {
       setIsLoadingServices(true)
-      getContractorServiceOfferings(contractor.id)
-        .then(offerings => {
-          setServiceOfferings(offerings)
-        })
-        .catch(err => {
-          console.error("Error fetching contractor services for modal:", err)
-          setServiceOfferings([]) // Set to empty or handle error display
-        })
-        .finally(() => {
-          setIsLoadingServices(false)
-        })
+      async function fetchData() {
+        try {
+          const [offerings, services] = await Promise.all([
+            getContractorServiceOfferings(contractor.id),
+            getAllPlatformServices()
+          ]);
+          
+          setServiceOfferings(offerings);
+          setPlatformServices(services);
+        } catch (err) {
+          console.error("Error fetching data:", err);
+          setServiceOfferings([]);
+        } finally {
+          setIsLoadingServices(false);
+        }
+      }
+      
+      fetchData();
     } else {
-      setServiceOfferings([]) // Clear when modal closes or no contractor
+      setServiceOfferings([]);
+      setIsLoadingServices(false);
     }
   }, [open, contractor])
 
   if (!contractor) return null
 
-  // DEBUG: Log contractor location
-  if (contractor) {
-    // eslint-disable-next-line no-console
-    console.log('Contractor location:', contractor.locationLat, contractor.locationLng)
-    console.log('Client location:', clientLatLng)
-  }
+  // At this point, we know contractor is not null
+  const validContractor = contractor as Contractor;
 
   // Helper to get service name - assumes serviceOfferings might have denormalized name,
   // or falls back to serviceId. A proper shared utility for platform services is better long-term.
-  const getServiceName = (serviceId: string) => {
-    // In a real app, this would look up from a fetched list of PlatformService
-    const platformService = MOCK_PLATFORM_SERVICES_MODAL.find(ps => ps.id === serviceId);
-    return platformService?.name || serviceId;
-  };
+  const getServiceName = (serviceId: string) => 
+    platformServices.find(ps => ps.id === serviceId)?.name || serviceId;
+
+  // Safely access contractor properties to avoid null reference errors
+  const contractorName = validContractor.name || 'Contractor';
+  const contractorInitial = contractorName ? contractorName[0].toUpperCase() : 'C';
+  const contractorProfileImage = validContractor.profileImage || '/avatars/default.png';
+  const contractorEmail = validContractor.email || '';
+  const contractorLocation = [validContractor.city, validContractor.state].filter(Boolean).join(', ');
+  const contractorDrivingRange = validContractor.drivingRange || 'N/A';
+  const contractorBio = validContractor.bio || 'No bio provided.';
+
+  // Calculate driving range in miles
+  const drivingRangeMiles = (() => {
+    if (!validContractor.drivingRange) return 10;
+    const match = validContractor.drivingRange.match(/(\d+(?:\.\d+)?)/);
+    return match ? parseFloat(match[1]) : 10;
+  })();
+
+  // For availability section
+  const unavailableDates = validContractor.availability?.unavailableDates || [];
+  const hasUnavailableDates = unavailableDates.length > 0;
+
+  // For ratings section
+  const contractorRatings = validContractor.ratings || [];
+  const hasRatings = contractorRatings.length > 0;
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -92,16 +106,16 @@ export function ContractorProfileModal({ contractor, open, onClose, onBookNow, c
         <div className="p-6 space-y-6 bg-card text-card-foreground overflow-y-auto max-h-[calc(100vh_-_5rem)]">
           <div className="flex flex-col md:flex-row items-center md:items-start gap-6 pb-6 border-b">
             <Avatar className="w-28 h-28 md:w-36 md:h-36 border-4 border-primary shadow-lg">
-              <AvatarImage src={contractor.profileImage || '/avatars/default.png'} alt={contractor.name || 'Contractor'} className="object-cover"/>
-              <AvatarFallback className="text-4xl bg-primary/10">{contractor.name ? contractor.name[0].toUpperCase() : 'C'}</AvatarFallback>
+              <AvatarImage src={contractorProfileImage} alt={contractorName} className="object-cover"/>
+              <AvatarFallback className="text-4xl bg-primary/10">{contractorInitial}</AvatarFallback>
             </Avatar>
             <div className="text-center md:text-left">
-              <DialogTitle className="text-3xl font-bold mb-1">{contractor.name}</DialogTitle>
-              <p className="text-sm text-muted-foreground mb-0.5">{contractor.email}</p>
+              <DialogTitle className="text-3xl font-bold mb-1">{contractorName}</DialogTitle>
+              <p className="text-sm text-muted-foreground mb-0.5">{contractorEmail}</p>
               <p className="text-xs text-muted-foreground">
-                {[contractor.city, contractor.state].filter(Boolean).join(', ')}
+                {contractorLocation}
               </p>
-              <p className="text-xs text-muted-foreground mt-1">Driving Range: {contractor.drivingRange || 'N/A'}</p>
+              <p className="text-xs text-muted-foreground mt-1">Driving Range: {contractorDrivingRange}</p>
             </div>
           </div>
 
@@ -109,10 +123,8 @@ export function ContractorProfileModal({ contractor, open, onClose, onBookNow, c
             <div className="space-y-6">
               <div>
                 <h3 className="text-lg font-semibold mb-2 text-primary">About Me</h3>
-                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{contractor.bio || 'No bio provided.'}</p>
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{contractorBio}</p>
               </div>
-
-
 
               <div>
                 <h3 className="text-lg font-semibold mb-2 text-primary">Services Offered</h3>
@@ -134,9 +146,9 @@ export function ContractorProfileModal({ contractor, open, onClose, onBookNow, c
 
               <div>
                 <h3 className="text-lg font-semibold mb-2 text-primary">Availability Notes</h3>
-                {contractor.availability?.unavailableDates && contractor.availability.unavailableDates.length > 0 ? (
+                {hasUnavailableDates ? (
                     <ul className="list-disc list-inside pl-1 space-y-1 text-sm text-muted-foreground">
-                        {contractor.availability.unavailableDates.map(date => 
+                        {unavailableDates.map(date => 
                             <li key={date}>Unavailable on: {new Date(date).toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}</li>
                         )}
                     </ul>
@@ -147,17 +159,14 @@ export function ContractorProfileModal({ contractor, open, onClose, onBookNow, c
             </div>
 
             <div className="space-y-6">
-              {contractor.locationLat && contractor.locationLng ? (
+              {validContractor.locationLat && validContractor.locationLng ? (
                 <div> 
                     <h3 className="text-lg font-semibold mb-2 text-primary">Service Area</h3>
                     <div className="w-full h-72 md:h-80 rounded-md overflow-hidden border shadow-sm">
                     <ContractorMap
-                        lat={contractor.locationLat}
-                        lng={contractor.locationLng}
-                        miles={(() => {
-                        const match = contractor.drivingRange?.match(/(\d+(?:\.\d+)?)/)
-                        return match ? parseFloat(match[1]) : 10
-                        })()}
+                        lat={validContractor.locationLat}
+                        lng={validContractor.locationLng}
+                        miles={drivingRangeMiles}
                         clientLat={clientLatLng?.lat}
                         clientLng={clientLatLng?.lng}
                     />
@@ -172,9 +181,9 @@ export function ContractorProfileModal({ contractor, open, onClose, onBookNow, c
 
               <div>
                 <h3 className="text-lg font-semibold mb-2 text-primary">Ratings & Reviews</h3>
-                {contractor.ratings && contractor.ratings.length > 0 ? (
+                {hasRatings ? (
                   <div className="space-y-3 max-h-80 overflow-y-auto pr-2">
-                    {contractor.ratings.slice(0, 5).map((review, idx) => ( // Show latest 5 or so
+                    {contractorRatings.slice(0, 5).map((review, idx) => ( // Show latest 5 or so
                       <div key={idx} className="p-3 bg-secondary/50 rounded-md shadow-sm text-sm">
                         <div className="flex items-center mb-1">
                           {[...Array(5)].map((_, i) => (
@@ -196,7 +205,7 @@ export function ContractorProfileModal({ contractor, open, onClose, onBookNow, c
           <div className="w-full pt-6 border-t flex flex-col sm:flex-row gap-3">
             <Button 
               className="flex-1 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-sm"
-              onClick={() => onBookNow(contractor.id)} 
+              onClick={() => onBookNow(validContractor.id)} 
               type="button"
             >
               Request Booking

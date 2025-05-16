@@ -11,18 +11,27 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import dynamic from 'next/dynamic'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Pet } from '@/types/client'
-import { PawPrint, Pill, Utensils, Clock, Dog, Info } from 'lucide-react'
+import { PawPrint, Pill, Utensils, Clock, Dog, Info, Package } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import type { Booking } from '@/types/booking'
 
+// Define Gig interface directly without extending Booking
 interface Gig {
   id: string
   clientId?: string
   clientName: string
   pets: string[]
-  serviceType: string
-  date: string
-  time: string
+  serviceType?: string
+  services?: {
+    serviceId: string
+    price: number
+    paymentType: 'one_time' | 'daily'
+    name?: string
+  }[]
+  date?: string
+  time?: { startTime?: string; endTime?: string }
   status: 'pending' | 'approved' | 'completed' | 'cancelled'
-  paymentStatus: 'unpaid' | 'escrow' | 'paid' | 'cancelled'
+  paymentStatus: 'pending' | 'paid' | 'escrow' | 'cancelled' | 'failed'
   contractorCompleted: boolean
   paymentAmount?: number
   platformFee?: number
@@ -30,6 +39,10 @@ interface Gig {
   netPayout?: number
   review?: { rating: number; comment?: string }
   petIds?: string[]
+  startDate?: string
+  endDate?: string
+  numberOfDays?: number
+  paymentIntentId?: string
 }
 
 const statusLabels = {
@@ -40,6 +53,31 @@ const statusLabels = {
 }
 
 const ContractorMap = dynamic(() => import('@/components/contractor-map'), { ssr: false })
+
+// Add a helper function to calculate hours between start and end time
+function calculateHours(startTime?: string, endTime?: string): number {
+  if (!startTime || !endTime) return 0;
+  
+  const [startHour, startMinute] = startTime.split(':').map(Number);
+  const [endHour, endMinute] = endTime.split(':').map(Number);
+  
+  let hours = endHour - startHour;
+  let minutes = endMinute - startMinute;
+  
+  // Handle negative minutes by borrowing an hour
+  if (minutes < 0) {
+    hours -= 1;
+    minutes += 60;
+  }
+  
+  // If end time is earlier than start time, assume it's for the next day
+  if (hours < 0) {
+    hours += 24;
+  }
+  
+  // Convert to decimal hours (e.g., 1 hour 30 minutes = 1.5 hours)
+  return Math.round((hours + minutes / 60) * 10) / 10;
+}
 
 export default function ContractorGigsPage() {
   const { isLoaded, isAuthorized } = useRequireRole('contractor')
@@ -56,6 +94,9 @@ export default function ContractorGigsPage() {
   const [distanceMiles, setDistanceMiles] = useState<number | null>(null)
   const [contractorDrivingRange, setContractorDrivingRange] = useState<number>(0)
   const [bookedPetsDetails, setBookedPetsDetails] = useState<Pet[]>([])
+  const [cancelGigId, setCancelGigId] = useState<string | null>(null)
+  const [cancelError, setCancelError] = useState<string | null>(null)
+  const [isCancelling, setIsCancelling] = useState(false)
 
   async function fetchGigs() {
     if (!user) return
@@ -81,6 +122,7 @@ export default function ContractorGigsPage() {
           clientName,
           pets: petNames,
           serviceType: b.serviceType || 'N/A',
+          services: b.services || [],
           date: b.startDate || b.date || '',
           time: b.time || '',
           status: b.status || 'pending',
@@ -92,6 +134,10 @@ export default function ContractorGigsPage() {
           netPayout: b.netPayout,
           review: b.review,
           petIds: b.petIds,
+          startDate: b.startDate || '',
+          endDate: b.endDate || '',
+          numberOfDays: b.numberOfDays || 1,
+          paymentIntentId: b.paymentIntentId,
         }
       }))
       setGigs(mapped)
@@ -278,16 +324,78 @@ export default function ContractorGigsPage() {
     }
   }
 
+  const handleEmergencyCancel = async () => {
+    if (!cancelGigId) return
+    setIsCancelling(true)
+    setCancelError(null)
+    try {
+      const gigToCancel = gigs.find(g => g.id === cancelGigId)
+      if (!gigToCancel) throw new Error('Gig not found')
+      
+      // Cancel the payment intent in Stripe if it exists
+      if (gigToCancel.paymentIntentId) {
+        try {
+          const res = await fetch('/api/stripe/cancel-payment-intent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ paymentIntentId: gigToCancel.paymentIntentId }),
+          })
+          const data = await res.json()
+          if (!res.ok) {
+            throw new Error(data.error || 'Failed to cancel payment')
+          }
+        } catch (err: any) {
+          console.error('Failed to cancel payment intent:', err)
+          // Continue with booking cancellation even if payment cancellation fails
+        }
+      }
+      
+      // Update booking status to cancelled
+      await updateBookingStatus(cancelGigId, 'cancelled')
+      setCancelGigId(null)
+      await fetchGigs()
+    } catch (err: any) {
+      setCancelError(err?.message || 'Failed to cancel gig')
+    } finally {
+      setIsCancelling(false)
+    }
+  }
+
   // Helper to format date(s)
   const safeDateString = (date: string) => {
     if (!date) return ''
     const d = new Date(date)
     return isNaN(d.getTime()) ? '' : d.toLocaleString()
   }
+
+  // Update the formatDateTime function to include hours calculation if time is provided
+  const formatDateTime = (date: string | undefined, time?: {startTime?: string, endTime?: string}) => {
+    if (!date) return 'N/A';
+    
+    const formattedDate = safeDateString(date);
+    if (!time) return formattedDate;
+    
+    const { startTime, endTime } = time;
+    if (startTime && endTime) {
+      const hoursPerDay = calculateHours(startTime, endTime);
+      return `${formattedDate}, ${startTime} - ${endTime} (${hoursPerDay} hours)`;
+    } else if (startTime) {
+      return `${formattedDate}, ${startTime}`;
+    }
+    
+    return formattedDate;
+  };
+
+  // Update the getGigDisplayDate function to include time information
   const getGigDisplayDate = (g: Gig) => {
-    const start = g.date ?? ''
-    return safeDateString(start)
-  }
+    const start = g.startDate ?? g.date ?? '';
+    
+    if (g.time?.startTime) {
+      return formatDateTime(start, g.time);
+    }
+    
+    return safeDateString(start);
+  };
 
   // Helper for net payout
   const getNetPayout = (gig: Gig) => {
@@ -321,6 +429,43 @@ export default function ContractorGigsPage() {
     ) : null
   );
 
+  // Format price for display - fixing the Stripe cents formatting issue
+  const formatPrice = (price: number, paymentType: 'one_time' | 'daily', numberOfDays: number = 1) => {
+    // Convert from cents to dollars if price is over 100
+    // This handles the case where prices might be stored in cents in the database
+    const isInCents = price > 100 && price % 100 === 0;
+    const displayPrice = isInCents ? price / 100 : price;
+
+    if (paymentType === 'one_time') {
+      return `$${displayPrice.toFixed(2)}`;
+    } else {
+      // For daily services, show total and rate
+      const dailyRate = displayPrice;
+      const totalPrice = dailyRate * numberOfDays;
+      return `$${dailyRate.toFixed(2)}/day × ${numberOfDays} day${numberOfDays !== 1 ? 's' : ''} = $${totalPrice.toFixed(2)}`;
+    }
+  };
+
+  // Add a helper function to get service names
+  const getServiceNames = (gig: Gig) => {
+    if (!gig.services || gig.services.length === 0) {
+      return gig.serviceType || 'N/A';
+    }
+    
+    // If we have only one service, show its name
+    if (gig.services.length === 1) {
+      return gig.services[0].name || gig.services[0].serviceId;
+    }
+    
+    // If we have multiple services, show the first one with a +N indicator
+    return `${gig.services[0].name || gig.services[0].serviceId} +${gig.services.length - 1} more`;
+  };
+
+  // Helper to check if a gig has multiple services
+  const hasMultipleServices = (gig: Gig) => {
+    return gig.services && gig.services.length > 1;
+  };
+
   if (!isLoaded || !isAuthorized) return null
   if (loading) return <div className="p-8 text-center text-muted-foreground">Loading gigs...</div>
   if (error) return <div className="p-8 text-center text-destructive">{error}</div>
@@ -352,10 +497,20 @@ export default function ContractorGigsPage() {
             <Card key={gig.id} className="shadow-sm">
               <CardContent className="py-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
-                  <CardTitle className="mb-2">{gig.serviceType}</CardTitle>
+                  <CardTitle className="mb-2 flex items-center">
+                    {hasMultipleServices(gig) ? (
+                      <Badge variant="outline" className="mr-2 bg-primary/10 text-primary">
+                        <Package className="h-3 w-3 mr-1" />
+                        {gig.services?.length} services
+                      </Badge>
+                    ) : null}
+                    {getServiceNames(gig)}
+                  </CardTitle>
                   <div className="text-sm mb-1"><span className="font-medium">Client:</span> {gig.clientName}</div>
                   <div className="text-sm mb-1"><span className="font-medium">Pets:</span> {gig.pets.join(', ')}</div>
-                  <div className="text-sm mb-1"><span className="font-medium">Date:</span> {getGigDisplayDate(gig)}{gig.time ? ` at ${gig.time}` : ''}</div>
+                  <div className="text-sm mb-1">
+                    <span className="font-medium">Date & Time:</span> {getGigDisplayDate(gig)}
+                  </div>
                   <div className="text-sm mb-1"><span className="font-medium">Status:</span> <StatusBadge status={gig.status} /></div>
                   {gig.review && (
                     <span className="text-xs text-muted-foreground">Review: <span className="font-medium text-foreground">{gig.review.rating}★</span> {gig.review.comment}</span>
@@ -378,9 +533,19 @@ export default function ContractorGigsPage() {
                       </>
                     )}
                     {gig.status === 'approved' && !gig.contractorCompleted && (
-                      <Button variant="default" disabled={actionLoading === gig.id} onClick={() => handleMarkCompleted(gig.id)}>
-                        {actionLoading === gig.id ? 'Marking...' : 'Mark as Completed'}
-                      </Button>
+                      <>
+                        <Button variant="default" disabled={actionLoading === gig.id} onClick={() => handleMarkCompleted(gig.id)}>
+                          {actionLoading === gig.id ? 'Marking...' : 'Mark as Completed'}
+                        </Button>
+                        <Button 
+                          variant="destructive" 
+                          className="text-sm px-2 py-1"
+                          onClick={() => setCancelGigId(gig.id)}
+                          disabled={actionLoading === gig.id}
+                        >
+                          Cancel
+                        </Button>
+                      </>
                     )}
                     {gig.status === 'approved' && gig.contractorCompleted && (
                       <span className="text-xs text-muted-foreground">Waiting for client...</span>
@@ -444,22 +609,32 @@ export default function ContractorGigsPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <div className="text-xs text-muted-foreground mb-1">Service Type</div>
-                    <div className="font-medium text-base">{detailGig?.serviceType ?? ''}</div>
+                    <div className="font-medium text-base">
+                      {detailGig?.services && detailGig.services.length > 0 ? (
+                        <div className="space-y-1">
+                          {detailGig.services.map((service, idx) => (
+                            <div key={idx} className="flex items-center">
+                              <Package className="h-4 w-4 mr-1 text-primary" />
+                              <span>{service.name || service.serviceId}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        detailGig?.serviceType || 'N/A'
+                      )}
+                    </div>
                   </div>
                   <div>
                     <div className="text-xs text-muted-foreground mb-1">Status</div>
-                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
-                      detailGig?.status === 'completed' ? 'bg-green-100 text-green-800' :
-                      detailGig?.status === 'cancelled' ? 'bg-red-100 text-red-800' :
-                      detailGig?.status === 'approved' ? 'bg-blue-100 text-blue-800' :
-                      'bg-yellow-100 text-yellow-800' // Default for pending or other statuses
-                    }`}>
+                    <span className="inline-block px-2 py-0.5 rounded bg-green-100 text-green-800 text-xs font-medium">
                       {detailGig?.status?.charAt(0).toUpperCase() + detailGig?.status?.slice(1)}
                     </span>
                   </div>
                   <div>
                     <div className="text-xs text-muted-foreground mb-1">Date & Time</div>
-                    <div className="font-medium text-base">{getGigDisplayDate(detailGig)}{detailGig.time ? ` at ${detailGig.time}` : ''}</div>
+                    <div className="font-medium text-base">
+                      {getGigDisplayDate(detailGig)}
+                    </div>
                   </div>
                   <div>
                     <div className="text-xs text-muted-foreground mb-1">Payment Status</div>
@@ -472,6 +647,37 @@ export default function ContractorGigsPage() {
                        {detailGig?.paymentStatus?.charAt(0).toUpperCase() + detailGig?.paymentStatus?.slice(1)}
                     </span>
                   </div>
+
+                  {/* Add Duration Details section */}
+                  {detailGig?.time?.startTime && detailGig?.time?.endTime && (
+                    <div className="sm:col-span-2 border rounded-md p-3 mt-2 bg-muted/50">
+                      <h4 className="text-sm font-semibold mb-2 flex items-center">
+                        <Clock className="w-4 h-4 mr-1 text-primary" />
+                        Duration Details
+                      </h4>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                        <div>
+                          <span className="text-muted-foreground">Hours per day:</span>
+                          <span className="font-medium ml-2">
+                            {calculateHours(detailGig.time.startTime, detailGig.time.endTime)} hours
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Total days:</span>
+                          <span className="font-medium ml-2">
+                            {detailGig.numberOfDays || 1} day{(detailGig.numberOfDays || 1) !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                        <div className="col-span-2">
+                          <span className="text-muted-foreground">Total service hours:</span>
+                          <span className="font-medium ml-2">
+                            {calculateHours(detailGig.time.startTime, detailGig.time.endTime) * (detailGig.numberOfDays || 1)} hours
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
                   {distanceMiles !== null && clientLatLng && contractorLatLng && (
                     <div className="sm:col-span-2 mt-2">
                       <div className="text-xs text-muted-foreground mb-1">Distance to Gig</div>
@@ -479,6 +685,59 @@ export default function ContractorGigsPage() {
                     </div>
                   )}
                 </div>
+              </div>
+              {/* Display payment breakdown for each service */}
+              <div className="border border-gray-200 rounded-md p-4 mt-4">
+                <h3 className="text-base font-semibold mb-3 flex items-center">
+                  <Package className="w-5 h-5 mr-2 text-primary"/>
+                  Service Details
+                </h3>
+                
+                {detailGig?.services && detailGig.services.length > 0 ? (
+                  <div className="space-y-3">
+                    {detailGig.services.map((service, idx) => (
+                      <div key={idx} className="flex justify-between items-center pb-2">
+                        <div className="flex flex-col">
+                          <span className="font-medium">{service.name || service.serviceId}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {service.paymentType === 'one_time' ? 'One-time payment' : 'Daily rate'}
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-medium">
+                            {formatPrice(service.price, service.paymentType, detailGig.numberOfDays || 1)}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    
+                    <div className="border-t pt-3 mt-2 flex justify-between items-center">
+                      <div className="font-semibold">Total Payment:</div>
+                      <div className="font-semibold text-primary text-lg">
+                        ${((detailGig.paymentAmount || 0)).toFixed(2)}
+                      </div>
+                    </div>
+                    
+                    <div className="border-t border-dashed pt-3 flex justify-between items-center text-sm">
+                      <div className="text-muted-foreground">Platform Fee (5%):</div>
+                      <div className="text-red-600">-${((detailGig.platformFee || 0)).toFixed(2)}</div>
+                    </div>
+                    
+                    <div className="flex justify-between items-center text-sm mb-1">
+                      <div className="text-muted-foreground">Processing Fee:</div>
+                      <div className="text-red-600">-${((detailGig.stripeFee || 0)).toFixed(2)}</div>
+                    </div>
+                    
+                    <div className="border-t pt-3 flex justify-between items-center">
+                      <div className="font-semibold">Your Payout:</div>
+                      <div className="font-semibold text-green-600 text-lg">
+                        ${getNetPayout(detailGig).toFixed(2)}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-muted-foreground">No service details available</div>
+                )}
               </div>
               {/* Enhanced Pet Information Section */}
               {bookedPetsDetails.length > 0 && (
@@ -534,7 +793,55 @@ export default function ContractorGigsPage() {
           <DialogFooter>
             <div className="flex w-full justify-end gap-2">
               <Button variant="outline" onClick={() => setDetailGig(null)}>Close</Button>
+              {detailGig?.status === 'approved' && !detailGig.contractorCompleted && (
+                <Button 
+                  variant="destructive" 
+                  onClick={() => { 
+                    setCancelGigId(detailGig.id); 
+                    setDetailGig(null); 
+                  }}
+                  disabled={isCancelling}
+                >
+                  Emergency Cancel
+                </Button>
+              )}
             </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Emergency Cancellation Dialog */}
+      <Dialog open={!!cancelGigId} onOpenChange={(open) => !open && setCancelGigId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-destructive">Emergency Gig Cancellation</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm">
+              You are about to cancel this gig. This action is <strong>irreversible</strong> and should only be used in case of:
+            </p>
+            <ul className="list-disc pl-5 text-sm space-y-1">
+              <li>Emergencies that prevent you from fulfilling the gig</li>
+              <li>Serious misunderstandings about service requirements</li>
+              <li>Safety concerns</li>
+            </ul>
+            <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-sm">
+              <p className="font-medium text-amber-800">What happens when you cancel:</p>
+              <ul className="list-disc pl-5 text-amber-700 mt-1">
+                <li>Any pending payment will be canceled</li>
+                <li>The client will be notified</li>
+                <li>The gig will be permanently marked as cancelled</li>
+                <li>Frequent cancellations may affect your contractor rating</li>
+              </ul>
+            </div>
+            {cancelError && <div className="text-destructive text-sm mt-2">{cancelError}</div>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCancelGigId(null)} disabled={isCancelling}>
+              No, Keep Gig
+            </Button>
+            <Button variant="destructive" onClick={handleEmergencyCancel} disabled={isCancelling}>
+              {isCancelling ? 'Cancelling...' : 'Yes, Cancel Gig'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -191,6 +191,15 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
     - [x] Modify `addBooking` action to calculate total price based on daily rate and number of days.
     - [x] Update `BookingRequestForm` to collect date range and display per-day rates and calculated total.
     - [x] Ensure `ContractorProfileServiceManager` labels clarify "price per day".
+- [x] Enhance booking form to support multiple service selections
+  - [x] Update `Booking` interface to support multiple services array
+  - [x] Modify booking form UI to allow selecting multiple services
+  - [x] Update total price calculation based on selected services and their payment types
+  - [x] Update booking/gig detail views to display selected services
+- [x] Update contractor profile modal to fetch platform services from Firestore
+  - [x] Remove MOCK_PLATFORM_SERVICES_MODAL constant
+  - [x] Add state for platform services and fetch them when modal is opened
+  - [x] Update getServiceName function to use fetched platform services
 - [ ] (TODO) Update net proceeds calculations for contractors to use their specific service prices.
 - [x] Remove redundant service management page: `app/dashboard/contractor/services/page.tsx` and its component `app/dashboard/contractor/services/components/contractor-service-management.tsx`.
 
@@ -201,6 +210,9 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
 - [ ] Display contractor calendar to clients
 - [ ] Booking status updates (pending, approved, completed, cancelled)
 - [x] Booking detail view for both client and contractor
+- [x] Emergency booking cancellation for both clients and contractors after approval
+- [x] Add time selection to booking form and display time information in booking details
+- [x] Display booking duration in hours based on start and end times
 
 ### 7. Payments (Stripe)
 - [x] Integrate Stripe for client payments
@@ -219,9 +231,10 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
 - [x] Manage contractors and bookings overview
 - [x] Contractor management page (remove contractors, view payouts summary)
 - [x] Bookings summary with metrics and visualizations
+- [x] Add admin navigation links for admin users
+- [x] Admin services management page for adding/editing/removing platform services
 - [ ] Manage Clients
 - [ ] Add phone number filter to contractor application filters
-- [ ] Create pricing page with tier-based payment structure management
 - [ ] Add coupon management to pricing page
 
 ### 9. Notifications & Reviews

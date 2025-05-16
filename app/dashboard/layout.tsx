@@ -4,27 +4,30 @@ import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { usePathname } from 'next/navigation'
 import { useUser } from '@clerk/nextjs'
+import { AdminNav } from './components/admin-nav'
 
 interface DashboardLayoutProps {
   children: ReactNode
 }
 
 const navItemsByRole = {
-  client: [
-    { href: '/dashboard/profile', label: 'Profile' },
-    { href: '/dashboard/pets', label: 'Pets' },
-    { href: '/dashboard/payments', label: 'Payments' },
-    { href: '/dashboard/bookings', label: 'Bookings' },
-    { href: '/dashboard/contractors', label: 'Contractors' },
-  ],
   contractor: [
+    { href: '/dashboard', label: 'Dashboard' },
     { href: '/dashboard/contractor/profile', label: 'Profile' },
     { href: '/dashboard/contractor/availability', label: 'Availability' },
     { href: '/dashboard/contractor/gigs', label: 'Gigs' },
     { href: '/dashboard/contractor/payments', label: 'Payments' },
     { href: '/dashboard/contractor/reviews', label: 'Reviews' },
   ],
-} as const
+  client: [
+    { href: '/dashboard', label: 'Dashboard' },
+    { href: '/dashboard/bookings', label: 'Bookings' },
+    { href: '/dashboard/contractors', label: 'Find Contractors' },
+    { href: '/dashboard/pets', label: 'My Pets' },
+    { href: '/dashboard/profile', label: 'Profile' },
+    { href: '/dashboard/payments', label: 'Payments' },
+  ],
+}
 
 type UserRole = keyof typeof navItemsByRole
 
@@ -35,7 +38,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const role = user?.publicMetadata?.role as UserRole | undefined
 
   if (isContractorApply) {
-    // Render only the page content, no sidebar/nav
     return <>{children}</>
   }
 
@@ -55,7 +57,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 <Link
                   href={item.href}
                   className={cn(
-                    'block rounded-md px-3 py-2 text-base font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors',
+                    "flex items-center py-2 px-3 rounded-lg transition-colors",
+                    pathname === item.href
+                      ? "bg-primary text-primary-foreground"
+                      : "hover:bg-muted-foreground/10"
                   )}
                 >
                   {item.label}
@@ -63,6 +68,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               </li>
             ))}
           </ul>
+          
+          {/* Add AdminNav component */}
+          <AdminNav />
         </nav>
       )}
       <main className="flex-1 p-6 md:p-10">

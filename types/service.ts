@@ -10,6 +10,7 @@ export interface ContractorServiceOffering {
   serviceId: string; // Corresponds to PlatformService.id
   contractorUid: string;
   price: number; // Price set by the contractor in cents
+  paymentType: 'one_time' | 'daily'; // Whether this is a one-time fee or daily rate
   // Add any other contractor-specific details for this service offering
   // e.g., isActive, specific notes from contractor for this service.
 } 

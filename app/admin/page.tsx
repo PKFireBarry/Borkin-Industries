@@ -20,6 +20,10 @@ export default async function AdminDashboardPage() {
           Contractor Management
           <span className="text-sm ml-2 text-muted-foreground">(Active & Banned Contractors)</span>
         </Link>
+        <Link href="/admin/services" className="block p-4 rounded border hover:bg-muted transition font-medium">
+          Platform Services
+          <span className="text-sm ml-2 text-muted-foreground">(Add/Edit/Remove Services)</span>
+        </Link>
         <Link href="/admin/bookings" className="block p-4 rounded border hover:bg-muted transition font-medium">Booking Logs</Link>
         <Link href="/admin/clients" className="block p-4 rounded border hover:bg-muted transition font-medium">
           Client Management
