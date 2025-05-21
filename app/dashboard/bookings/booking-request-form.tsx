@@ -251,9 +251,12 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
       });
 
       // Data for addBooking
+      const selectedContractor = allContractors.find(c => c.id === selectedContractorId);
       const bookingPayload = {
         clientId: user.id,
         contractorId: selectedContractorId,
+        contractorName: selectedContractor?.name || '',
+        contractorPhone: selectedContractor?.phone || '',
         petIds: selectedPets,
         services: selectedServices,
         startDate: new Date(`${startDate}T${startTime}:00`).toISOString(),
@@ -344,7 +347,7 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
                     type="button" 
                     onClick={() => handleServiceToggle(contractorServices.find(s => s.serviceId === service.serviceId)!)}
                     className="text-red-500 hover:text-red-700 ml-1 p-0.5"
-                  >
+        >
                     <X className="h-3 w-3" />
                   </button>
                 </Badge>
@@ -396,10 +399,10 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="flex-1">
           <label htmlFor="startDate" className="block text-sm font-medium mb-1">Start Date</label>
-          <Input 
-            id="startDate" 
-            type="date" 
-            value={startDate} 
+          <Input
+            id="startDate"
+            type="date"
+            value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
             min={new Date().toISOString().split('T')[0]} 
             required
@@ -407,10 +410,10 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
         </div>
         <div className="flex-1">
           <label htmlFor="endDate" className="block text-sm font-medium mb-1">End Date</label>
-          <Input 
-            id="endDate" 
-            type="date" 
-            value={endDate} 
+          <Input
+            id="endDate"
+            type="date"
+            value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
             min={startDate || new Date().toISOString().split('T')[0]}
             required 

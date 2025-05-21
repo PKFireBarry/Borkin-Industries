@@ -48,6 +48,8 @@ export interface Booking {
   paymentClientSecret?: string
   stripeFee?: number // Actual Stripe fee for the transaction
   netPayout?: number // Actual net payout to contractor
+  contractorName: string // Contractor's name at time of booking
+  contractorPhone: string // Contractor's phone at time of booking
 }
 
 export interface Client {

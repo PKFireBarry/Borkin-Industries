@@ -11,13 +11,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
   try {
+    // Fetch the PaymentIntent first
+    const pi = await stripe.paymentIntents.retrieve(paymentIntentId)
+    if (pi.status !== 'requires_capture') {
+      return NextResponse.json({
+        error: `PaymentIntent is not ready to be captured. Current status: ${pi.status}. Please ensure payment is authorized before releasing funds.`
+      }, { status: 400 })
+    }
     const paymentIntent = await stripe.paymentIntents.capture(paymentIntentId)
     // Update Firestore booking status
     const bookingRef = doc(db, 'bookings', bookingId)
     await updateDoc(bookingRef, { paymentStatus: 'paid', status: 'completed' })
     return NextResponse.json({ ok: true, paymentIntent })
-  } catch (err) {
+  } catch (err: any) {
     console.error('Failed to capture PaymentIntent:', err)
-    return NextResponse.json({ error: 'Stripe error' }, { status: 500 })
+    return NextResponse.json({ error: err?.message || 'Stripe error' }, { status: 500 })
   }
 } 

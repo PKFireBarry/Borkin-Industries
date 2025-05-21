@@ -9,7 +9,7 @@ export default function Header() {
   const [isHovered, setIsHovered] = useState(false)
 
   const navItems = [
-    { href: "#services", label: "Services" },
+    { href: "#hero", label: "Home" },
     { href: "#about", label: "About" },
     { href: "#contact", label: "Contact" },
   ]

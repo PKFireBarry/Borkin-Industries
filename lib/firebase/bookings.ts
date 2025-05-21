@@ -234,6 +234,8 @@ export async function addBooking(data: AddBookingDataInput): Promise<string> {
     id: newBookingDocRef.id,
     clientId: data.clientId,
     contractorId: data.contractorId,
+    contractorName: data.contractorName,
+    contractorPhone: data.contractorPhone,
     petIds: data.petIds,
     startDate: data.startDate,
     endDate: data.endDate,
@@ -349,4 +351,143 @@ export async function getBookingById(bookingId: string): Promise<Booking | null>
     return null;
   }
   return { id: snapshot.id, ...snapshot.data() } as Booking;
+}
+
+/**
+ * Update the services for a pending booking and update the Stripe PaymentIntent
+ */
+export async function updateBookingServices({ bookingId, newServices, userId, newStartDate, newEndDate, newEndTime }: {
+  bookingId: string,
+  newServices: BookingService[],
+  userId: string,
+  newStartDate?: string,
+  newEndDate?: string,
+  newEndTime?: string,
+}): Promise<Booking & { paymentRequiresAction?: boolean; paymentClientSecret?: string }> {
+  // Fetch the booking
+  const bookingRef = doc(db, 'bookings', bookingId)
+  const bookingSnap = await getDoc(bookingRef)
+  if (!bookingSnap.exists()) throw new Error('Booking not found')
+  const booking = bookingSnap.data() as Booking
+
+  // Only allow if not completed or cancelled
+  if (booking.status === 'completed' || booking.status === 'cancelled') throw new Error('Cannot edit completed or cancelled bookings')
+  if (booking.clientId !== userId) throw new Error('You do not have permission to edit this booking')
+
+  // Use new dates if provided, else current
+  const startDate = newStartDate || booking.startDate
+  const endDate = newEndDate || booking.endDate
+  const endTime = newEndTime || booking.time?.endTime
+
+  // Validate dates
+  if (new Date(startDate) > new Date(endDate)) throw new Error('Start date must be before end date')
+  if (new Date(startDate) < new Date()) throw new Error('Cannot set start date in the past')
+
+  // Only allow service changes if pending
+  let servicesToSave = booking.services
+  if (booking.status === 'pending') {
+    servicesToSave = newServices
+  }
+
+  // Recalculate total
+  const numberOfDays = calculateNumberOfDays(startDate, endDate)
+  let newTotal = 0
+  servicesToSave.forEach(service => {
+    if (service.paymentType === 'one_time') {
+      newTotal += service.price
+    } else {
+      newTotal += service.price * numberOfDays
+    }
+  })
+  if (newTotal <= 0) throw new Error('Total must be greater than zero')
+  const newPlatformFee = Math.round(newTotal * 0.05)
+
+  // Get contractor's Stripe account ID
+  const contractorRef = doc(db, 'contractors', booking.contractorId)
+  const contractorSnap = await getDoc(contractorRef)
+  if (!contractorSnap.exists()) throw new Error('Contractor not found')
+  const contractorStripeAccountId = contractorSnap.data()?.stripeAccountId
+  if (!contractorStripeAccountId) throw new Error('Contractor has no Stripe account')
+
+  // Get client Stripe customer ID and currency
+  const clientRef = doc(db, 'clients', booking.clientId)
+  const clientSnap = await getDoc(clientRef)
+  if (!clientSnap.exists()) throw new Error('Client not found')
+  const stripeCustomerId = clientSnap.data()?.stripeCustomerId
+  if (!stripeCustomerId) throw new Error('Client has no Stripe customer ID')
+  // Default to USD; update if multi-currency support is added
+  const currency = 'usd'
+
+  // Fetch default payment method if not present on booking
+  let paymentMethodId: string | undefined = booking.paymentMethodId
+  if (!paymentMethodId) {
+    try {
+      const res = await fetch('/api/stripe/list-payment-methods', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerId: stripeCustomerId }),
+      })
+      if (res.ok) {
+        const { paymentMethods } = await res.json()
+        const defaultCard = paymentMethods.find((pm: any) => pm.isDefault) || paymentMethods[0]
+        if (defaultCard) paymentMethodId = defaultCard.id
+      }
+    } catch (err) {
+      // Optionally log error
+    }
+  }
+
+  // Update the PaymentIntent
+  const updateRes = await fetch('/api/stripe/update-payment-intent', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      paymentIntentId: booking.paymentIntentId,
+      newAmount: newTotal,
+      currency,
+      customerId: stripeCustomerId,
+      contractorId: booking.contractorId,
+      ...(paymentMethodId ? { paymentMethodId } : {}),
+    }),
+  })
+  const updateData = await updateRes.json()
+  if (!updateRes.ok) {
+    throw new Error(updateData.error || 'Failed to update payment intent')
+  }
+
+  let paymentIntentId = booking.paymentIntentId
+  let paymentClientSecret = booking.paymentClientSecret
+  let paymentRequiresAction = false
+  // Only require payment action if status is requires_payment_method or requires_confirmation
+  if (updateData.replaced && updateData.paymentIntentId && updateData.clientSecret) {
+    paymentIntentId = updateData.paymentIntentId
+    paymentClientSecret = updateData.clientSecret
+    if (updateData.status === 'requires_payment_method' || updateData.status === 'requires_confirmation') {
+      paymentRequiresAction = true
+    }
+    // Update Firestore booking with new PaymentIntent
+    await updateDoc(bookingRef, {
+      paymentIntentId,
+      paymentClientSecret,
+      ...(paymentMethodId ? { paymentMethodId } : {}),
+    })
+  }
+
+  // Update Firestore booking
+  await updateDoc(bookingRef, {
+    services: servicesToSave,
+    paymentAmount: newTotal / 100,
+    platformFee: newPlatformFee / 100,
+    startDate,
+    endDate,
+    numberOfDays,
+    time: {
+      ...(booking.time || {}),
+      endTime,
+    },
+    updatedAt: new Date().toISOString(),
+    ...(paymentMethodId ? { paymentMethodId } : {}),
+  })
+  const updatedSnap = await getDoc(bookingRef)
+  return { ...(updatedSnap.data() as Booking), id: updatedSnap.id, paymentRequiresAction, paymentClientSecret }
 } 

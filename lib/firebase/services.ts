@@ -44,13 +44,15 @@ export async function createPlatformService(service: Omit<PlatformService, 'id'>
   try {
     const servicesRef = collection(db, 'platform_services')
     const newDocRef = doc(servicesRef)
-    
-    await setDoc(newDocRef, {
+    const dataToSave: any = {
       ...service,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
-    })
-    
+    }
+    if (!service.description || service.description.trim() === '') {
+      delete dataToSave.description
+    }
+    await setDoc(newDocRef, dataToSave)
     return newDocRef.id
   } catch (error) {
     console.error('Error creating platform service:', error)
@@ -65,15 +67,17 @@ export async function updatePlatformService(serviceId: string, updates: Partial<
   try {
     const serviceRef = doc(db, 'platform_services', serviceId)
     const snapshot = await getDoc(serviceRef)
-    
     if (!snapshot.exists()) {
       throw new Error(`Platform service with ID ${serviceId} does not exist`)
     }
-    
-    await updateDoc(serviceRef, {
+    const updatesToApply: any = {
       ...updates,
       updatedAt: serverTimestamp()
-    })
+    }
+    if (updates.description === undefined || updates.description?.trim() === '') {
+      delete updatesToApply.description
+    }
+    await updateDoc(serviceRef, updatesToApply)
   } catch (error) {
     console.error(`Error updating platform service ${serviceId}:`, error)
     throw new Error('Failed to update platform service')

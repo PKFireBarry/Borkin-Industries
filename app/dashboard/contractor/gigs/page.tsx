@@ -14,6 +14,7 @@ import { Pet } from '@/types/client'
 import { PawPrint, Pill, Utensils, Clock, Dog, Info, Package } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import type { Booking } from '@/types/booking'
+import { getAllPlatformServices } from '@/lib/firebase/services'
 
 // Define Gig interface directly without extending Booking
 interface Gig {
@@ -79,6 +80,82 @@ function calculateHours(startTime?: string, endTime?: string): number {
   return Math.round((hours + minutes / 60) * 10) / 10;
 }
 
+// Update getGoogleCalendarUrl to use robust local date parsing
+function getGoogleCalendarUrl(gig: Gig, clientName: string, petNames: string[], clientProfile?: { name?: string; phone?: string; address?: string; city?: string; state?: string; postalCode?: string }): string {
+  function parseLocalDate(dateStr?: string) {
+    if (!dateStr) return null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      const [y, m, d] = dateStr.split('-').map(Number);
+      return new Date(y, m - 1, d);
+    }
+    if (/^\d{4}-\d{2}-\d{2}T/.test(dateStr)) {
+      const [datePart] = dateStr.split('T');
+      const [y, m, d] = datePart.split('-').map(Number);
+      return new Date(y, m - 1, d);
+    }
+    return new Date(dateStr);
+  }
+  const clientFullName = clientProfile?.name || clientName;
+  const clientPhone = clientProfile?.phone || '';
+  const clientAddress = [clientProfile?.address, clientProfile?.city, clientProfile?.state, clientProfile?.postalCode].filter(Boolean).join(', ');
+  const title = `Pet Care for ${petNames.join(', ') || 'your pet'} with ${clientFullName}`;
+  const description = [
+    `Client: ${clientFullName}`,
+    clientPhone ? `Phone: ${clientPhone}` : '',
+    clientAddress ? `Address: ${clientAddress}` : '',
+    `Pets: ${petNames.join(', ')}`,
+    gig.services && gig.services.length > 0 ? `Services: ${gig.services.map(s => s.name || s.serviceId).join(', ')}` : '',
+    `Gig ID: ${gig.id}`,
+  ].filter(Boolean).join('\n');
+  const startDate = parseLocalDate(gig.startDate);
+  const endDate = parseLocalDate(gig.endDate);
+  let startTime = gig.time?.startTime;
+  let endTime = gig.time?.endTime;
+  if (!startTime) startTime = '09:00';
+  if (!endTime) endTime = '17:00';
+  function toGoogleDate(date: Date, time: string) {
+    const [h, m] = time.split(':');
+    const d = new Date(date);
+    d.setHours(Number(h), Number(m), 0, 0);
+    return d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+  }
+  const start = startDate ? toGoogleDate(startDate, startTime) : '';
+  const end = endDate ? toGoogleDate(endDate, endTime) : '';
+  const url = new URL('https://calendar.google.com/calendar/render');
+  url.searchParams.set('action', 'TEMPLATE');
+  url.searchParams.set('text', title);
+  url.searchParams.set('details', description);
+  if (start && end) url.searchParams.set('dates', `${start}/${end}`);
+  return url.toString();
+}
+
+// Add robust local date range display helper
+function getGigDateTimeRange(g: Gig) {
+  function parseLocalDate(dateStr?: string) {
+    if (!dateStr) return null;
+    // If format is YYYY-MM-DD, treat as local date
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      const [y, m, d] = dateStr.split('-').map(Number);
+      return new Date(y, m - 1, d);
+    }
+    // If ISO string, extract date part and treat as local
+    if (/^\d{4}-\d{2}-\d{2}T/.test(dateStr)) {
+      const [datePart] = dateStr.split('T');
+      const [y, m, d] = datePart.split('-').map(Number);
+      return new Date(y, m - 1, d);
+    }
+    return new Date(dateStr);
+  }
+  const start = parseLocalDate(g.startDate);
+  const end = parseLocalDate(g.endDate);
+  const startTime = g.time?.startTime;
+  const endTime = g.time?.endTime;
+  if (!start || !end) return '';
+  const startStr = `${start.toLocaleDateString()}${startTime ? ', ' + startTime : ''}`;
+  const endStr = `${end.toLocaleDateString()}${endTime ? ', ' + endTime : ''}`;
+  return `${startStr} — ${endStr}`;
+}
+
 export default function ContractorGigsPage() {
   const { isLoaded, isAuthorized } = useRequireRole('contractor')
   const { user } = useUser()
@@ -104,6 +181,8 @@ export default function ContractorGigsPage() {
     setError(null)
     try {
       const bookings = await getGigsForContractor(user.id)
+      const platformServices = await getAllPlatformServices()
+      const serviceNameMap = new Map(platformServices.map((s: PlatformService) => [s.id, s.name]))
       const mapped = await Promise.all(bookings.map(async (b: any) => {
         let clientName = 'N/A'
         let petNames: string[] = []
@@ -116,13 +195,18 @@ export default function ContractorGigsPage() {
             petNames = client.pets.filter((p: any) => b.petIds.includes(p.id)).map((p: any) => p.name)
           }
         }
+        // Attach service names
+        const servicesWithNames = (b.services || []).map((service: any) => ({
+          ...service,
+          name: service.name || serviceNameMap.get(service.serviceId) || service.serviceId,
+        }))
         return {
           id: b.id,
           clientId: bookingClientId,
           clientName,
           pets: petNames,
           serviceType: b.serviceType || 'N/A',
-          services: b.services || [],
+          services: servicesWithNames,
           date: b.startDate || b.date || '',
           time: b.time || '',
           status: b.status || 'pending',
@@ -495,7 +579,7 @@ export default function ContractorGigsPage() {
         <div className="space-y-6">
           {filteredGigs.map(gig => (
             <Card key={gig.id} className="shadow-sm">
-              <CardContent className="py-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <CardContent className="py-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white rounded-lg shadow-md border border-gray-200">
                 <div>
                   <CardTitle className="mb-2 flex items-center">
                     {hasMultipleServices(gig) ? (
@@ -509,48 +593,45 @@ export default function ContractorGigsPage() {
                   <div className="text-sm mb-1"><span className="font-medium">Client:</span> {gig.clientName}</div>
                   <div className="text-sm mb-1"><span className="font-medium">Pets:</span> {gig.pets.join(', ')}</div>
                   <div className="text-sm mb-1">
-                    <span className="font-medium">Date & Time:</span> {getGigDisplayDate(gig)}
+                    <span className="font-medium">Date & Time:</span> {getGigDateTimeRange(gig)}
                   </div>
                   <div className="text-sm mb-1"><span className="font-medium">Status:</span> <StatusBadge status={gig.status} /></div>
                   {gig.review && (
                     <span className="text-xs text-muted-foreground">Review: <span className="font-medium text-foreground">{gig.review.rating}★</span> {gig.review.comment}</span>
                   )}
                 </div>
-                {/* Actions and Net Payout */}
-                <div className="flex flex-col items-end gap-2 mt-4 md:mt-0">
-                  <div className="flex gap-2">
-                    <Button variant="outline" className="text-sm px-2 py-1" onClick={() => setDetailGig(gig)}>
-                      Details
-                    </Button>
-                    {gig.status === 'pending' && (
-                      <>
-                        <Button variant="default" disabled={actionLoading === gig.id} onClick={() => handleAccept(gig.id)}>
-                          {actionLoading === gig.id ? 'Accepting...' : 'Accept'}
-                        </Button>
-                        <Button variant="destructive" disabled={actionLoading === gig.id} onClick={() => handleDecline(gig.id)}>
-                          {actionLoading === gig.id ? 'Declining...' : 'Decline'}
-                        </Button>
-                      </>
-                    )}
-                    {gig.status === 'approved' && !gig.contractorCompleted && (
-                      <>
-                        <Button variant="default" disabled={actionLoading === gig.id} onClick={() => handleMarkCompleted(gig.id)}>
-                          {actionLoading === gig.id ? 'Marking...' : 'Mark as Completed'}
-                        </Button>
-                        <Button 
-                          variant="destructive" 
-                          className="text-sm px-2 py-1"
-                          onClick={() => setCancelGigId(gig.id)}
-                          disabled={actionLoading === gig.id}
-                        >
-                          Cancel
-                        </Button>
-                      </>
-                    )}
-                    {gig.status === 'approved' && gig.contractorCompleted && (
-                      <span className="text-xs text-muted-foreground">Waiting for client...</span>
-                    )}
-                  </div>
+                <div className="flex flex-wrap gap-2 justify-end items-center">
+                  <Button variant="outline" className="text-sm px-3 py-1 rounded-full shadow-sm" onClick={() => setDetailGig(gig)}>
+                    Details
+                  </Button>
+                  {gig.status === 'pending' && (
+                    <>
+                      <Button variant="default" disabled={actionLoading === gig.id} onClick={() => handleAccept(gig.id)}>
+                        {actionLoading === gig.id ? 'Accepting...' : 'Accept'}
+                      </Button>
+                      <Button variant="destructive" disabled={actionLoading === gig.id} onClick={() => handleDecline(gig.id)}>
+                        {actionLoading === gig.id ? 'Declining...' : 'Decline'}
+                      </Button>
+                    </>
+                  )}
+                  {gig.status === 'approved' && !gig.contractorCompleted && (
+                    <>
+                      <Button variant="default" disabled={actionLoading === gig.id} onClick={() => handleMarkCompleted(gig.id)}>
+                        {actionLoading === gig.id ? 'Marking...' : 'Mark as Completed'}
+                      </Button>
+                      <Button 
+                        variant="destructive" 
+                        className="text-sm px-3 py-1 rounded-full shadow-sm"
+                        onClick={() => setCancelGigId(gig.id)}
+                        disabled={actionLoading === gig.id}
+                      >
+                        Cancel
+                      </Button>
+                    </>
+                  )}
+                  {gig.status === 'approved' && gig.contractorCompleted && (
+                    <span className="text-xs text-muted-foreground">Waiting for client...</span>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -608,21 +689,6 @@ export default function ContractorGigsPage() {
                 <h3 className="text-lg font-semibold mb-3 text-gray-700">Booking Summary</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <div className="text-xs text-muted-foreground mb-1">Service Type</div>
-                    <div className="font-medium text-base">
-                      {detailGig?.services && detailGig.services.length > 0 ? (
-                        <div className="space-y-1">
-                          {detailGig.services.map((service, idx) => (
-                            <div key={idx} className="flex items-center">
-                              <Package className="h-4 w-4 mr-1 text-primary" />
-                              <span>{service.name || service.serviceId}</span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        detailGig?.serviceType || 'N/A'
-                      )}
-                    </div>
                   </div>
                   <div>
                     <div className="text-xs text-muted-foreground mb-1">Status</div>
@@ -633,7 +699,7 @@ export default function ContractorGigsPage() {
                   <div>
                     <div className="text-xs text-muted-foreground mb-1">Date & Time</div>
                     <div className="font-medium text-base">
-                      {getGigDisplayDate(detailGig)}
+                      {getGigDateTimeRange(detailGig)}
                     </div>
                   </div>
                   <div>
@@ -657,21 +723,9 @@ export default function ContractorGigsPage() {
                       </h4>
                       <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                         <div>
-                          <span className="text-muted-foreground">Hours per day:</span>
-                          <span className="font-medium ml-2">
-                            {calculateHours(detailGig.time.startTime, detailGig.time.endTime)} hours
-                          </span>
-                        </div>
-                        <div>
                           <span className="text-muted-foreground">Total days:</span>
                           <span className="font-medium ml-2">
                             {detailGig.numberOfDays || 1} day{(detailGig.numberOfDays || 1) !== 1 ? 's' : ''}
-                          </span>
-                        </div>
-                        <div className="col-span-2">
-                          <span className="text-muted-foreground">Total service hours:</span>
-                          <span className="font-medium ml-2">
-                            {calculateHours(detailGig.time.startTime, detailGig.time.endTime) * (detailGig.numberOfDays || 1)} hours
                           </span>
                         </div>
                       </div>
@@ -725,7 +779,7 @@ export default function ContractorGigsPage() {
                     
                     <div className="flex justify-between items-center text-sm mb-1">
                       <div className="text-muted-foreground">Processing Fee:</div>
-                      <div className="text-red-600">-${((detailGig.stripeFee || 0)).toFixed(2)}</div>
+                      <div className="text-red-600">-${((detailGig.stripeFee && detailGig.stripeFee > 0 ? detailGig.stripeFee : (detailGig.paymentAmount || 0) * 0.029 + 0.3)).toFixed(2)}</div>
                     </div>
                     
                     <div className="border-t pt-3 flex justify-between items-center">
@@ -773,10 +827,6 @@ export default function ContractorGigsPage() {
                   ))}
                 </div>
               )}
-              <div className="border-t pt-4">
-                <div className="text-xs text-muted-foreground mb-2 font-semibold">Net Payout</div>
-                <div className="font-semibold text-base text-green-700">${getNetPayout(detailGig).toFixed(2)}</div>
-              </div>
               {detailGig.review && (
                 <div className="border-t pt-4">
                   <div className="text-xs text-muted-foreground mb-2 font-semibold">Review</div>
@@ -788,6 +838,18 @@ export default function ContractorGigsPage() {
                 <div className="mb-1">Booking ID</div>
                 <div className="font-mono break-all mb-1">{detailGig?.id ?? ''}</div>
               </div>
+              {clientProfile && (
+                <div className="flex justify-end mb-4">
+                  <a
+                    href={getGoogleCalendarUrl(detailGig, detailGig.clientName, detailGig.pets, clientProfile)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block"
+                  >
+                    <Button variant="outline" className="text-sm px-3 py-1 rounded-full shadow-sm">Add to Google Calendar</Button>
+                  </a>
+                </div>
+              )}
             </div>
           )}
           <DialogFooter>

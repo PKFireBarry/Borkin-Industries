@@ -14,12 +14,6 @@ import type { Contractor, ContractorApplication, Availability, PaymentInfo, Work
 import { ContractorProfileServiceManager } from './components/contractor-profile-service-manager';
 import { getAllPlatformServices } from '@/lib/firebase/services'
 
-const MOCK_PLATFORM_SERVICES: PlatformService[] = [
-  { id: "ps_1", name: "Dog Walking (30 mins)", description: "A 30-minute walk for your dog." },
-  { id: "ps_2", name: "Pet Sitting (per hour)", description: "In-home pet sitting, billed hourly." },
-  { id: "ps_3", name: "Medication Administration", description: "Administering prescribed medication." },
-  { id: "ps_4", name: "Nail Trim", description: "Professional nail trimming service." },
-];
 
 const VETERINARY_SKILLS = [
   'Dog Walking',
@@ -310,31 +304,6 @@ export default function ContractorProfilePage() {
                     </div>
                 )}
             </div>
-             <div className="pt-6">
-                <h3 className="text-lg font-semibold mb-2 text-primary">Skills & Experience</h3>
-                <p><strong>Education:</strong> {form.education || 'N/A'}</p>
-                <p><strong>Experience:</strong> {form.experience || 'N/A'}</p>
-                <div><strong>Veterinary Skills:</strong> {form.veterinarySkills && form.veterinarySkills.length > 0 ? form.veterinarySkills.join(', ') : <span className="text-muted-foreground">No skills listed.</span>}</div>
-            </div>
-            <div className="pt-6">
-                <h3 className="text-lg font-semibold mb-2 text-primary">Credentials</h3>
-                <div>
-                    <strong>Certifications:</strong>
-                    {form.certifications && form.certifications.filter(c => c && c.trim() !== '').length > 0 ? (
-                        <ul className="list-disc pl-5 mt-1">
-                        {form.certifications.filter(c => c && c.trim() !== '').map((cert, idx) => <li key={idx}>{cert}</li>)}
-                        </ul>
-                    ) : <span className="text-muted-foreground"> No certifications listed.</span>}
-                </div>
-                <div className="mt-2">
-                    <strong>References:</strong>
-                    {form.references && form.references.filter(r => r && r.trim() !== '').length > 0 ? (
-                        <ul className="list-disc pl-5 mt-1">
-                        {form.references.filter(r => r && r.trim() !== '').map((ref, idx) => <li key={idx}>{ref}</li>)}
-                        </ul>
-                    ) : <span className="text-muted-foreground"> No references listed.</span>}
-                </div>
-            </div>
           </CardContent>
         </Card>
         
@@ -366,54 +335,6 @@ export default function ContractorProfilePage() {
                        <div><Label>State</Label><Input name="state" value={form.state} onChange={handleChange} /></div>
                        <div><Label>Postal Code</Label><Input name="postalCode" value={form.postalCode} onChange={handleChange} /></div>
                        <div><Label>Driving Range</Label><Input name="drivingRange" value={form.drivingRange} onChange={handleChange} /></div>
-                  </CardContent>
-              </Card>
-             <Card>
-                  <CardHeader><CardTitle>Edit Skills & Experience</CardTitle></CardHeader>
-                  <CardContent className="space-y-4">
-                       <div><Label>Education</Label><Input name="education" value={form.education} onChange={handleChange} /></div>
-                       <div><Label>Experience</Label><Input name="experience" value={form.experience} onChange={handleChange} /></div>
-                       <div><Label>Veterinary Skills</Label>
-                           <div className="flex flex-wrap">
-                               {VETERINARY_SKILLS.map((skill) => (
-                                   <button
-                                       key={skill}
-                                       type="button"
-                                       onClick={() => handleSkillToggle(skill)}
-                                       className={`px-2 py-1 m-1 ${form.veterinarySkills.includes(skill) ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
-                                   >
-                                       {skill}
-                                   </button>
-                               ))}
-                           </div>
-                       </div>
-                  </CardContent>
-              </Card>
-             <Card>
-                  <CardHeader><CardTitle>Edit Credentials</CardTitle></CardHeader>
-                  <CardContent className="space-y-4">
-                       <div><Label>Certifications</Label>
-                           <div className="flex flex-wrap">
-                               {form.certifications.map((cert, idx) => (
-                                   <div key={idx} className="flex items-center space-x-2">
-                                       <Input name="certifications" value={cert} onChange={(e) => handleListChange('certifications', idx, e.target.value)} />
-                                       <button type="button" onClick={() => handleRemoveListItem('certifications', idx)} className="text-red-500">Remove</button>
-                                   </div>
-                               ))}
-                               <button type="button" onClick={() => handleAddListItem('certifications')} className="text-primary">Add Certification</button>
-                           </div>
-                       </div>
-                       <div><Label>References</Label>
-                           <div className="flex flex-wrap">
-                               {form.references.map((ref, idx) => (
-                                   <div key={idx} className="flex items-center space-x-2">
-                                       <Input name="references" value={ref} onChange={(e) => handleListChange('references', idx, e.target.value)} />
-                                       <button type="button" onClick={() => handleRemoveListItem('references', idx)} className="text-red-500">Remove</button>
-                                   </div>
-                               ))}
-                               <button type="button" onClick={() => handleAddListItem('references')} className="text-primary">Add Reference</button>
-                           </div>
-                       </div>
                   </CardContent>
               </Card>
           </form>
@@ -484,31 +405,6 @@ export default function ContractorProfilePage() {
                              <MapWithCircle lat={form.locationLat} lng={form.locationLng} miles={getDrivingRangeMiles()} />
                              </div>
                          )}
-                     </div>
-                      <div className="pt-6">
-                         <h3 className="text-lg font-semibold mb-2 text-primary">Skills & Experience</h3>
-                         <p><strong>Education:</strong> {form.education || 'N/A'}</p>
-                         <p><strong>Experience:</strong> {form.experience || 'N/A'}</p>
-                         <div><strong>Veterinary Skills:</strong> {form.veterinarySkills && form.veterinarySkills.length > 0 ? form.veterinarySkills.join(', ') : <span className="text-muted-foreground">No skills listed.</span>}</div>
-                     </div>
-                     <div className="pt-6">
-                         <h3 className="text-lg font-semibold mb-2 text-primary">Credentials</h3>
-                         <div>
-                             <strong>Certifications:</strong>
-                             {form.certifications && form.certifications.filter(c => c && c.trim() !== '').length > 0 ? (
-                                 <ul className="list-disc pl-5 mt-1">
-                                 {form.certifications.filter(c => c && c.trim() !== '').map((cert, idx) => <li key={idx}>{cert}</li>)}
-                                 </ul>
-                             ) : <span className="text-muted-foreground"> No certifications listed.</span>}
-                         </div>
-                         <div className="mt-2">
-                             <strong>References:</strong>
-                             {form.references && form.references.filter(r => r && r.trim() !== '').length > 0 ? (
-                                 <ul className="list-disc pl-5 mt-1">
-                                 {form.references.filter(r => r && r.trim() !== '').map((ref, idx) => <li key={idx}>{ref}</li>)}
-                                 </ul>
-                             ) : <span className="text-muted-foreground"> No references listed.</span>}
-                         </div>
                      </div>
                  </CardContent>
              </Card>

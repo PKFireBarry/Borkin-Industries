@@ -54,4 +54,7 @@ export interface Booking {
 
   // Remove old single 'date' field if it's fully deprecated
   // date?: string; // Keep if some old bookings might still have it and need handling
+
+  contractorName: string // Contractor's name at time of booking
+  contractorPhone: string // Contractor's phone at time of booking
 } 

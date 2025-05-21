@@ -163,6 +163,11 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
 - [x] Cancel uncaptured Stripe payment when pending booking is canceled
   - Pending bookings now cancel the associated Stripe PaymentIntent when canceled, ensuring no lingering payments in Stripe or the UI.
 - [x] Map gigs to payouts in contractor payments API (backend returns payouts and all paid gigs)
+- [x] Allow clients to edit services for pending bookings and update Stripe PaymentIntent accordingly.
+- [x] Integrate Stripe Elements payment re-authorization in the edit services modal for bookings when a new PaymentIntent is required after editing services.
+- [x] Update backend and frontend to fully automate the booking update and payment flow for the user.
+- [x] Fix client booking details modal to always show service names instead of IDs
+- [x] Add contractor name and phone number to booking details model and display in booking details UI
 
 ### 5. Contractor Application & Onboarding
 - [x] Build contractor application form (resume, experience, education, address, driving range, certifications, references)
@@ -252,6 +257,11 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
 - [ ] Prepare landing page for local marketing
 - [ ] Set up Facebook/Instagram ad campaign tracking (if feasible)
 - [ ] Prepare for event/booth marketing (print materials, info page)
+
+### 12. Additional Features
+- [x] Add Google Calendar button to contractor gig cards (shows on all gigs)
+- [x] Remove debugging from client-side bookings page cards
+- [x] Restyle both contractor and client cards for a more refined, Material Design-inspired look
 
 ---
 
