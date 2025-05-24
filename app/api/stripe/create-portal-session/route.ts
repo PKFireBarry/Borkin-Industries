@@ -5,11 +5,11 @@ import { getClientProfile, updateClientProfile } from '@/lib/firebase/client'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2025-03-31.basil' })
 
-export async function POST(req: NextRequest) {
+export async function POST(_req: NextRequest) {
   try {
     const user = await currentUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    let profile = await getClientProfile(user.id)
+    const profile = await getClientProfile(user.id)
     let customerId = profile?.stripeCustomerId
 
     // If no Stripe customer, create one and save to Firestore

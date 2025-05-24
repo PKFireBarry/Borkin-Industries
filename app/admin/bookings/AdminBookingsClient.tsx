@@ -1,6 +1,21 @@
 'use client'
 import { useState } from 'react'
-import { Button } from '@/components/ui/button'
+
+interface Booking {
+  id: string;
+  clientId?: string;
+  contractorId?: string;
+  serviceType?: string;
+  date: string | Date; // Can be string from server, or Date object
+  status: 'pending' | 'approved' | 'completed' | 'cancelled' | 'paid' | string; // Allow for other statuses
+  paymentStatus?: string;
+  paymentAmount?: number;
+  stripeCustomerId?: string;
+  paymentIntentId?: string;
+  petIds?: string[] | string;
+  // Add any other fields that might be present
+  [key: string]: any; // Allow other properties not explicitly defined
+}
 
 function formatDate(date: Date | string | null) {
   if (!date) return '-'
@@ -17,7 +32,7 @@ const statusColors = {
   default: 'bg-gray-100 text-gray-800',
 } as const
 
-export default function AdminBookingsClient({ bookings }: { bookings: any[] }) {
+export default function AdminBookingsClient({ bookings }: { bookings: Booking[] }) {
   const [client, setClient] = useState('')
   const [contractor, setContractor] = useState('')
   const [date, setDate] = useState('')
@@ -103,7 +118,7 @@ export default function AdminBookingsClient({ bookings }: { bookings: any[] }) {
           <tbody>
             {filtered.length === 0 ? (
               <tr><td colSpan={10} className="text-center text-muted-foreground py-8">No bookings found.</td></tr>
-            ) : filtered.map((b: any) => (
+            ) : filtered.map((b: Booking) => (
               <tr key={b.id} className="hover:bg-accent">
                 <td className="p-2 border font-mono">{b.id}</td>
                 <td className="p-2 border font-mono">{b.clientId}</td>
@@ -115,7 +130,7 @@ export default function AdminBookingsClient({ bookings }: { bookings: any[] }) {
                 </td>
                 <td className="p-2 border">
                   <div className="text-xs">{b.paymentStatus}</div>
-                  <div className="text-xs">{b.paymentAmount ? `$${b.paymentAmount}` : '-'}</div>
+                  <div className="text-xs">{b.paymentAmount ? `$${(b.paymentAmount / 100).toFixed(2)}` : '-'}</div>
                 </td>
                 <td className="p-2 border">
                   {b.stripeCustomerId && (
@@ -144,7 +159,7 @@ export default function AdminBookingsClient({ bookings }: { bookings: any[] }) {
                 <td className="p-2 border font-mono">
                   {Array.isArray(b.petIds) ? b.petIds.join(', ') : b.petIds}
                 </td>
-                <td className="p-2 border">{b.paymentAmount ? `$${b.paymentAmount}` : '-'}</td>
+                <td className="p-2 border">{b.paymentAmount ? `$${(b.paymentAmount / 100).toFixed(2)}` : '-'}</td>
               </tr>
             ))}
           </tbody>

@@ -11,7 +11,7 @@ export async function GET(req: NextRequest, context: { params: { id: string } })
     const snap = await getDoc(contractorRef)
     if (!snap.exists()) return NextResponse.json({ error: 'Contractor not found' }, { status: 404 })
     return NextResponse.json({ ...snap.data(), id })
-  } catch (err) {
+  } catch (_err) {
     return NextResponse.json({ error: 'Failed to fetch contractor' }, { status: 500 })
   }
 }

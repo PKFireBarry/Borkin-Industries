@@ -40,22 +40,23 @@ export async function POST(req: NextRequest) {
       const account = await stripe.accounts.retrieve(stripeAccountId, {
         expand: ['external_accounts'],
       })
-      const externalAccounts = (account as any).external_accounts?.data || []
+      const externalAccounts = account.external_accounts?.data || []
       const hasPayoutMethod = externalAccounts.length > 0
       let payoutMethod = null
       if (hasPayoutMethod) {
-        const bank = externalAccounts.find((acc: any) => acc.object === 'bank_account')
-        const card = externalAccounts.find((acc: any) => acc.object === 'card')
-        if (bank) {
+        const bankAccount = externalAccounts.find(acc => acc.object === 'bank_account') as Stripe.BankAccount | undefined;
+        const cardAccount = externalAccounts.find(acc => acc.object === 'card') as Stripe.Card | undefined;
+
+        if (bankAccount) {
           payoutMethod = {
-            brand: bank.bank_name,
-            last4: bank.last4,
+            brand: bankAccount.bank_name,
+            last4: bankAccount.last4,
             type: 'bank_account',
           }
-        } else if (card) {
+        } else if (cardAccount) {
           payoutMethod = {
-            brand: card.brand,
-            last4: card.last4,
+            brand: cardAccount.brand,
+            last4: cardAccount.last4,
             type: 'card',
           }
         }

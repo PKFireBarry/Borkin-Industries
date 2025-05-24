@@ -2,6 +2,51 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 
+export interface Application {
+  id: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  postalCode?: string;
+  createdAt: string | Date; // Can be string from server, or Date object
+  status: 'pending' | 'approved' | 'rejected';
+  certifications?: Array<{ name?: string } | string>;
+  education?: Array<{
+    degree?: string;
+    fieldOfStudy?: string;
+    school?: string;
+    cityState?: string;
+    yearStarted?: string | number;
+    yearEnded?: string | number;
+    present?: boolean;
+  }>;
+  skills?: string[];
+  experience?: Array<{
+    title?: string;
+    employer?: string;
+    description?: string;
+    yearStarted?: string | number;
+    startDate?: string | Date;
+    yearEnded?: string | number;
+    endDate?: string | Date;
+    present?: boolean;
+  }>;
+  references?: Array<{
+    name?: string;
+    email?: string;
+    phone?: string;
+    relationship?: string;
+    notes?: string;
+  }>;
+  // Add any other fields that might be present
+  [key: string]: any; // Allow other properties not explicitly defined
+}
+
 function formatDate(date: Date | string | null) {
   if (!date) return '-'
   if (typeof date === 'string') return new Date(date).toLocaleString()
@@ -9,7 +54,7 @@ function formatDate(date: Date | string | null) {
 }
 
 export default function AdminApplicationsClient({ applications, onApprove, onReject, onReinstate }: {
-  applications: any[],
+  applications: Application[], // Use the Application interface
   onApprove: (id: string) => Promise<void>,
   onReject: (id: string) => Promise<void>,
   onReinstate: (id: string) => Promise<void>,
@@ -78,7 +123,7 @@ export default function AdminApplicationsClient({ applications, onApprove, onRej
         <div className="text-muted-foreground">No applications found.</div>
       ) : (
         <div className="space-y-6">
-          {filtered.map((a: any) => (
+          {filtered.map((a: Application) => (
             <div key={a.id} className="border rounded-lg p-6 bg-background shadow-sm">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-2">
                 <div>
@@ -131,25 +176,35 @@ export default function AdminApplicationsClient({ applications, onApprove, onRej
                 <div>
                   <div className="font-semibold mb-1">Certifications</div>
                   <ul className="list-disc ml-5 text-sm">
-                    {Array.isArray(a.certifications) && a.certifications.length > 0 ? a.certifications.map((c: any, i: number) => <li key={i}>{typeof c === 'string' ? c : c.name || JSON.stringify(c)}</li>) : <li className="text-muted-foreground">None</li>}
+                    {Array.isArray(a.certifications) && a.certifications.length > 0 ? a.certifications.map((c, i: number) => <li key={i}>{typeof c === 'string' ? c : c.name || JSON.stringify(c)}</li>) : <li className="text-muted-foreground">None</li>}
                   </ul>
                   <div className="font-semibold mt-4 mb-1">Education</div>
                   <ul className="list-disc ml-5 text-sm">
-                    {Array.isArray(a.education) && a.education.length > 0 ? a.education.map((e: any, i: number) => <li key={i}>{e.degree} in {e.fieldOfStudy} ({e.school}, {e.cityState}) {e.yearStarted} - {e.present ? 'Present' : e.yearEnded}</li>) : <li className="text-muted-foreground">None</li>}
+                    {Array.isArray(a.education) && a.education.length > 0 ? a.education.map((e, i: number) => <li key={i}>{e.degree} in {e.fieldOfStudy} ({e.school}, {e.cityState}) {e.yearStarted} - {e.present ? 'Present' : e.yearEnded}</li>) : <li className="text-muted-foreground">None</li>}
                   </ul>
                   <div className="font-semibold mt-4 mb-1">Skills</div>
                   <ul className="list-disc ml-5 text-sm">
-                    {Array.isArray(a.skills) && a.skills.length > 0 ? a.skills.map((s: any, i: number) => <li key={i}>{s}</li>) : <li className="text-muted-foreground">None</li>}
+                    {Array.isArray(a.skills) && a.skills.length > 0 ? a.skills.map((s: string, i: number) => <li key={i}>{s}</li>) : <li className="text-muted-foreground">None</li>}
                   </ul>
                 </div>
                 <div>
                   <div className="font-semibold mb-1">Experience</div>
                   <ul className="list-disc ml-5 text-sm">
-                    {Array.isArray(a.experience) && a.experience.length > 0 ? a.experience.map((e: any, i: number) => <li key={i}>{e.title || e.employer || ''} {e.description ? `- ${e.description}` : ''} {e.yearStarted || e.startDate} - {e.present ? 'Present' : e.yearEnded || e.endDate}</li>) : <li className="text-muted-foreground">None</li>}
+                    {Array.isArray(a.experience) && a.experience.length > 0 ? a.experience.map((e, i: number) => {
+                      const startDateString = e.startDate instanceof Date ? e.startDate.toLocaleDateString() : typeof e.startDate === 'string' ? e.startDate : '';
+                      const endDateString = e.endDate instanceof Date ? e.endDate.toLocaleDateString() : typeof e.endDate === 'string' ? e.endDate : '';
+                      return (
+                        <li key={i}>
+                          {e.title || e.employer || ''} 
+                          {e.description ? `- ${e.description}` : ''} 
+                          {e.yearStarted || startDateString} - {e.present ? 'Present' : (e.yearEnded || endDateString)}
+                        </li>
+                      );
+                    }) : <li className="text-muted-foreground">None</li>}
                   </ul>
                   <div className="font-semibold mt-4 mb-1">References</div>
                   <ul className="list-disc ml-5 text-sm">
-                    {Array.isArray(a.references) && a.references.length > 0 ? a.references.map((r: any, i: number) => <li key={i}>{r.name} ({r.email}) {r.phone ? `- ${r.phone}` : ''} {r.relationship ? `- ${r.relationship}` : ''} {r.notes ? `- ${r.notes}` : ''}</li>) : <li className="text-muted-foreground">None</li>}
+                    {Array.isArray(a.references) && a.references.length > 0 ? a.references.map((r, i: number) => <li key={i}>{r.name} ({r.email}) {r.phone ? `- ${r.phone}` : ''} {r.relationship ? `- ${r.relationship}` : ''} {r.notes ? `- ${r.notes}` : ''}</li>) : <li className="text-muted-foreground">None</li>}
                   </ul>
                 </div>
               </div>

@@ -91,7 +91,7 @@ export default function AdminContractorsClient({ contractors, bookings }: Props)
   }
 
   async function handleRemoveConfirmed() {
-    const { contractorId, name, email, clerkUserId } = modal
+    const { contractorId, email, clerkUserId } = modal
     if (!contractorId) return
     if (!clerkUserId && !email) {
       showToast('error', 'Missing Clerk user ID and email for this contractor.')
@@ -112,7 +112,7 @@ export default function AdminContractorsClient({ contractors, bookings }: Props)
       } else {
         showToast('error', data.error || data.warning || 'Failed to remove contractor.')
       }
-    } catch (err) {
+    } catch (_error) {
       showToast('error', 'Failed to remove contractor. Please try again.')
     } finally {
       setRemoving(null)

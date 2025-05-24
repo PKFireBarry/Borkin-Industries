@@ -14,7 +14,24 @@ interface BookingMetrics {
   completionRate: number
 }
 
-export default function BookingsSummary({ bookings }: { bookings: any[] }) {
+// Ideally, this Booking interface would be imported from a shared types file
+interface Booking {
+  id: string;
+  clientId?: string;
+  contractorId?: string;
+  serviceType?: string;
+  date: string | Date | { seconds: number, nanoseconds: number }; // Allow for Firestore Timestamp object
+  status: 'pending' | 'approved' | 'completed' | 'cancelled' | 'paid' | string;
+  paymentStatus?: string;
+  paymentAmount?: number;
+  stripeCustomerId?: string;
+  paymentIntentId?: string;
+  petIds?: string[] | string;
+  createdAt?: string | Date | { seconds: number, nanoseconds: number }; // Allow for Firestore Timestamp object
+  [key: string]: any;
+}
+
+export default function BookingsSummary({ bookings }: { bookings: Booking[] }) { // Use Booking interface
   // Calculate metrics from the bookings data
   const metrics = useMemo<BookingMetrics>(() => {
     const now = new Date()
@@ -56,9 +73,21 @@ export default function BookingsSummary({ bookings }: { bookings: any[] }) {
       
       // Group by month for current year
       if (booking.date) {
-        const date = new Date(booking.date)
-        if (date.getFullYear() === currentYear) {
-          const month = date.getMonth()
+        let dateObject: Date;
+        if (typeof booking.date === 'string') {
+          dateObject = new Date(booking.date);
+        } else if (booking.date instanceof Date) {
+          dateObject = booking.date;
+        } else if (typeof booking.date === 'object' && 'seconds' in booking.date) {
+          // Handle Firestore Timestamp like object for booking.date
+          dateObject = new Date((booking.date as { seconds: number, nanoseconds: number }).seconds * 1000 + (booking.date as { seconds: number, nanoseconds: number }).nanoseconds / 1000000);
+        } else {
+          // Skip if date format is unrecognized
+          return; 
+        }
+
+        if (dateObject.getFullYear() === currentYear) {
+          const month = dateObject.getMonth()
           metrics.byMonth[month] = (metrics.byMonth[month] || 0) + 1
         }
       }
@@ -85,7 +114,8 @@ export default function BookingsSummary({ bookings }: { bookings: any[] }) {
 
   // Helper for dollar amount formatting
   const formatCurrency = (value: number) => {
-    return `$${value.toFixed(2)}`
+    // Assuming value is in cents, convert to dollars for display
+    return `$${(value / 100).toFixed(2)}`
   }
 
   // Create data for bar chart

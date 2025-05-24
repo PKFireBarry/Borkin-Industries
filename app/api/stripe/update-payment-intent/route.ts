@@ -85,8 +85,9 @@ export async function POST(req: NextRequest) {
         status: newIntent.status
       })
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[update-payment-intent] Failed to update PaymentIntent:', err)
-    return NextResponse.json({ error: err?.message || 'Stripe error', details: err }, { status: 500 })
+    const errorMessage = err instanceof Error ? err.message : 'Stripe error';
+    return NextResponse.json({ error: errorMessage, details: err }, { status: 500 })
   }
 } 

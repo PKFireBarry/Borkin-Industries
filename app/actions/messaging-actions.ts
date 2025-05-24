@@ -3,7 +3,6 @@
 import {
   collection,
   doc,
-  addDoc,
   getDoc,
   getDocs,
   query,
@@ -12,10 +11,9 @@ import {
   Timestamp,
   writeBatch,
   serverTimestamp,
-  updateDoc,
   increment,
-  QueryDocumentSnapshot,
   DocumentData,
+  FieldValue,
 } from "firebase/firestore";
 import { db } from "@/firebase";
 import type {
@@ -24,8 +22,7 @@ import type {
   Message,
   MessageInputData,
 } from "@/types/messaging";
-import type { Booking } from "@/types/booking";
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { auth } from "@clerk/nextjs/server";
 
 // Helper to convert Firestore Timestamps in a Chat object
 function convertChatTimestamps(chatData: DocumentData): Chat {
@@ -95,7 +92,7 @@ export async function createOrGetChat(
       return { success: true, data: { ...chatData, id: chatDocSnap.id } as Chat };
     } else {
       // Chat doesn't exist, create it
-      const newChatFirestoreData: any = {
+      const newChatFirestoreData: { [key: string]: any | FieldValue } = {
         bookingId: chatInput.bookingId,
         client: {
           userId: chatInput.clientUserId,
@@ -202,7 +199,7 @@ export async function sendMessage(
 
     // Add the new message
     const newMessageRef = doc(collection(db, "chats", chatId, "messages"));
-    const newMessageDataForFirestore = {
+    const newMessageDataForFirestore: { [key: string]: any | FieldValue } = {
       chatId,
       senderId,
       receiverId, // Store receiverId for clarity, though chat context is primary
@@ -213,7 +210,7 @@ export async function sendMessage(
     batch.set(newMessageRef, newMessageDataForFirestore);
 
     // Update the chat document with last message and unread counts
-    const updateData: any = {
+    const updateData: { [key: string]: any | FieldValue } = {
       lastMessage: {
         // Storing a snippet of the message
         id: newMessageRef.id, // Store the new message ID
@@ -249,9 +246,10 @@ export async function sendMessage(
     return { success: true, data: createdMessage };
   } catch (error: any) {
     console.error("Error in sendMessage:", error);
+    const errorMessage = error instanceof Error ? error.message : "Failed to send message.";
     return {
       success: false,
-      error: "Failed to send message.",
+      error: errorMessage,
       errorCode: "FIRESTORE_ERROR",
     };
   }
@@ -267,45 +265,45 @@ export async function getChatsForUser(): Promise<ActionResult<Chat[]>> {
   }
   const { userId } = authResult;
 
-  try {
-    const clientChatsQuery = query(
-      collection(db, "chats"),
-      where("client.userId", "==", userId),
-    );
-    const contractorChatsQuery = query(
-      collection(db, "chats"),
-      where("contractor.userId", "==", userId),
-    );
+  const chatsColRef = collection(db, "chats");
+  const q = query(
+    chatsColRef,
+    where(`client.userId`, "==", userId)
+  );
+  const q2 = query(
+    chatsColRef,
+    where(`contractor.userId`, "==", userId)
+  );
 
+  try {
     const [clientChatsSnap, contractorChatsSnap] = await Promise.all([
-      getDocs(clientChatsQuery),
-      getDocs(contractorChatsQuery),
+      getDocs(q),
+      getDocs(q2),
     ]);
 
     const chatsMap = new Map<string, Chat>();
 
     clientChatsSnap.forEach((docSnap) => {
       const chatData = convertChatTimestamps(docSnap.data());
-      chatsMap.set(docSnap.id, { ...chatData, id: docSnap.id });
+      chatsMap.set(docSnap.id, { ...chatData, id: docSnap.id } as Chat);
     });
 
     contractorChatsSnap.forEach((docSnap) => {
       if (!chatsMap.has(docSnap.id)) { // Avoid duplicates if user is both client and contractor in a chat (edge case)
         const chatData = convertChatTimestamps(docSnap.data());
-        chatsMap.set(docSnap.id, { ...chatData, id: docSnap.id });
+        chatsMap.set(docSnap.id, { ...chatData, id: docSnap.id } as Chat);
       }
     });
     
-    const allChats = Array.from(chatsMap.values());
-    // Sort by last message time, newest first
-    allChats.sort((a, b) => (b.lastMessageAt || 0) - (a.lastMessageAt || 0));
+    const chats = Array.from(chatsMap.values()).sort((a, b) => b.lastMessageAt - a.lastMessageAt);
 
-    return { success: true, data: allChats };
+    return { success: true, data: chats };
   } catch (error: any) {
     console.error("Error in getChatsForUser:", error);
+    const errorMessage = error instanceof Error ? error.message : "Failed to get chats for user.";
     return {
       success: false,
-      error: "Failed to retrieve chats.",
+      error: errorMessage,
       errorCode: "FIRESTORE_ERROR",
     };
   }
@@ -321,11 +319,12 @@ export async function getMessagesForChat(
   if (!authResult || !authResult.userId) {
     return { success: false, error: "User not authenticated.", errorCode: "UNAUTHENTICATED" };
   }
-  const { userId } = authResult;
+  const { userId: currentUserId } = authResult;
+
+  const chatDocRef = doc(db, "chats", chatId);
 
   try {
     // First, verify the user is part of this chat
-    const chatDocRef = doc(db, "chats", chatId);
     const chatDocSnap = await getDoc(chatDocRef);
     if (!chatDocSnap.exists()) {
       return { success: false, error: "Chat not found.", errorCode: "NOT_FOUND" };
@@ -345,11 +344,11 @@ export async function getMessagesForChat(
     const typedChatData = chatData as Chat;
 
     console.log("[getMessagesForChat] Debugging userIdentity check:");
-    console.log("[getMessagesForChat] currentUserId:", userId, "Type:", typeof userId);
+    console.log("[getMessagesForChat] currentUserId:", currentUserId, "Type:", typeof currentUserId);
     console.log("[getMessagesForChat] chatClientUserId:", typedChatData.client.userId, "Type:", typeof typedChatData.client.userId);
     console.log("[getMessagesForChat] chatContractorUserId:", typedChatData.contractor.userId, "Type:", typeof typedChatData.contractor.userId);
 
-    if (userId !== typedChatData.client.userId && userId !== typedChatData.contractor.userId) {
+    if (currentUserId !== typedChatData.client.userId && currentUserId !== typedChatData.contractor.userId) {
       return {
         success: false,
         error: "User is not a participant of this chat.",
@@ -357,8 +356,10 @@ export async function getMessagesForChat(
       };
     }
 
-    const messagesColRef = collection(db, "chats", chatId, "messages");
-    const messagesQuery = query(messagesColRef, orderBy("timestamp", "asc"));
+    const messagesQuery = query(
+      collection(chatDocRef, "messages"),
+      orderBy("timestamp", "asc"),
+    );
     const messagesSnap = await getDocs(messagesQuery);
 
     const messages = messagesSnap.docs.map((docSnap) => {
@@ -369,9 +370,10 @@ export async function getMessagesForChat(
     return { success: true, data: messages };
   } catch (error: any) {
     console.error("Error in getMessagesForChat:", error);
+    const errorMessage = error instanceof Error ? error.message : "Failed to get messages for chat.";
     return {
       success: false,
-      error: "Failed to retrieve messages.",
+      error: errorMessage,
       errorCode: "FIRESTORE_ERROR",
     };
   }
@@ -387,7 +389,7 @@ export async function markMessagesAsRead(
   if (!authResult || !authResult.userId) {
     return { success: false, error: "User not authenticated.", errorCode: "UNAUTHENTICATED" };
   }
-  const { userId } = authResult;
+  const { userId: currentUserId } = authResult;
 
   const chatDocRef = doc(db, "chats", chatId);
 
@@ -399,9 +401,9 @@ export async function markMessagesAsRead(
     const chatData = chatDocSnap.data() as Chat;
 
     let isClient = false;
-    if (userId === chatData.client.userId) {
+    if (currentUserId === chatData.client.userId) {
         isClient = true;
-    } else if (userId !== chatData.contractor.userId) {
+    } else if (currentUserId !== chatData.contractor.userId) {
         return { success: false, error: "User is not a participant of this chat.", errorCode: "FORBIDDEN" };
     }
 
@@ -416,7 +418,7 @@ export async function markMessagesAsRead(
     const batch = writeBatch(db);
 
     // Update unread count on the chat document
-    const chatUpdateData: any = {};
+    const chatUpdateData: { [key: string]: any | FieldValue } = {};
     if (isClient) {
       chatUpdateData.clientUnreadMessages = 0;
     } else {
@@ -431,7 +433,7 @@ export async function markMessagesAsRead(
     // Fetch last N unread messages. For simplicity, let's say last 20.
     const messagesQuery = query(
         collection(db, "chats", chatId, "messages"),
-        where(`readBy.${userId}`, "==", false), // This query won't work directly if field doesn't exist
+        where(`readBy.${currentUserId}`, "==", false), // This query won't work directly if field doesn't exist
         orderBy("timestamp", "desc"),
         // limit(20) // Firestore doesn't support inequality filters on one field and ordering on another in this way
         // So, we fetch recent messages and filter client-side, or update all. For now, simpler: update all.
@@ -451,9 +453,9 @@ export async function markMessagesAsRead(
     messagesSnap.forEach(msgDoc => {
         const msgData = msgDoc.data() as Message;
         // Check if the message was sent by the other party and not yet read by current user
-        if (msgData.senderId !== userId && (!msgData.readBy || !msgData.readBy[userId])) {
+        if (msgData.senderId !== currentUserId && (!msgData.readBy || !msgData.readBy[currentUserId])) {
             const messageRef = doc(db, "chats", chatId, "messages", msgDoc.id);
-            batch.update(messageRef, { [`readBy.${userId}`]: true });
+            batch.update(messageRef, { [`readBy.${currentUserId}`]: true });
         }
     });
 
@@ -462,9 +464,10 @@ export async function markMessagesAsRead(
 
   } catch (error: any) {
     console.error("Error in markMessagesAsRead:", error);
+    const errorMessage = error instanceof Error ? error.message : "Failed to mark messages as read.";
     return {
       success: false,
-      error: "Failed to mark messages as read.",
+      error: errorMessage,
       errorCode: "FIRESTORE_ERROR",
     };
   }

@@ -20,6 +20,7 @@ import { loadStripe } from '@stripe/stripe-js'
 import { PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js'
 import { isOpenBookingStatus } from '@/app/actions/messaging-actions'
 import Link from 'next/link'
+import { toast } from 'sonner'
 
 interface BookingListProps {
   bookings: Booking[]
@@ -44,6 +45,14 @@ interface ExtendedBooking extends Booking {
     startTime: string;
     endTime: string;
   };
+}
+
+interface EditableService {
+  serviceId: string;
+  name?: string;
+  price: number; // In CENTS
+  paymentType: 'one_time' | 'daily';
+  description?: string;
 }
 
 // Helper to recalc total
@@ -369,29 +378,49 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
     }
   }
 
-  async function handleConfirmPayment(booking: ExtendedBooking, setIsPending: (v: boolean) => void, setError: (v: string | null) => void, setBookings: (fn: (prev: ExtendedBooking[]) => ExtendedBooking[]) => void) {
-    setIsPending(true)
-    setError(null)
-    setReleasePaymentError(null)
-    try {
-      const res = await fetch('/api/stripe/capture-payment-intent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paymentIntentId: booking.paymentIntentId, bookingId: booking.id }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        setReleasePaymentError(data.error || 'Failed to release payment. Please ensure payment is authorized.')
-        setError(data.error || 'Failed to release payment. Please ensure payment is authorized.')
-        return
-      }
-      setBookings(prev => prev.map(b => b.id === booking.id ? { ...b, paymentStatus: 'paid', status: 'completed' } : b))
-    } catch (err) {
-      setReleasePaymentError('Failed to confirm payment')
-      setError('Failed to confirm payment')
-    } finally {
-      setIsPending(false)
+  async function handleConfirmPayment(booking: ExtendedBooking, setIsActionPending: (v: boolean) => void, setActionError: (v: string | null) => void, updateBookingsList: (fn: (prev: ExtendedBooking[]) => ExtendedBooking[]) => void) {
+    setIsActionPending(true)
+    setActionError(null)
+
+    // First, try to capture payment if it's still authorized
+    if (booking.paymentIntentId && booking.paymentStatus === 'pending') {
+        try {
+            const captureRes = await fetch('/api/stripe/capture-payment-intent', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ paymentIntentId: booking.paymentIntentId }),
+            });
+            const captureData = await captureRes.json();
+
+            if (!captureRes.ok) {
+                if (captureData.error === 'payment_intent_authentication_failure') {
+                    // Need re-authentication
+                    setPendingPaymentClientSecret(captureData.clientSecret);
+                    setPendingPaymentBookingId(booking.id);
+                    setIsActionPending(false); 
+                    return; // Stop here, user needs to re-auth
+                } 
+                throw new Error(captureData.error || 'Failed to capture payment.');
+            }
+            // Payment captured successfully, now update booking and release if needed
+            updateBookingsList(prev => prev.map(b => b.id === booking.id ? { ...b, paymentStatus: 'paid', status: 'completed' } : b));
+            toast.success('Payment captured and booking completed!');
+
+        } catch (_err: any) {
+            const message = _err.message || 'Error processing payment.';
+            setActionError(message);
+            toast.error(message);
+            setIsActionPending(false);
+            return;
+        }
+    } else {
+        // If payment was already processed or no PI, just mark as completed or handle accordingly
+        // This path might be taken if payment was handled outside this flow or if it's a no-charge booking
+        updateBookingsList(prev => prev.map(b => b.id === booking.id ? { ...b, status: 'completed' } : b));
+        toast.success('Booking marked as completed!');
     }
+
+    setIsActionPending(false);
   }
 
   async function handleClientComplete(bookingId: string) {
@@ -400,8 +429,30 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
     try {
       await setClientCompleted(bookingId, true)
       setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, clientCompleted: true } : b))
-    } catch (err) {
-      setError('Failed to mark as completed')
+      // Check if contractor also completed to release payment
+      const currentBooking = bookings.find(b => b.id === bookingId)
+      if (currentBooking?.contractorCompleted) {
+        // Attempt to release payment
+        const releaseRes = await fetch('/api/stripe/release-payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ gigId: bookingId }),
+        });
+        if (!releaseRes.ok) {
+            const errData = await releaseRes.json();
+            setReleasePaymentError(errData.error || 'Failed to auto-release payment after client completion.');
+            toast.error(errData.error || 'Failed to auto-release payment.');
+        } else {
+            setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, paymentStatus: 'paid', status: 'completed' } : b));
+            toast.success('Booking completed and payment released!');
+            setReleasePaymentError(null);
+        }
+      }
+
+    } catch (_err: any) {
+      const message = _err.message || 'Failed to mark booking as completed.'
+      setError(message)
+      toast.error(message)
     } finally {
       setIsPending(false)
     }
@@ -452,21 +503,23 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
   }
 
   // Helper function to format service price
-  const formatServicePrice = (service: any, numberOfDays: number = 1) => {
-    if (!service) return '';
-    
-    // Convert from cents to dollars if price is over 100
-    // This handles the case where prices might be stored in cents in the database
-    const isInCents = service.price > 100 && service.price % 100 === 0;
-    const displayPrice = isInCents ? service.price / 100 : service.price;
-    
+  const formatServicePrice = (service: { price: number; paymentType: 'one_time' | 'daily' | 'per_day' }, numberOfDays: number = 1) => {
+    if (!service || typeof service.price === 'undefined') return '';
+
+    const priceInDollars = service.price / 100;
+
     if (service.paymentType === 'one_time') {
-      return `$${displayPrice.toFixed(2)}`;
-    } else {
-      const dailyRate = displayPrice;
-      const totalPrice = dailyRate * numberOfDays;
-      return `$${dailyRate.toFixed(2)}/day × ${numberOfDays} day${numberOfDays !== 1 ? 's' : ''} = $${totalPrice.toFixed(2)}`;
+      return `$${priceInDollars.toFixed(2)}`;
     }
+    // For 'daily' or 'per_day' types
+    const dailyRateInDollars = priceInDollars;
+    const totalPriceInDollars = dailyRateInDollars * (numberOfDays > 0 ? numberOfDays : 1);
+
+    if (numberOfDays > 0) {
+        return `$${dailyRateInDollars.toFixed(2)}/day × ${numberOfDays} day${numberOfDays !== 1 ? 's' : ''} = $${totalPriceInDollars.toFixed(2)}`;
+    }
+    // If numberOfDays is not applicable or 0, just show base rate
+    return `$${dailyRateInDollars.toFixed(2)}${service.paymentType !== 'one_time' ? '/day' : ''}`;
   };
 
   // Helper to convert price to dollars (assume all values are in dollars, never cents)
@@ -496,12 +549,26 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
 
   // Helper to save booking review
   async function saveReview(bookingId: string, review: { rating: number, comment?: string }, contractorId?: string) {
-    const reviewWithCreatedAt = {
-      ...review,
-      createdAt: new Date().toISOString() // Add the required createdAt field
-    };
-    await saveBookingReview(bookingId, reviewWithCreatedAt, contractorId || '');
-    return reviewWithCreatedAt;
+    setIsPending(true) // Keep state updates local to this handler
+    setError(null)
+    try {
+      const reviewWithCreatedAt = {
+        ...review,
+        createdAt: new Date().toISOString()
+      };
+      await saveBookingReview(bookingId, reviewWithCreatedAt, contractorId || '') // Call firebase function
+      
+      // Update client-side state with the new review object that includes createdAt
+      setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, review: reviewWithCreatedAt } : b))
+      setReviewModal({ open: false, booking: null }) // Close modal
+      toast.success('Review submitted successfully!')
+    } catch (_err: any) {
+      const message = _err.message || 'Failed to submit review.'
+      setError(message)
+      toast.error(message)
+    } finally {
+      setIsPending(false)
+    }
   }
 
   const handleSaveEditServices = async () => {
@@ -922,9 +989,7 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
               booking={reviewModal.booking}
               onClose={() => setReviewModal({ open: false, booking: null })}
               onSaved={async (review) => {
-                const reviewWithCreatedAt = await saveReview(reviewModal.booking!.id, review, reviewModal.booking!.contractorId);
-                setBookings(prev => prev.map(b => b.id === reviewModal.booking!.id ? { ...b, review: reviewWithCreatedAt } : b));
-                setReviewModal({ open: false, booking: null });
+                await saveReview(reviewModal.booking!.id, review, reviewModal.booking!.contractorId);
               }}
             />
           )}
@@ -995,13 +1060,21 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
                           checked={checked}
                           onChange={() => {
                             if (!isEditable) return
-                            setEditServices(prev => checked ? prev.filter((s: any) => s.serviceId !== offering.serviceId) : [...prev, offering])
+                            const serviceToAdd = {
+                              ...offering,
+                              paymentType: offering.paymentType === 'per_day' ? 'daily' : offering.paymentType
+                            };
+                            setEditServices(prev => 
+                              checked 
+                                ? prev.filter((s: any) => s.serviceId !== offering.serviceId) 
+                                : [...prev, serviceToAdd]
+                            )
                           }}
                           className="accent-primary h-4 w-4 mr-2"
                           disabled={!isEditable}
                         />
                         <span className="font-medium truncate">{platformService?.name || offering.serviceId}</span>
-                        <span className="text-xs text-muted-foreground ml-2">${(offering.price / 100).toFixed(2)}{offering.paymentType === 'daily' ? '/day' : ''}</span>
+                        <span className="text-xs text-muted-foreground ml-2">${(offering.price / 100).toFixed(2)}{(offering.paymentType === 'daily' || offering.paymentType === 'per_day') ? '/day' : ''}</span>
                       </div>
                       {platformService?.description && (
                         <span className="text-xs text-muted-foreground ml-6 break-words">{platformService.description}</span>

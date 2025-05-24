@@ -36,7 +36,7 @@ interface AdminServicesClientProps {
 
 export default function AdminServicesClient({ initialServices }: AdminServicesClientProps) {
   const [services, setServices] = useState<PlatformService[]>(initialServices)
-  const [error, setError] = useState<string | null>(null)
+  const [_error, _setError] = useState<string | null>(null)
   const [serviceToEdit, setServiceToEdit] = useState<PlatformService | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
@@ -147,13 +147,13 @@ export default function AdminServicesClient({ initialServices }: AdminServicesCl
         </Button>
       </div>
 
-      {error && (
+      {_error && (
         <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-md mb-6">
           <div className="flex items-center">
             <AlertCircle className="h-4 w-4 mr-2" />
             <h3 className="font-medium">Error</h3>
           </div>
-          <p className="mt-1">{error}</p>
+          <p className="mt-1">{_error}</p>
         </div>
       )}
 
@@ -170,7 +170,7 @@ export default function AdminServicesClient({ initialServices }: AdminServicesCl
           {services.length === 0 ? (
             <TableRow>
               <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
-                No services found. Click "Add New Service" to create one.
+                No services found. Click &quot;Add New Service&quot; to create one.
               </TableCell>
             </TableRow>
           ) : (
@@ -260,24 +260,15 @@ export default function AdminServicesClient({ initialServices }: AdminServicesCl
           <DialogHeader>
             <DialogTitle>Confirm Deletion</DialogTitle>
             <p className="text-sm text-muted-foreground mt-1">
-              Are you sure you want to delete the service "{serviceToDelete?.name}"? 
+              Are you sure you want to remove the service &quot;{serviceToDelete?.name || 'this service'}&quot;? 
               This action cannot be undone.
             </p>
           </DialogHeader>
-          
           <DialogFooter>
-            <Button 
-              variant="outline" 
-              onClick={() => setIsDeleteDialogOpen(false)}
-              disabled={isSubmitting}
-            >
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
               Cancel
             </Button>
-            <Button 
-              variant="destructive" 
-              onClick={handleDeleteService}
-              disabled={isSubmitting}
-            >
+            <Button variant="destructive" onClick={handleDeleteService} disabled={isSubmitting}>
               {isSubmitting ? 'Deleting...' : 'Delete Service'}
             </Button>
           </DialogFooter>

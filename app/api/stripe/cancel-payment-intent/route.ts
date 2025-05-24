@@ -13,8 +13,9 @@ export async function POST(req: NextRequest) {
     const intent = await stripe.paymentIntents.cancel(paymentIntentId)
     console.log('[cancel-payment-intent] Stripe response:', intent.status)
     return NextResponse.json({ success: true, status: intent.status, intent })
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[cancel-payment-intent] Failed to cancel PaymentIntent:', err)
-    return NextResponse.json({ error: err?.message || 'Stripe error', details: err }, { status: 500 })
+    const errorMessage = err instanceof Error ? err.message : 'Stripe error';
+    return NextResponse.json({ error: errorMessage, details: err }, { status: 500 })
   }
 } 

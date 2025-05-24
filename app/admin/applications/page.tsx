@@ -2,7 +2,7 @@ import { currentUser } from '@clerk/nextjs/server'
 import { isAdmin } from '@/lib/auth/role-helpers'
 import { redirect } from 'next/navigation'
 import { getAllContractorApplications, updateContractorApplicationStatus } from '@/lib/firebase/contractors'
-import AdminApplicationsClient from './AdminApplicationsClient'
+import AdminApplicationsClient, { type Application } from './AdminApplicationsClient'
 
 async function approveContractor(id: string) {
   'use server'
@@ -19,12 +19,6 @@ async function reinstateContractor(id: string) {
   await updateContractorApplicationStatus(id, 'pending')
 }
 
-function formatDate(date: Date | string | null) {
-  if (!date) return '-'
-  if (typeof date === 'string') return new Date(date).toLocaleString()
-  return date.toLocaleString()
-}
-
 export default async function AdminApplicationsPage() {
   const user = await currentUser()
   if (!user || !isAdmin(user)) {
@@ -32,13 +26,33 @@ export default async function AdminApplicationsPage() {
   }
 
   // Fetch all contractor applications, sorted by createdAt descending
-  const applications = (await getAllContractorApplications()).sort((a: any, b: any) => {
-    if (!a.createdAt || !b.createdAt) return 0
-    return b.createdAt - a.createdAt
-  })
+  const applicationsData = await getAllContractorApplications();
+  // Ensure applicationsData is treated as an array of Application
+  const applications = (applicationsData as Application[]).sort((a, b) => {
+    let timeA = 0;
+    if (a.createdAt) {
+      if (typeof a.createdAt === 'number') timeA = a.createdAt;
+      else if (typeof a.createdAt === 'string') timeA = new Date(a.createdAt).getTime();
+      else if (a.createdAt instanceof Date) timeA = a.createdAt.getTime();
+      else if (typeof a.createdAt === 'object' && 'seconds' in a.createdAt && typeof (a.createdAt as any).seconds === 'number' && typeof (a.createdAt as any).nanoseconds === 'number') { // Firestore Timestamp like object
+        timeA = (a.createdAt as any).seconds * 1000 + (a.createdAt as any).nanoseconds / 1000000;
+      }
+    }
+
+    let timeB = 0;
+    if (b.createdAt) {
+      if (typeof b.createdAt === 'number') timeB = b.createdAt;
+      else if (typeof b.createdAt === 'string') timeB = new Date(b.createdAt).getTime();
+      else if (b.createdAt instanceof Date) timeB = b.createdAt.getTime();
+      else if (typeof b.createdAt === 'object' && 'seconds' in b.createdAt && typeof (b.createdAt as any).seconds === 'number' && typeof (b.createdAt as any).nanoseconds === 'number') { // Firestore Timestamp like object
+        timeB = (b.createdAt as any).seconds * 1000 + (b.createdAt as any).nanoseconds / 1000000;
+      }
+    }
+    return timeB - timeA; // Sort descending
+  });
 
   return <AdminApplicationsClient
-    applications={applications}
+    applications={applications} // No longer need 'as any'
     onApprove={approveContractor}
     onReject={rejectContractor}
     onReinstate={reinstateContractor}

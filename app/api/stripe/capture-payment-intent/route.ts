@@ -23,8 +23,9 @@ export async function POST(req: NextRequest) {
     const bookingRef = doc(db, 'bookings', bookingId)
     await updateDoc(bookingRef, { paymentStatus: 'paid', status: 'completed' })
     return NextResponse.json({ ok: true, paymentIntent })
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Failed to capture PaymentIntent:', err)
-    return NextResponse.json({ error: err?.message || 'Stripe error' }, { status: 500 })
+    const errorMessage = err instanceof Error ? err.message : 'Stripe error';
+    return NextResponse.json({ error: errorMessage }, { status: 500 })
   }
 } 

@@ -4,7 +4,7 @@ import { db } from '@/firebase'
 import { currentUser } from '@clerk/nextjs/server'
 import { isAdmin } from '@/lib/auth/role-helpers'
 
-export async function GET(req: NextRequest) {
+export async function GET(_req: NextRequest) {
   // Verify admin authorization
   const user = await currentUser()
   if (!user || !isAdmin(user)) {

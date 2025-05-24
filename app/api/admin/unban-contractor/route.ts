@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
   try {
     await allowReapplication(userId)
     return NextResponse.json({ success: true })
-  } catch (err) {
+  } catch (_err) {
     return NextResponse.json({ error: 'Failed to unban user' }, { status: 500 })
   }
 } 
