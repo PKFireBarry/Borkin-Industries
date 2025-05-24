@@ -3,6 +3,8 @@ import { motion } from "framer-motion"
 import { PawPrint, Heart, Sun, Cat, Dog, Fish, Bird, Rabbit } from "lucide-react"
 import Image from "next/image"
 import logo from "../photo/logo.png"
+import { SignInButton, SignedIn, SignedOut } from "@clerk/nextjs"
+import Link from "next/link"
 
 export default function HeroSection() {
   const text = "Borkin Industries"
@@ -20,7 +22,7 @@ export default function HeroSection() {
   const getRandomPetIcon = () => petIcons[Math.floor(Math.random() * petIcons.length)]
 
   return (
-    <section className="w-full min-h-screen py-12 flex flex-col items-center justify-center bg-gradient-to-r from-blue-400 to-green-400 relative overflow-hidden">
+    <section className="w-full min-h-screen py-12 flex flex-col items-center justify-center bg-gradient-to-r from-blue-400 to-green-400 relative overflow-hidden" id="hero">
       {/* Pet Icons Background */}
       {[...Array(30)].map((_, index) => {
         const RandomIcon = getRandomPetIcon()
@@ -101,14 +103,30 @@ export default function HeroSection() {
           </motion.p>
 
           <div className="space-x-4 mt-6">
-            <motion.a
-              className="bg-yellow-400 text-blue-900 px-6 py-3 rounded-full transition-all duration-300 transform hover:scale-105 hover:bg-yellow-300"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              href="#services"
-            >
-              Get Estimate
-            </motion.a>
+            <SignedOut>
+              <SignInButton mode="modal">
+                <motion.button
+                  className="bg-yellow-400 text-blue-900 px-6 py-3 rounded-full transition-all duration-300 transform hover:scale-105 hover:bg-yellow-300"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  Sign In
+                </motion.button>
+              </SignInButton>
+            </SignedOut>
+            
+            <SignedIn>
+              <Link href="/dashboard">
+                <motion.button
+                  className="bg-yellow-400 text-blue-900 px-6 py-3 rounded-full transition-all duration-300 transform hover:scale-105 hover:bg-yellow-300"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  Go to Dashboard
+                </motion.button>
+              </Link>
+            </SignedIn>
+            
             <motion.a
               className="text-white border border-white px-6 py-3 rounded-full transition-all duration-300 transform hover:scale-105 hover:bg-white hover:text-blue-600"
               whileHover={{ scale: 1.05 }}

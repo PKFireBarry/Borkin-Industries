@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Label } from '@/components/ui/label'
+import { PhotoUpload } from '@/components/PhotoUpload'
 
 interface ProfileFormProps {
   initialProfile: Client | null
@@ -243,8 +244,13 @@ export function ProfileForm({ initialProfile, isEditing }: ProfileFormProps) {
               )}
             </Avatar>
             <div className="w-full">
-              <Label htmlFor="avatar">Profile Picture URL</Label>
-              <Input id="avatar" name="avatar" value={form.avatar} onChange={handleChange} placeholder="https://example.com/profile.jpg" />
+              <PhotoUpload
+                label="Profile Picture"
+                storagePath={`avatars/${user?.id || 'unknown'}`}
+                initialUrl={form.avatar}
+                onUpload={url => setForm(prev => ({ ...prev, avatar: url }))}
+                disabled={isSaving}
+              />
             </div>
           </div>
 

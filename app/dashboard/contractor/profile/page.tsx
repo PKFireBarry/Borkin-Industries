@@ -13,6 +13,7 @@ import type { ContractorServiceOffering, PlatformService } from '@/types/service
 import type { Contractor, ContractorApplication, Availability, PaymentInfo, WorkHistory, Rating } from '@/types/contractor';
 import { ContractorProfileServiceManager } from './components/contractor-profile-service-manager';
 import { getAllPlatformServices } from '@/lib/firebase/services'
+import { PhotoUpload } from '@/components/PhotoUpload'
 
 
 const VETERINARY_SKILLS = [
@@ -272,7 +273,7 @@ export default function ContractorProfilePage() {
 
   if (!editing) {
     return (
-      <section className="max-w-2xl mx-auto py-12 px-4">
+      <section className="max-w-2xl mx-auto py-12 px-4 pb-28">
         <h1 className="text-3xl font-bold mb-8 text-center">Contractor Profile</h1>
         <Card className="shadow-lg">
           <CardHeader className="text-center">
@@ -309,12 +310,17 @@ export default function ContractorProfilePage() {
         
         {renderServiceManager()}
 
-        <Button type="button" className="mt-8 w-full py-3 text-lg" onClick={() => setEditing(true)}>Edit Profile</Button>
+        {/* Sticky action bar */}
+        <div className="fixed bottom-0 left-0 w-full bg-background border-t border-gray-200 shadow-lg z-50 flex justify-center py-4 px-4">
+          <Button type="button" className="w-full max-w-2xl text-lg" onClick={() => setEditing(true)}>
+            Edit Profile
+          </Button>
+        </div>
       </section>
     )
   }
   return (
-    <section className="max-w-4xl mx-auto py-12 px-4">
+    <section className="max-w-4xl mx-auto py-12 px-4 pb-32">
       <h1 className="text-3xl font-bold mb-8 text-center">Contractor Profile</h1>
       {editing ? (
         <>
@@ -322,6 +328,24 @@ export default function ContractorProfilePage() {
              <Card>
                   <CardHeader><CardTitle>Edit Basic Information</CardTitle></CardHeader>
                   <CardContent className="space-y-4">
+                       <div className="flex flex-col items-center mb-6 space-y-4">
+                         <Avatar className="h-24 w-24">
+                           {form.profileImage ? (
+                             <AvatarImage src={form.profileImage} alt={form.name} />
+                           ) : (
+                             <AvatarFallback>{form.name?.charAt(0) || 'U'}</AvatarFallback>
+                           )}
+                         </Avatar>
+                         <div className="w-full">
+                           <PhotoUpload
+                             label="Profile Picture"
+                             storagePath={`contractor-avatars/${user?.id || 'unknown'}`}
+                             initialUrl={form.profileImage}
+                             onUpload={url => setForm(prev => ({ ...prev, profileImage: url }))}
+                             disabled={saving}
+                           />
+                         </div>
+                       </div>
                        <div><Label>Name</Label><Input name="name" value={form.name} onChange={handleChange} /></div>
                        <div><Label>Phone</Label><Input name="phone" value={form.phone} onChange={handleChange} /></div>
                        <div><Label>Bio</Label><textarea name="bio" value={form.bio || ''} onChange={handleChange} rows={4} className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary focus:border-primary" placeholder="Tell clients a bit about yourself and your experience."></textarea></div>
@@ -339,10 +363,13 @@ export default function ContractorProfilePage() {
               </Card>
           </form>
 
-          <div className="flex justify-end space-x-2 mt-6 border-t pt-6">
+          {/* Sticky action bar for edit mode */}
+          <div className="fixed bottom-0 left-0 w-full bg-background border-t border-gray-200 shadow-lg z-50 flex justify-center py-4 px-4">
+            <div className="flex gap-2 w-full max-w-4xl">
               <Button 
                 type="button" 
                 variant="outline" 
+                className="flex-1"
                 onClick={() => { 
                   setForm(originalForm); 
                   setEditing(false); 
@@ -352,13 +379,13 @@ export default function ContractorProfilePage() {
               >
                 Cancel Profile Edit
               </Button>
-              <div className="relative">
+              <div className="relative flex-1">
                 <Button 
                   type="submit" 
                   form="contractorProfileForm"
                   disabled={saving || !formValid}
                   title={!formValid ? "Please complete required fields" : saving ? "Saving in progress" : "Save your profile changes"}
-                  className="relative"
+                  className="w-full relative"
                 >
                   {saving ? 'Saving Profile...' : 'Save Profile Changes'}
                 </Button>
@@ -368,7 +395,9 @@ export default function ContractorProfilePage() {
                   </p>
                 )}
               </div>
+            </div>
           </div>
+
           {error && <p className="text-red-500 text-sm mt-2">Error: {error}</p>}
           {success && <p className="text-green-500 text-sm mt-2">Profile updated successfully!</p>}
 
@@ -411,8 +440,9 @@ export default function ContractorProfilePage() {
              
              {renderServiceManager()}
 
-             <div className="text-center mt-6">
-                 <Button onClick={() => setEditing(true)}>Edit Profile</Button>
+             {/* Sticky action bar for view mode */}
+             <div className="fixed bottom-0 left-0 w-full bg-background border-t border-gray-200 shadow-lg z-50 flex justify-center py-4 px-4">
+               <Button onClick={() => setEditing(true)} className="w-full max-w-4xl text-lg">Edit Profile</Button>
              </div>
          </div>
       )}

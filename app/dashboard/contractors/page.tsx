@@ -6,16 +6,16 @@ import { Card, CardContent, CardTitle } from '@/components/ui/card'
 import type { Contractor } from '@/types/contractor'
 import { ContractorProfileModal } from './contractor-profile-modal'
 import { BookingRequestForm } from '../bookings/booking-request-form'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { useRequireRole } from '../use-require-role'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { useUser } from '@clerk/nextjs'
 import { getClientProfile } from '@/lib/firebase/client'
 
 export default function ContractorsPageWrapper() {
+  // All Hooks must be called at the top level, before any conditional returns.
   const { isLoaded, isAuthorized } = useRequireRole('client')
   const { user } = useUser()
-  if (!isLoaded || !isAuthorized) return null
 
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedContractor, setSelectedContractor] = useState<Contractor | null>(null)
@@ -26,14 +26,18 @@ export default function ContractorsPageWrapper() {
   const [bookingForContractorId, setBookingForContractorId] = useState<string | null>(null)
   const [clientLocation, setClientLocation] = useState<{ address?: string; city?: string; state?: string; postalCode?: string } | null>(null)
 
+  // Moved useEffect Hooks before the early return
   // Fetch contractors on mount (client component)
   React.useEffect(() => {
-    getAllContractors().then(setContractors)
-  }, [])
+    // Ensure this effect only runs when authorized and user is available if needed
+    if (isAuthorized && user) {
+        getAllContractors().then(setContractors)
+    }
+  }, [isAuthorized, user]) // Added dependencies
 
   // Fetch client location on mount
   React.useEffect(() => {
-    if (!user) return
+    if (!user || !isAuthorized) return // Guard condition
     getClientProfile(user.id).then(profile => {
       if (profile) setClientLocation({
         address: profile.address,
@@ -42,7 +46,14 @@ export default function ContractorsPageWrapper() {
         postalCode: profile.postalCode,
       })
     })
-  }, [user])
+  }, [user, isAuthorized]) // Added isAuthorized dependency
+
+  // Early return after all Hooks have been declared
+  if (!isLoaded || !isAuthorized) {
+    // It's good practice to return a consistent loading/skeleton UI here 
+    // instead of null if the page has a defined layout, but null is fine for now.
+    return null
+  }
 
   // Get all unique skills for filter dropdown
   const allSkills = Array.from(new Set(contractors.flatMap(c => c.veterinarySkills || [])))
@@ -152,18 +163,26 @@ export default function ContractorsPageWrapper() {
           ))}
         </div>
       )}
-      <ContractorProfileModal
-        contractor={selectedContractor}
-        open={modalOpen}
-        onClose={handleCloseModal}
-        onBookNow={handleBookNowFromModal}
-        clientLocation={clientLocation}
-      />
+      {modalOpen && selectedContractor && (
+        <ContractorProfileModal
+          contractor={selectedContractor}
+          open={modalOpen} 
+          onClose={handleCloseModal}
+          onBookNow={handleBookNowFromModal}
+          clientLocation={clientLocation}
+        />
+      )}
       {isBookingOpen && (
         <Dialog open={isBookingOpen} onOpenChange={handleBookingClose}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent 
+            className="max-w-2xl"
+            aria-labelledby="bookingRequestTitle"
+          >
             <DialogHeader>
-              <DialogTitle>New Booking Request</DialogTitle>
+              <DialogTitle id="bookingRequestTitle">New Booking Request</DialogTitle>
+              <DialogDescription id="bookingRequestDescription" className="sr-only">
+                Submit a new booking request for the selected contractor.
+              </DialogDescription>
             </DialogHeader>
             <BookingRequestForm 
                 onSuccess={handleBookingClose} 

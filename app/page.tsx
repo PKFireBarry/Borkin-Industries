@@ -1,7 +1,6 @@
 import Image from "next/image";
 import { currentUser } from '@clerk/nextjs/server';
 import { getUserRole } from '@/lib/auth/role-helpers';
-import { RoleButtons } from './role-buttons';
 import { redirect } from 'next/navigation';
 import { GenerateTestDataButton } from './generate-test-data-button';
 import About from "@/components/About";
@@ -12,6 +11,7 @@ import Footer from "@/components/Footer";
 import Header from "@/components/Header";
 import ContactComponent from "@/components/Contact";
 import WhyChooseUs from "@/components/WhyChooseUs";
+import ServicesSection from "@/components/ServicesSection";
 
 export default async function Home() {
   const user = await currentUser();
@@ -20,24 +20,26 @@ export default async function Home() {
   if (role === 'client') redirect('/dashboard');
   if (role === 'contractor') redirect('/dashboard/contractor');
   if (role === 'admin') redirect('/admin');
+  
+  // Redirect to role selection page if user is logged in but has no role
+  if (user && !role) redirect('/select-role');
 
   return (
     <div className="flex flex-col min-h-screen w-full">
       <Header />
       <main className="flex-1 flex flex-col w-full">
-        {/* Role selection buttons for new users */}
-        {user && !role && <div className="container mx-auto px-4 py-8"><RoleButtons /></div>}
         {/* Admin-only: Generate test data button */}
         {user && role === 'admin' && <div className="container mx-auto px-4 py-8"><GenerateTestDataButton /></div>}
         
         <HeroSection />
-        <div  id='about'><About /></div>
+        <div id='about'><About /></div>
         <TeamSection />
         <WhyChooseUs/>
+        <ServicesSection />
         <div id="contact"><ContactComponent /></div>
-        <TermsOfServiceSection />
-        
-
+        <div className="flex justify-center w-full">
+          <TermsOfServiceSection />
+        </div>
       </main>
       <Footer />
     </div>

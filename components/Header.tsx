@@ -4,6 +4,8 @@ import Link from "next/link"
 import { PawPrintIcon as Paw } from 'lucide-react'
 import { motion } from "framer-motion"
 import { useState } from "react"
+import { SignInButton, SignUpButton, SignedIn, SignedOut, UserButton } from "@clerk/nextjs"
+import { Button } from "@/components/ui/button"
 
 export default function Header() {
   const [isHovered, setIsHovered] = useState(false)
@@ -42,23 +44,50 @@ export default function Header() {
             Borkin Industries
           </motion.span>
         </Link>
-        <nav className="ml-auto flex gap-4 sm:gap-6">
-          {navItems.map((item) => (
-            <motion.div
-              key={item.href}
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              <Link 
-                className="text-sm font-medium relative group"
-                href={item.href}
+        
+        <div className="flex items-center gap-4">
+          <nav className="flex gap-4 sm:gap-6">
+            {navItems.map((item) => (
+              <motion.div
+                key={item.href}
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.95 }}
               >
-                {item.label}
-                <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-pink-500 group-hover:w-full transition-all duration-300 ease-in-out" />
+                <Link 
+                  className="text-sm font-medium relative group"
+                  href={item.href}
+                >
+                  {item.label}
+                  <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-pink-500 group-hover:w-full transition-all duration-300 ease-in-out" />
+                </Link>
+              </motion.div>
+            ))}
+          </nav>
+          
+          <div className="flex items-center gap-2 ml-4">
+            <SignedOut>
+              <SignInButton mode="modal">
+                <Button variant="default" className="text-sm px-3 py-1">
+                  Sign In
+                </Button>
+              </SignInButton>
+              <SignUpButton mode="modal">
+                <Button variant="outline" className="text-sm px-3 py-1">
+                  Sign Up
+                </Button>
+              </SignUpButton>
+            </SignedOut>
+            
+            <SignedIn>
+              <Link href="/dashboard">
+                <Button variant="default" className="text-sm px-3 py-1 mr-2">
+                  Dashboard
+                </Button>
               </Link>
-            </motion.div>
-          ))}
-        </nav>
+              <UserButton afterSignOutUrl="/" />
+            </SignedIn>
+          </div>
+        </div>
       </div>
     </motion.header>
   )

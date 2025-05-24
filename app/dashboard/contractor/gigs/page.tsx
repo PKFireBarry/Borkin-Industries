@@ -11,10 +11,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import dynamic from 'next/dynamic'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Pet } from '@/types/client'
-import { PawPrint, Pill, Utensils, Clock, Dog, Info, Package } from 'lucide-react'
+import { PawPrint, Pill, Utensils, Clock, Dog, Info, Package, ChevronDown, ChevronUp, Loader2, MessageSquare } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import type { Booking } from '@/types/booking'
 import { getAllPlatformServices } from '@/lib/firebase/services'
+import type { PlatformService } from '@/types/service'
+import { isOpenBookingStatus } from '@/app/actions/messaging-actions'
+import Link from 'next/link'
 
 // Define Gig interface directly without extending Booking
 interface Gig {
@@ -174,6 +177,9 @@ export default function ContractorGigsPage() {
   const [cancelGigId, setCancelGigId] = useState<string | null>(null)
   const [cancelError, setCancelError] = useState<string | null>(null)
   const [isCancelling, setIsCancelling] = useState(false)
+  const [expandedPetIndex, setExpandedPetIndex] = useState<number>(0)
+  const [isDetailLoading, setIsDetailLoading] = useState(false)
+  const [gigMessageEligibility, setGigMessageEligibility] = useState<Record<string, boolean>>({})
 
   async function fetchGigs() {
     if (!user) return
@@ -236,6 +242,19 @@ export default function ContractorGigsPage() {
     fetchGigs()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user])
+
+  useEffect(() => {
+    const checkEligibility = async () => {
+      const eligibility: Record<string, boolean> = {};
+      for (const gig of gigs) {
+        eligibility[gig.id] = await isOpenBookingStatus(gig.status);
+      }
+      setGigMessageEligibility(eligibility);
+    };
+    if (gigs.length > 0) {
+      checkEligibility();
+    }
+  }, [gigs]);
 
   // Fetch client profile and geocode both addresses when opening modal
   useEffect(() => {
@@ -550,6 +569,23 @@ export default function ContractorGigsPage() {
     return gig.services && gig.services.length > 1;
   };
 
+  // When detailGig is set, start loading state
+  useEffect(() => {
+    if (detailGig) setIsDetailLoading(true)
+  }, [detailGig])
+
+  // When all modal data is loaded, stop loading state
+  useEffect(() => {
+    if (
+      detailGig &&
+      clientProfile &&
+      bookedPetsDetails &&
+      (contractorLatLng && clientLatLng)
+    ) {
+      setIsDetailLoading(false)
+    }
+  }, [detailGig, clientProfile, bookedPetsDetails, contractorLatLng, clientLatLng])
+
   if (!isLoaded || !isAuthorized) return null
   if (loading) return <div className="p-8 text-center text-muted-foreground">Loading gigs...</div>
   if (error) return <div className="p-8 text-center text-destructive">{error}</div>
@@ -576,79 +612,141 @@ export default function ContractorGigsPage() {
       {filteredGigs.length === 0 ? (
         <div className="text-muted-foreground">No gigs found for this status.</div>
       ) : (
-        <div className="space-y-6">
-          {filteredGigs.map(gig => (
-            <Card key={gig.id} className="shadow-sm">
-              <CardContent className="py-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white rounded-lg shadow-md border border-gray-200">
-                <div>
-                  <CardTitle className="mb-2 flex items-center">
-                    {hasMultipleServices(gig) ? (
-                      <Badge variant="outline" className="mr-2 bg-primary/10 text-primary">
-                        <Package className="h-3 w-3 mr-1" />
-                        {gig.services?.length} services
-                      </Badge>
-                    ) : null}
-                    {getServiceNames(gig)}
-                  </CardTitle>
-                  <div className="text-sm mb-1"><span className="font-medium">Client:</span> {gig.clientName}</div>
-                  <div className="text-sm mb-1"><span className="font-medium">Pets:</span> {gig.pets.join(', ')}</div>
-                  <div className="text-sm mb-1">
-                    <span className="font-medium">Date & Time:</span> {getGigDateTimeRange(gig)}
+        <div className="grid gap-4 w-full">
+          {filteredGigs.map(gig => {
+            const canMessage = gigMessageEligibility[gig.id] === true;
+            return (
+              <Card key={gig.id} className="w-full bg-white rounded-lg shadow-md border border-gray-200 flex flex-col gap-0">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 flex-wrap p-4 pb-2 border-b">
+                  <div className="flex-1 min-w-0">
+                    <CardTitle className="text-lg flex items-center gap-2 flex-wrap">
+                      {hasMultipleServices(gig) ? (
+                        <Badge variant="outline" className="mr-2 bg-primary/10 text-primary">
+                          <Package className="h-3 w-3 mr-1" />
+                          {gig.services?.length} services
+                        </Badge>
+                      ) : null}
+                      <span className="truncate max-w-xs md:max-w-md lg:max-w-lg xl:max-w-xl">{getServiceNames(gig)}</span>
+                    </CardTitle>
+                    <div className="text-sm text-gray-500 mt-1 flex flex-col sm:flex-row sm:items-center gap-1">
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-4 h-4 text-primary" />
+                        {getGigDateTimeRange(gig)}
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-sm mb-1"><span className="font-medium">Status:</span> <StatusBadge status={gig.status} /></div>
-                  {gig.review && (
-                    <span className="text-xs text-muted-foreground">Review: <span className="font-medium text-foreground">{gig.review.rating}★</span> {gig.review.comment}</span>
-                  )}
+                  <div className="flex flex-row sm:flex-col items-end gap-2 min-w-[120px] sm:min-w-[100px] mt-2 sm:mt-0">
+                    <StatusBadge status={gig.status} />
+                    <span className={`capitalize text-xs${gig.paymentStatus === 'cancelled' ? ' text-red-600' : ''}`}>{gig.paymentStatus}</span>
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-2 justify-end items-center">
-                  <Button variant="outline" className="text-sm px-3 py-1 rounded-full shadow-sm" onClick={() => setDetailGig(gig)}>
-                    Details
-                  </Button>
-                  {gig.status === 'pending' && (
-                    <>
-                      <Button variant="default" disabled={actionLoading === gig.id} onClick={() => handleAccept(gig.id)}>
-                        {actionLoading === gig.id ? 'Accepting...' : 'Accept'}
-                      </Button>
-                      <Button variant="destructive" disabled={actionLoading === gig.id} onClick={() => handleDecline(gig.id)}>
-                        {actionLoading === gig.id ? 'Declining...' : 'Decline'}
-                      </Button>
-                    </>
-                  )}
-                  {gig.status === 'approved' && !gig.contractorCompleted && (
-                    <>
-                      <Button variant="default" disabled={actionLoading === gig.id} onClick={() => handleMarkCompleted(gig.id)}>
-                        {actionLoading === gig.id ? 'Marking...' : 'Mark as Completed'}
-                      </Button>
-                      <Button 
-                        variant="destructive" 
-                        className="text-sm px-3 py-1 rounded-full shadow-sm"
-                        onClick={() => setCancelGigId(gig.id)}
-                        disabled={actionLoading === gig.id}
-                      >
-                        Cancel
-                      </Button>
-                    </>
-                  )}
-                  {gig.status === 'approved' && gig.contractorCompleted && (
-                    <span className="text-xs text-muted-foreground">Waiting for client...</span>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                <CardContent className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-4 pt-2">
+                  <div className="flex flex-col gap-1 flex-1 min-w-0">
+                    <span className="text-xs text-muted-foreground">Client: <span className="font-medium text-foreground">{gig.clientName}</span></span>
+                    <span className="text-xs text-muted-foreground">Pets: <span className="font-medium text-foreground">{gig.pets.join(', ')}</span></span>
+                    {gig.review && (
+                      <span className="text-xs text-muted-foreground">Review: <span className="font-medium text-foreground">{gig.review.rating}★</span> {gig.review.comment}</span>
+                    )}
+                  </div>
+                  <div className="flex flex-col sm:flex-row flex-wrap gap-2 justify-end items-center w-full sm:w-auto mt-2 sm:mt-0">
+                    <Button variant="outline" className="text-sm px-3 py-1 rounded-full shadow-sm w-full sm:w-auto" onClick={() => setDetailGig(gig)}>
+                      Details
+                    </Button>
+                    {canMessage && (
+                      <Link href={`/dashboard/messages/${gig.id}`} passHref>
+                        <Button variant="outline" className="text-sm px-3 py-1 rounded-full shadow-sm w-full sm:w-auto">
+                          <MessageSquare className="h-4 w-4 mr-2" />
+                          Message Client
+                        </Button>
+                      </Link>
+                    )}
+                    {gig.status === 'pending' && (
+                      <>
+                        <Button variant="default" disabled={actionLoading === gig.id} onClick={() => handleAccept(gig.id)}>
+                          {actionLoading === gig.id ? 'Accepting...' : 'Accept'}
+                        </Button>
+                        <Button variant="destructive" disabled={actionLoading === gig.id} onClick={() => handleDecline(gig.id)}>
+                          {actionLoading === gig.id ? 'Declining...' : 'Decline'}
+                        </Button>
+                      </>
+                    )}
+                    {gig.status === 'approved' && !gig.contractorCompleted && (
+                      <>
+                        <Button variant="default" disabled={actionLoading === gig.id} onClick={() => handleMarkCompleted(gig.id)}>
+                          {actionLoading === gig.id ? 'Marking...' : 'Mark as Completed'}
+                        </Button>
+                        <Button 
+                          variant="destructive" 
+                          className="text-sm px-3 py-1 rounded-full shadow-sm"
+                          onClick={() => setCancelGigId(gig.id)}
+                          disabled={actionLoading === gig.id}
+                        >
+                          Cancel
+                        </Button>
+                      </>
+                    )}
+                    {gig.status === 'approved' && gig.contractorCompleted && (
+                      <span className="text-xs text-muted-foreground">Waiting for client...</span>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })}
         </div>
       )}
       {/* Gig Details Modal */}
       <Dialog open={!!detailGig} onOpenChange={() => setDetailGig(null)}>
-        <DialogContent className="w-full max-w-lg sm:max-w-xl md:max-w-2xl lg:max-w-3xl xl:max-w-4xl">
+        <DialogContent className="w-full max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Gig Details</DialogTitle>
           </DialogHeader>
-          {detailGig && (
-            <div className="space-y-6 py-4 max-h-[80vh] overflow-y-auto pr-2">
-              {/* Client Info Section */}
+          {isDetailLoading ? (
+            <div className="flex flex-col items-center justify-center min-h-[300px] py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
+              <div className="text-muted-foreground text-sm">Loading gig details...</div>
+            </div>
+          ) : detailGig && (
+            <section className="space-y-6">
+              {/* Status & Dates */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 border-b pb-4">
+                <div className="flex flex-col gap-2">
+                  <span className="text-xs text-muted-foreground">Status</span>
+                  <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold shadow-sm
+                    ${detailGig.status === 'completed' ? 'bg-green-100 text-green-800' :
+                      detailGig.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                      detailGig.status === 'approved' ? 'bg-blue-100 text-blue-800' :
+                      'bg-gray-200 text-gray-700'}`}
+                  >
+                    {detailGig.status?.charAt(0).toUpperCase() + detailGig.status?.slice(1)}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <span className="text-xs text-muted-foreground">Payment Status</span>
+                  <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold bg-gray-100 text-gray-800 capitalize shadow-sm">
+                    {detailGig.paymentStatus}
+                  </span>
+                </div>
+                {/* Date, Time, and Duration (responsive) */}
+                <div className="col-span-1 sm:col-span-2 mt-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6 bg-muted/50 rounded-md px-4 py-3 w-full">
+                    <div className="flex flex-col flex-1 min-w-0">
+                      <span className="text-xs text-muted-foreground">Date & Time</span>
+                      <span className="font-bold text-base flex items-center gap-2 break-words">
+                        <Clock className="w-4 h-4 text-primary shrink-0" />
+                        {getGigDateTimeRange(detailGig)}
+                      </span>
+                    </div>
+                    <div className="flex flex-col flex-none sm:border-l sm:border-border sm:pl-6">
+                      <span className="text-xs text-muted-foreground">Duration</span>
+                      <span className="font-semibold text-base">{detailGig.numberOfDays} day{detailGig.numberOfDays !== 1 ? 's' : ''}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {/* Client Info (separate row) */}
               {clientProfile && (
-                <div className="flex items-center gap-4 border-b pb-4">
+                <div className="border-b pb-4 flex items-center gap-4">
                   <Avatar className="h-16 w-16">
                     {clientProfile.avatar ? (
                       <AvatarImage src={clientProfile.avatar} alt={clientProfile.name} />
@@ -665,8 +763,8 @@ export default function ContractorGigsPage() {
                 </div>
               )}
               {/* Map Section */}
-              {contractorLatLng && clientLatLng && (
-                <div className="w-full h-64 mb-4">
+              {(contractorLatLng && clientLatLng) && (
+                <div className="w-full h-64 mb-2 relative">
                   <ContractorMap
                     lat={contractorLatLng.lat}
                     lng={contractorLatLng.lng}
@@ -674,183 +772,132 @@ export default function ContractorGigsPage() {
                     clientLat={clientLatLng?.lat}
                     clientLng={clientLatLng?.lng}
                   />
+                  <div className="absolute top-2 left-2 bg-background/80 rounded px-3 py-1 text-xs font-medium shadow border border-gray-200">
+                    Contractor Driving Range: <span className="font-semibold">{contractorDrivingRange} miles</span>
+                  </div>
                 </div>
               )}
-              {!contractorLatLng && clientLatLng && (
-                <div className="w-full h-64 mb-4">
-                  <ContractorMap
-                    lat={clientLatLng.lat}
-                    lng={clientLatLng.lng}
-                    miles={0}
-                  />
+              {/* Distance to Gig */}
+              {(contractorLatLng && clientLatLng && typeof distanceMiles === 'number') && (
+                <div className="mb-2 text-sm text-muted-foreground">
+                  <span className="font-medium">Distance to Gig:</span> {distanceMiles.toFixed(2)} miles
                 </div>
               )}
-              <div className="border-t pt-4">
-                <h3 className="text-lg font-semibold mb-3 text-gray-700">Booking Summary</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground mb-1">Status</div>
-                    <span className="inline-block px-2 py-0.5 rounded bg-green-100 text-green-800 text-xs font-medium">
-                      {detailGig?.status?.charAt(0).toUpperCase() + detailGig?.status?.slice(1)}
-                    </span>
-                  </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground mb-1">Date & Time</div>
-                    <div className="font-medium text-base">
-                      {getGigDateTimeRange(detailGig)}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground mb-1">Payment Status</div>
-                     <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
-                        detailGig?.paymentStatus === 'paid' ? 'bg-green-100 text-green-800' :
-                        detailGig?.paymentStatus === 'cancelled' ? 'bg-red-100 text-red-800' :
-                        detailGig?.paymentStatus === 'escrow' ? 'bg-blue-100 text-blue-800' :
-                        'bg-gray-100 text-gray-800' // Default for unpaid or pending (if applicable)
-                    }`}>
-                       {detailGig?.paymentStatus?.charAt(0).toUpperCase() + detailGig?.paymentStatus?.slice(1)}
-                    </span>
-                  </div>
-
-                  {/* Add Duration Details section */}
-                  {detailGig?.time?.startTime && detailGig?.time?.endTime && (
-                    <div className="sm:col-span-2 border rounded-md p-3 mt-2 bg-muted/50">
-                      <h4 className="text-sm font-semibold mb-2 flex items-center">
-                        <Clock className="w-4 h-4 mr-1 text-primary" />
-                        Duration Details
-                      </h4>
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                        <div>
-                          <span className="text-muted-foreground">Total days:</span>
-                          <span className="font-medium ml-2">
-                            {detailGig.numberOfDays || 1} day{(detailGig.numberOfDays || 1) !== 1 ? 's' : ''}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {distanceMiles !== null && clientLatLng && contractorLatLng && (
-                    <div className="sm:col-span-2 mt-2">
-                      <div className="text-xs text-muted-foreground mb-1">Distance to Gig</div>
-                      <div className="font-medium text-base">{distanceMiles.toFixed(2)} miles</div>
-                    </div>
-                  )}
-                </div>
-              </div>
-              {/* Display payment breakdown for each service */}
-              <div className="border border-gray-200 rounded-md p-4 mt-4">
-                <h3 className="text-base font-semibold mb-3 flex items-center">
-                  <Package className="w-5 h-5 mr-2 text-primary"/>
-                  Service Details
+              {/* Service & Payment */}
+              <div className="border-b pb-4">
+                <h3 className="text-base font-bold mb-2 flex items-center gap-2">
+                  <Package className="w-5 h-5 text-primary"/>
+                  Services & Payment
                 </h3>
-                
-                {detailGig?.services && detailGig.services.length > 0 ? (
-                  <div className="space-y-3">
-                    {detailGig.services.map((service, idx) => (
-                      <div key={idx} className="flex justify-between items-center pb-2">
-                        <div className="flex flex-col">
-                          <span className="font-medium">{service.name || service.serviceId}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {service.paymentType === 'one_time' ? 'One-time payment' : 'Daily rate'}
-                          </span>
-                        </div>
-                        <div className="text-right">
-                          <div className="font-medium">
-                            {formatPrice(service.price, service.paymentType, detailGig.numberOfDays || 1)}
-                          </div>
-                        </div>
+                <div className="space-y-3">
+                  {detailGig.services && detailGig.services.length > 0 ? detailGig.services.map((service, idx) => (
+                    <div key={idx} className="flex flex-col sm:flex-row sm:justify-between sm:items-center bg-muted/50 rounded-md px-3 py-2">
+                      <div className="flex flex-col">
+                        <span className="font-semibold text-base">{service.name || service.serviceId}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {service.paymentType === 'one_time' ? 'One-time payment' : 'Daily rate'}
+                        </span>
                       </div>
-                    ))}
-                    
-                    <div className="border-t pt-3 mt-2 flex justify-between items-center">
-                      <div className="font-semibold">Total Payment:</div>
-                      <div className="font-semibold text-primary text-lg">
-                        ${((detailGig.paymentAmount || 0)).toFixed(2)}
+                      <div className="text-right mt-2 sm:mt-0">
+                        <span className="font-bold text-lg">{formatPrice(service.price, service.paymentType, detailGig.numberOfDays || 1)}</span>
                       </div>
                     </div>
-                    
-                    <div className="border-t border-dashed pt-3 flex justify-between items-center text-sm">
-                      <div className="text-muted-foreground">Platform Fee (5%):</div>
-                      <div className="text-red-600">-${((detailGig.platformFee || 0)).toFixed(2)}</div>
-                    </div>
-                    
-                    <div className="flex justify-between items-center text-sm mb-1">
-                      <div className="text-muted-foreground">Processing Fee:</div>
-                      <div className="text-red-600">-${((detailGig.stripeFee && detailGig.stripeFee > 0 ? detailGig.stripeFee : (detailGig.paymentAmount || 0) * 0.029 + 0.3)).toFixed(2)}</div>
-                    </div>
-                    
-                    <div className="border-t pt-3 flex justify-between items-center">
-                      <div className="font-semibold">Your Payout:</div>
-                      <div className="font-semibold text-green-600 text-lg">
-                        ${getNetPayout(detailGig).toFixed(2)}
-                      </div>
-                    </div>
+                  )) : <div className="text-muted-foreground">No service details available</div>}
+                  <div className="flex justify-between items-center border-t pt-3 mt-2">
+                    <span className="font-semibold text-base">Total Payment</span>
+                    <span className="font-bold text-primary text-xl">${(detailGig.paymentAmount || 0).toFixed(2)}</span>
                   </div>
-                ) : (
-                  <div className="text-muted-foreground">No service details available</div>
-                )}
+                  <div className="flex justify-between items-center border-t border-dashed pt-3 text-sm">
+                    <span className="text-muted-foreground">Platform Fee (5%)</span>
+                    <span className="text-red-600">-${(detailGig.platformFee || 0).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm mb-1">
+                    <span className="text-muted-foreground">Processing Fee</span>
+                    <span className="text-red-600">-${((detailGig.stripeFee && detailGig.stripeFee > 0 ? detailGig.stripeFee : (detailGig.paymentAmount || 0) * 0.029 + 0.3).toFixed(2))}</span>
+                  </div>
+                  <div className="flex justify-between items-center border-t pt-3">
+                    <span className="font-semibold">Your Payout</span>
+                    <span className="font-semibold text-green-600 text-lg">${getNetPayout(detailGig).toFixed(2)}</span>
+                  </div>
+                </div>
               </div>
-              {/* Enhanced Pet Information Section */}
+              {/* Pet Info */}
               {bookedPetsDetails.length > 0 && (
-                <div className="border-t pt-4">
+                <div className="border-b pb-4">
                   <h3 className="text-lg font-semibold mb-3 text-gray-700 flex items-center"><PawPrint className="w-5 h-5 mr-2 text-primary"/>Pet Information</h3>
-                  {bookedPetsDetails.map((pet, index) => (
-                    <div key={pet.id} className={`py-4 ${index < bookedPetsDetails.length - 1 ? 'border-b border-dashed' : ''}`}>
-                      <div className="flex flex-col sm:flex-row items-center gap-4 mb-3">
-                          <Avatar className="w-16 h-16 sm:w-20 sm:h-20 border-2 border-primary/50">
+                  <div className="flex flex-col gap-2">
+                    {bookedPetsDetails.map((pet, index) => {
+                      const isExpanded = expandedPetIndex === index
+                      return (
+                        <div key={pet.id} className={`rounded-lg border border-gray-200 bg-muted/50 transition-shadow ${isExpanded ? 'shadow-lg' : 'hover:shadow'} relative`}> 
+                          <button
+                            type="button"
+                            className="w-full flex items-center gap-4 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/50 text-left"
+                            aria-expanded={isExpanded}
+                            onClick={() => setExpandedPetIndex(isExpanded ? -1 : index)}
+                          >
+                            <Avatar className="w-12 h-12 border-2 border-primary/50">
                               <AvatarImage src={pet.photoUrl || '/avatars/default-pet.png'} alt={pet.name} className="object-cover" />
                               <AvatarFallback className="bg-primary/10 text-primary text-xl">{pet.name ? pet.name[0].toUpperCase() : 'P'}</AvatarFallback>
-                          </Avatar>
-                          <div className="text-center sm:text-left">
-                              <h4 className="text-lg font-semibold text-gray-800 mb-0.5">{pet.name}</h4>
-                              <div className="flex flex-wrap justify-center sm:justify-start gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-                                  <span><strong>Age:</strong> {pet.age || 'N/A'} yrs</span>
-                                  {pet.animalType && <span><strong>Type:</strong> {pet.animalType}</span>}
-                                  {pet.breed && <span><strong>Breed:</strong> {pet.breed}</span>}
-                                  {pet.weight && <span><strong>Weight:</strong> {pet.weight}</span>}
+                            </Avatar>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-semibold text-base truncate">{pet.name}</div>
+                              <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground mt-0.5">
+                                {pet.animalType && <span><strong>Type:</strong> {pet.animalType}</span>}
+                                {pet.breed && <span><strong>Breed:</strong> {pet.breed}</span>}
+                                {pet.age && <span><strong>Age:</strong> {pet.age} yrs</span>}
+                                {pet.weight && <span><strong>Weight:</strong> {pet.weight}</span>}
                               </div>
-                          </div>
-                      </div>
-                      <div className="grid md:grid-cols-2 gap-x-6 gap-y-2 mt-2">
-                          <PetDetailItem icon={Pill} label="Medications" value={pet.medications} />
-                          <PetDetailItem icon={Utensils} label="Food" value={pet.food} />
-                          <PetDetailItem icon={Clock} label="Food Schedule" value={pet.foodSchedule} />
-                          <PetDetailItem icon={Clock} label="General Schedule" value={pet.schedule} />
-                          <PetDetailItem icon={Dog} label="Temperament" value={pet.temperament} />
-                          <PetDetailItem icon={Info} label="Allergies" value={pet.allergies} />
-                          <PetDetailItem icon={Info} label="Need to Know" value={pet.needToKnow} />
-                      </div>
-                    </div>
-                  ))}
+                            </div>
+                            <span className="ml-2 text-primary">{isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}</span>
+                          </button>
+                          {isExpanded && (
+                            <div className="px-6 pb-4 pt-1 animate-fade-in">
+                              <div className="grid md:grid-cols-2 gap-x-6 gap-y-2 mt-2">
+                                <PetDetailItem icon={Pill} label="Medications" value={pet.medications} />
+                                <PetDetailItem icon={Utensils} label="Food" value={pet.food} />
+                                <PetDetailItem icon={Clock} label="Food Schedule" value={pet.foodSchedule} />
+                                <PetDetailItem icon={Clock} label="General Schedule" value={pet.schedule} />
+                                <PetDetailItem icon={Dog} label="Temperament" value={pet.temperament} />
+                                <PetDetailItem icon={Info} label="Allergies" value={pet.allergies} />
+                                <PetDetailItem icon={Info} label="Need to Know" value={pet.needToKnow} />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
               )}
+              {/* Review */}
               {detailGig.review && (
-                <div className="border-t pt-4">
+                <div className="border-b pb-4">
                   <div className="text-xs text-muted-foreground mb-2 font-semibold">Review</div>
                   <div className="text-sm">Rating: <span className="font-bold">{detailGig.review.rating}</span></div>
                   {detailGig.review.comment && <div className="text-sm mt-1">"{detailGig.review.comment}"</div>}
                 </div>
               )}
-              <div className="border-t pt-4 text-xs text-muted-foreground">
-                <div className="mb-1">Booking ID</div>
-                <div className="font-mono break-all mb-1">{detailGig?.id ?? ''}</div>
-              </div>
-              {clientProfile && (
-                <div className="flex justify-end mb-4">
-                  <a
-                    href={getGoogleCalendarUrl(detailGig, detailGig.clientName, detailGig.pets, clientProfile)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-block"
-                  >
-                    <Button variant="outline" className="text-sm px-3 py-1 rounded-full shadow-sm">Add to Google Calendar</Button>
-                  </a>
+              {/* Booking ID & Calendar */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-t pt-4 mt-2">
+                <div>
+                  <span className="text-xs text-muted-foreground">Booking ID</span>
+                  <div className="font-mono break-all text-xs mt-1">{detailGig?.id ?? ''}</div>
                 </div>
-              )}
-            </div>
+                {clientProfile && (
+                  <div className="flex justify-end mt-2 sm:mt-0">
+                    <a
+                      href={getGoogleCalendarUrl(detailGig, detailGig.clientName, detailGig.pets, clientProfile)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-block"
+                    >
+                      <Button variant="outline" className="text-sm px-3 py-1 rounded-full shadow-sm">Add to Google Calendar</Button>
+                    </a>
+                  </div>
+                )}
+              </div>
+            </section>
           )}
           <DialogFooter>
             <div className="flex w-full justify-end gap-2">
@@ -909,4 +956,4 @@ export default function ContractorGigsPage() {
       </Dialog>
     </main>
   )
-} 
+}

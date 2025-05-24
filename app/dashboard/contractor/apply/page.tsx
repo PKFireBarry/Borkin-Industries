@@ -3,10 +3,12 @@ import { useState, useEffect } from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { Card, CardHeader, CardContent, CardTitle } from '@/components/ui/card'
 import { addDoc, collection, serverTimestamp, query, where, getDocs, doc, getDoc } from 'firebase/firestore'
 import { db } from '../../../../firebase'
 import { useUser } from '@clerk/nextjs'
 import { useRouter } from 'next/navigation'
+import { Check, ChevronRight, AlertCircle } from 'lucide-react'
 
 interface ExperienceEntry {
   employer: string
@@ -71,7 +73,6 @@ interface ContractorForm {
   references: ReferenceEntry[]
   drivingRange: {
     maxDistance: string
-    areasServed: string
     willTravelOutside: string // 'yes' | 'no'
   }
 }
@@ -139,7 +140,6 @@ const initialForm: ContractorForm = {
   references: [ { ...initialReference } ],
   drivingRange: {
     maxDistance: '',
-    areasServed: '',
     willTravelOutside: '',
   },
 }
@@ -186,6 +186,8 @@ export default function ContractorApplyPage() {
   const [skillInputs, setSkillInputs] = useState<string[]>(form.experience.map(() => ''))
   const [appStatus, setAppStatus] = useState<'loading' | 'none' | 'pending' | 'approved' | 'rejected'>('loading')
   const [appCheckError, setAppCheckError] = useState<string | null>(null)
+  const [visitedSteps, setVisitedSteps] = useState<boolean[]>(steps.map((_, i) => i === 0));
+  const [stepsCompleted, setStepsCompleted] = useState<boolean[]>(steps.map(() => false));
 
   useEffect(() => {
     if (!userLoaded) return
@@ -241,10 +243,19 @@ export default function ContractorApplyPage() {
 
   const handleNext = () => {
     if (validateStep(step)) {
-      setStepIndex((i) => i + 1)
+      const nextIndex = stepIndex + 1;
+      setVisitedSteps(prev => {
+        const updated = [...prev];
+        updated[nextIndex] = true;
+        return updated;
+      });
+      setStepIndex(nextIndex);
     } else {
-      setTouched((prev) => ({ ...prev, ...fieldsForStep(step).reduce((acc, f) => ({ ...acc, [f]: true }), {}) }))
-      setTimeout(scrollToFirstError, 100)
+      setTouched((prev) => ({ 
+        ...prev, 
+        ...fieldsForStep(step).reduce((acc, f) => ({ ...acc, [f]: true }), {}) 
+      }));
+      setTimeout(scrollToFirstError, 100);
     }
   }
 
@@ -329,20 +340,22 @@ export default function ContractorApplyPage() {
 
   function validateStep(step: Step): boolean {
     if (step === 'Experience') {
-      return form.experience.length > 0 && form.experience.every(
+      if (form.experience.length === 1 && Object.values(form.experience[0]).every(val => typeof val === 'string' ? !val.trim() : Array.isArray(val) ? val.length === 0 : val === false)) return true;
+      return form.experience.every(
         (exp) =>
-          typeof exp.employer === 'string' && exp.employer.trim() &&
-          typeof exp.location === 'string' && exp.location.trim() &&
-          typeof exp.phone === 'string' && exp.phone.trim() &&
-          typeof exp.title === 'string' && exp.title.trim() &&
-          typeof exp.startDate === 'string' && exp.startDate.trim() &&
-          (exp.present || (typeof exp.endDate === 'string' && exp.endDate.trim())) &&
-          typeof exp.description === 'string' && exp.description.trim() &&
-          typeof exp.canContact === 'string' && exp.canContact
+          exp.employer.trim() &&
+          exp.location.trim() &&
+          exp.phone.trim() &&
+          exp.title.trim() &&
+          exp.startDate.trim() &&
+          (exp.present || exp.endDate.trim()) &&
+          exp.description.trim() &&
+          exp.canContact
       )
     }
     if (step === 'Education') {
-      return form.education.length > 0 && form.education.every(
+      if (form.education.length === 1 && Object.values(form.education[0]).every(val => typeof val === 'string' ? !val.trim() : val === false)) return true;
+      return form.education.every(
         (ed) =>
           ed.school.trim() &&
           ed.cityState.trim() &&
@@ -353,7 +366,8 @@ export default function ContractorApplyPage() {
       )
     }
     if (step === 'Certifications') {
-      return form.certifications.length > 0 && form.certifications.every(
+      if (form.certifications.length === 1 && Object.values(form.certifications[0]).every(val => typeof val === 'string' ? !val.trim() : val === false)) return true;
+      return form.certifications.every(
         (c) =>
           c.name.trim() &&
           c.yearStarted.trim() &&
@@ -361,14 +375,14 @@ export default function ContractorApplyPage() {
       )
     }
     if (step === 'References') {
-      return form.references.length > 0 && form.references.every(
+      if (form.references.length === 1 && Object.values(form.references[0]).every(val => !val.trim())) return true;
+      return form.references.every(
         (r) => r.name.trim() && r.relationship.trim() && r.phone.trim() && r.email.trim()
       )
     }
     if (step === 'Driving Range') {
       return Boolean(
         form.drivingRange.maxDistance.trim() &&
-        form.drivingRange.areasServed.trim() &&
         form.drivingRange.willTravelOutside.trim()
       )
     }
@@ -498,209 +512,340 @@ export default function ContractorApplyPage() {
     setForm((prev) => ({ ...prev, drivingRange: { ...prev.drivingRange, [field]: value } }))
   }
 
+  // Function to render completion summary
+  const renderCompletionSummary = () => {
+    return (
+      <div className="bg-muted/50 rounded-lg p-4 mb-6 border border-border">
+        <h3 className="font-medium mb-3 flex items-center gap-2">
+          <span>Application Status</span>
+          {stepsCompleted.every(Boolean) ? (
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+              Ready to submit
+            </span>
+          ) : (
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">
+              Incomplete
+            </span>
+          )}
+        </h3>
+        <ul className="space-y-2">
+          {steps.map((stepName, index) => (
+            <li key={stepName} className="flex items-center gap-2">
+              {stepsCompleted[index] ? (
+                <Check className="h-4 w-4 text-green-600 flex-shrink-0" />
+              ) : (
+                <AlertCircle className="h-4 w-4 text-amber-500 flex-shrink-0" />
+              )}
+              <span className={`text-sm ${stepsCompleted[index] ? 'text-foreground' : 'text-muted-foreground'}`}>
+                {stepName}
+              </span>
+              {!stepsCompleted[index] && (
+                <button 
+                  type="button" 
+                  onClick={() => handleStepClick(index)}
+                  className="ml-auto text-xs text-primary hover:underline"
+                >
+                  Complete now
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  };
+
   function renderStep() {
     switch (step) {
       case 'Personal Info':
         return (
-          <section className="bg-card rounded-xl shadow-md p-1 sm:p-6 mb-1 sm:mb-8">
-            <h2 className="text-sm sm:text-2xl font-bold mb-1 sm:mb-2">Contact Information</h2>
-            <div className="text-muted-foreground text-xs sm:text-sm mb-2 sm:mb-4">Please provide your contact details. All fields marked * are required.</div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-4 mb-2 sm:mb-4">
-              <div>
-                <Input
-                  name="firstName"
-                  placeholder="First Name*"
-                  value={form.firstName}
-                  onChange={handleChange}
-                  required
-                  aria-label="First Name"
-                  className="h-8 sm:h-10 text-xs sm:text-sm"
-                />
-                {getFieldError('firstName', form, touched) && <div className="text-destructive text-[10px] sm:text-xs mt-0.5 sm:mt-1">{getFieldError('firstName', form, touched)}</div>}
+          <Card className="border-0 sm:border shadow-none sm:shadow-md">
+            <CardHeader className="pb-0">
+              <CardTitle className="text-xl font-bold">Contact Information</CardTitle>
+              <p className="text-muted-foreground text-sm">Please provide your contact details. All fields marked * are required.</p>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="firstName" className="block text-sm font-medium mb-1">First Name*</label>
+                  <Input
+                    id="firstName"
+                    name="firstName"
+                    value={form.firstName}
+                    onChange={handleChange}
+                    required
+                    aria-invalid={touched.firstName && !form.firstName ? true : undefined}
+                    className="h-10"
+                  />
+                  {getFieldError('firstName', form, touched) && 
+                    <div className="text-destructive text-xs mt-1 flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      <span>{getFieldError('firstName', form, touched)}</span>
+                    </div>
+                  }
+                </div>
+                <div>
+                  <label htmlFor="lastName" className="block text-sm font-medium mb-1">Last Name*</label>
+                  <Input
+                    id="lastName"
+                    name="lastName"
+                    value={form.lastName}
+                    onChange={handleChange}
+                    required
+                    aria-invalid={touched.lastName && !form.lastName ? true : undefined}
+                    className="h-10"
+                  />
+                  {getFieldError('lastName', form, touched) && 
+                    <div className="text-destructive text-xs mt-1 flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      <span>{getFieldError('lastName', form, touched)}</span>
+                    </div>
+                  }
+                </div>
+                <div>
+                  <label htmlFor="email" className="block text-sm font-medium mb-1">Email*</label>
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    value={form.email}
+                    onChange={handleChange}
+                    required
+                    aria-invalid={touched.email && !form.email ? true : undefined}
+                    className="h-10"
+                  />
+                  {getFieldError('email', form, touched) && 
+                    <div className="text-destructive text-xs mt-1 flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      <span>{getFieldError('email', form, touched)}</span>
+                    </div>
+                  }
+                </div>
+                <div>
+                  <label htmlFor="phone" className="block text-sm font-medium mb-1">Phone Number*</label>
+                  <Input
+                    id="phone"
+                    name="phone"
+                    value={form.phone}
+                    onChange={handleChange}
+                    required
+                    aria-invalid={touched.phone && !form.phone ? true : undefined}
+                    className="h-10"
+                  />
+                  {getFieldError('phone', form, touched) && 
+                    <div className="text-destructive text-xs mt-1 flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      <span>{getFieldError('phone', form, touched)}</span>
+                    </div>
+                  }
+                </div>
               </div>
-              <div>
-                <Input
-                  name="lastName"
-                  placeholder="Last Name*"
-                  value={form.lastName}
-                  onChange={handleChange}
-                  required
-                  aria-label="Last Name"
-                  className="h-8 sm:h-10 text-xs sm:text-sm"
-                />
-                {getFieldError('lastName', form, touched) && <div className="text-destructive text-[10px] sm:text-xs mt-0.5 sm:mt-1">{getFieldError('lastName', form, touched)}</div>}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="city" className="block text-sm font-medium mb-1">City*</label>
+                  <Input
+                    id="city"
+                    name="city"
+                    value={form.city}
+                    onChange={handleChange}
+                    required
+                    aria-invalid={touched.city && !form.city ? true : undefined}
+                    className="h-10"
+                  />
+                  {getFieldError('city', form, touched) && 
+                    <div className="text-destructive text-xs mt-1 flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      <span>{getFieldError('city', form, touched)}</span>
+                    </div>
+                  }
+                </div>
+                <div>
+                  <label htmlFor="state" className="block text-sm font-medium mb-1">State/Province*</label>
+                  <Input
+                    id="state"
+                    name="state"
+                    value={form.state}
+                    onChange={handleChange}
+                    required
+                    aria-invalid={touched.state && !form.state ? true : undefined}
+                    className="h-10"
+                  />
+                  {getFieldError('state', form, touched) && 
+                    <div className="text-destructive text-xs mt-1 flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      <span>{getFieldError('state', form, touched)}</span>
+                    </div>
+                  }
+                </div>
+                <div>
+                  <label htmlFor="postalCode" className="block text-sm font-medium mb-1">Postal Code</label>
+                  <Input
+                    id="postalCode"
+                    name="postalCode"
+                    value={form.postalCode}
+                    onChange={handleChange}
+                    className="h-10"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="country" className="block text-sm font-medium mb-1">Country*</label>
+                  <Input
+                    id="country"
+                    name="country"
+                    value={form.country}
+                    onChange={handleChange}
+                    required
+                    aria-invalid={touched.country && !form.country ? true : undefined}
+                    className="h-10"
+                  />
+                  {getFieldError('country', form, touched) && 
+                    <div className="text-destructive text-xs mt-1 flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      <span>{getFieldError('country', form, touched)}</span>
+                    </div>
+                  }
+                </div>
               </div>
+
               <div>
+                <label htmlFor="address" className="block text-sm font-medium mb-1">Full Address*</label>
                 <Input
-                  name="email"
-                  placeholder="Email*"
-                  value={form.email}
-                  onChange={handleChange}
-                  required
-                  type="email"
-                  aria-label="Email"
-                  className="h-8 sm:h-10 text-xs sm:text-sm"
-                />
-                {getFieldError('email', form, touched) && <div className="text-destructive text-[10px] sm:text-xs mt-0.5 sm:mt-1">{getFieldError('email', form, touched)}</div>}
-              </div>
-              <div>
-                <Input
-                  name="phone"
-                  placeholder="Phone Number*"
-                  value={form.phone}
-                  onChange={handleChange}
-                  required
-                  aria-label="Phone Number"
-                  className="h-8 sm:h-10 text-xs sm:text-sm"
-                />
-                {getFieldError('phone', form, touched) && <div className="text-destructive text-[10px] sm:text-xs mt-0.5 sm:mt-1">{getFieldError('phone', form, touched)}</div>}
-              </div>
-              <div>
-                <Input
-                  name="city"
-                  placeholder="City*"
-                  value={form.city}
-                  onChange={handleChange}
-                  required
-                  aria-label="City"
-                  className="h-8 sm:h-10 text-xs sm:text-sm"
-                />
-                {getFieldError('city', form, touched) && <div className="text-destructive text-[10px] sm:text-xs mt-0.5 sm:mt-1">{getFieldError('city', form, touched)}</div>}
-              </div>
-              <div>
-                <Input
-                  name="state"
-                  placeholder="State/Province*"
-                  value={form.state}
-                  onChange={handleChange}
-                  required
-                  aria-label="State/Province"
-                  className="h-8 sm:h-10 text-xs sm:text-sm"
-                />
-                {getFieldError('state', form, touched) && <div className="text-destructive text-[10px] sm:text-xs mt-0.5 sm:mt-1">{getFieldError('state', form, touched)}</div>}
-              </div>
-              <div>
-                <Input
-                  name="postalCode"
-                  placeholder="Postal Code"
-                  value={form.postalCode}
-                  onChange={handleChange}
-                  aria-label="Postal Code"
-                  className="h-8 sm:h-10 text-xs sm:text-sm"
-                />
-                {getFieldError('postalCode', form, touched) && <div className="text-destructive text-[10px] sm:text-xs mt-0.5 sm:mt-1">{getFieldError('postalCode', form, touched)}</div>}
-              </div>
-              <div>
-                <Input
-                  name="country"
-                  placeholder="Country*"
-                  value={form.country}
-                  onChange={handleChange}
-                  required
-                  aria-label="Country"
-                  className="h-8 sm:h-10 text-xs sm:text-sm"
-                />
-                {getFieldError('country', form, touched) && <div className="text-destructive text-[10px] sm:text-xs mt-0.5 sm:mt-1">{getFieldError('country', form, touched)}</div>}
-              </div>
-              <div className="md:col-span-2">
-                <Input
+                  id="address"
                   name="address"
-                  placeholder="Full Address*"
                   value={form.address}
                   onChange={handleChange}
                   required
-                  aria-label="Full Address"
-                  className="h-8 sm:h-10 text-xs sm:text-sm"
+                  aria-invalid={touched.address && !form.address ? true : undefined}
+                  className="h-10"
                 />
-                {getFieldError('address', form, touched) && <div className="text-destructive text-[10px] sm:text-xs mt-0.5 sm:mt-1">{getFieldError('address', form, touched)}</div>}
+                {getFieldError('address', form, touched) && 
+                  <div className="text-destructive text-xs mt-1 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    <span>{getFieldError('address', form, touched)}</span>
+                  </div>
+                }
               </div>
-            </div>
-            <Textarea
-              name="headline"
-              placeholder="Headline (optional)"
-              value={form.headline}
-              onChange={handleChange}
-              maxLength={150}
-              aria-label="Headline"
-              className="mb-1 sm:mb-2 text-xs sm:text-sm min-h-[60px] sm:min-h-[100px]"
-            />
-            <div className="text-[10px] sm:text-xs text-muted-foreground mb-2 sm:mb-4">Suggested: Graduation year, college, employers, 2-3 skills you have done and want to do again. Max 150 characters.</div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-4 mb-2 sm:mb-4">
-              <Input
-                name="linkedin"
-                placeholder="LinkedIn (optional)"
-                value={form.linkedin}
-                onChange={handleChange}
-                aria-label="LinkedIn"
-                className="h-8 sm:h-10 text-xs sm:text-sm"
-              />
-              <Input
-                name="x"
-                placeholder="X (optional)"
-                value={form.x}
-                onChange={handleChange}
-                aria-label="X"
-                className="h-8 sm:h-10 text-xs sm:text-sm"
-              />
-            </div>
-            <section className="mt-4 sm:mt-8">
-              <h3 className="text-xs sm:text-xl font-semibold mb-1 sm:mb-2">Identity <span className="text-[10px] sm:text-xs text-muted-foreground font-normal">(Optional)</span></h3>
-              <div className="text-muted-foreground text-[10px] sm:text-sm mb-2 sm:mb-4">Self-identifying is completely optional, and we will handle your information with care. Responses will not be displayed on your profile or in your applications.</div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-4">
-                <select
-                  name="genderIdentity"
-                  value={form.genderIdentity}
+
+              <div>
+                <label htmlFor="headline" className="block text-sm font-medium mb-1">
+                  Headline <span className="text-muted-foreground font-normal">(optional)</span>
+                </label>
+                <Textarea
+                  id="headline"
+                  name="headline"
+                  value={form.headline}
                   onChange={handleChange}
-                  className="w-full h-8 sm:h-10 rounded-md border border-input bg-background px-3 py-2 text-xs sm:text-sm"
-                  aria-label="Gender Identity"
-                >
-                  <option value="">Gender Identity (optional)</option>
-                  <option value="prefer-not-to-say">Prefer not to say</option>
-                  <option value="female">Female</option>
-                  <option value="male">Male</option>
-                  <option value="nonbinary">Non-binary</option>
-                  <option value="other">Other</option>
-                </select>
-                <select
-                  name="raceEthnicity"
-                  value={form.raceEthnicity}
-                  onChange={handleChange}
-                  className="w-full h-8 sm:h-10 rounded-md border border-input bg-background px-3 py-2 text-xs sm:text-sm"
-                  aria-label="Race/Ethnicity"
-                >
-                  <option value="">Race/Ethnicity (optional)</option>
-                  <option value="prefer-not-to-say">Prefer not to say</option>
-                  <option value="asian">Asian</option>
-                  <option value="black">Black or African American</option>
-                  <option value="hispanic">Hispanic or Latino</option>
-                  <option value="native">Native American or Alaska Native</option>
-                  <option value="pacific">Native Hawaiian or Pacific Islander</option>
-                  <option value="white">White</option>
-                  <option value="other">Other</option>
-                </select>
-                <select
-                  name="veteranDisability"
-                  value={form.veteranDisability}
-                  onChange={handleChange}
-                  className="w-full h-8 sm:h-10 rounded-md border border-input bg-background px-3 py-2 text-xs sm:text-sm"
-                  aria-label="Veteran/Disability"
-                >
-                  <option value="">Veteran/Disability (optional)</option>
-                  <option value="prefer-not-to-say">Prefer not to say</option>
-                  <option value="veteran">Veteran</option>
-                  <option value="disability">Person with a Disability</option>
-                  <option value="both">Both</option>
-                  <option value="none">Neither</option>
-                </select>
+                  maxLength={150}
+                  className="min-h-[100px]"
+                  placeholder="Briefly describe yourself professionally"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Suggested: Graduation year, college, employers, 2-3 skills you have done and want to do again. Max 150 characters.
+                </p>
               </div>
-            </section>
-          </section>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="linkedin" className="block text-sm font-medium mb-1">
+                    LinkedIn <span className="text-muted-foreground font-normal">(optional)</span>
+                  </label>
+                  <Input
+                    id="linkedin"
+                    name="linkedin"
+                    value={form.linkedin}
+                    onChange={handleChange}
+                    className="h-10"
+                    placeholder="https://linkedin.com/in/username"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="x" className="block text-sm font-medium mb-1">
+                    X <span className="text-muted-foreground font-normal">(optional)</span>
+                  </label>
+                  <Input
+                    id="x"
+                    name="x"
+                    value={form.x}
+                    onChange={handleChange}
+                    className="h-10"
+                    placeholder="https://x.com/username"
+                  />
+                </div>
+              </div>
+
+              <Card className="bg-slate-50 border border-slate-100">
+                <CardHeader className="pb-0">
+                  <CardTitle className="text-base font-medium">Identity Information</CardTitle>
+                  <p className="text-muted-foreground text-xs">Self-identifying is completely optional, and we will handle your information with care.</p>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label htmlFor="genderIdentity" className="block text-sm font-medium mb-1">Gender Identity</label>
+                      <select
+                        id="genderIdentity"
+                        name="genderIdentity"
+                        value={form.genderIdentity}
+                        onChange={handleChange}
+                        className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      >
+                        <option value="">Select option</option>
+                        <option value="prefer-not-to-say">Prefer not to say</option>
+                        <option value="female">Female</option>
+                        <option value="male">Male</option>
+                        <option value="nonbinary">Non-binary</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="raceEthnicity" className="block text-sm font-medium mb-1">Race/Ethnicity</label>
+                      <select
+                        id="raceEthnicity"
+                        name="raceEthnicity"
+                        value={form.raceEthnicity}
+                        onChange={handleChange}
+                        className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      >
+                        <option value="">Select option</option>
+                        <option value="prefer-not-to-say">Prefer not to say</option>
+                        <option value="asian">Asian</option>
+                        <option value="black">Black or African American</option>
+                        <option value="hispanic">Hispanic or Latino</option>
+                        <option value="native">Native American or Alaska Native</option>
+                        <option value="pacific">Native Hawaiian or Pacific Islander</option>
+                        <option value="white">White</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="veteranDisability" className="block text-sm font-medium mb-1">Veteran/Disability</label>
+                      <select
+                        id="veteranDisability"
+                        name="veteranDisability"
+                        value={form.veteranDisability}
+                        onChange={handleChange}
+                        className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      >
+                        <option value="">Select option</option>
+                        <option value="prefer-not-to-say">Prefer not to say</option>
+                        <option value="veteran">Veteran</option>
+                        <option value="disability">Person with a Disability</option>
+                        <option value="both">Both</option>
+                        <option value="none">Neither</option>
+                      </select>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </CardContent>
+          </Card>
         )
       case 'Experience':
         return (
           <section className="bg-card rounded-xl shadow-md p-1 sm:p-6 mb-1 sm:mb-8">
-            <h2 className="text-sm sm:text-2xl font-bold mb-1 sm:mb-2">Work Experience</h2>
-            <div className="text-muted-foreground text-xs sm:text-sm mb-2 sm:mb-4">Add your relevant work experience. All fields with * are required.</div>
+            <h2 className="text-sm sm:text-2xl font-bold mb-1 sm:mb-2">Work Experience (Optional)</h2>
+            <div className="text-muted-foreground text-xs sm:text-sm mb-2 sm:mb-4">Add your relevant work experience. If you add an entry, all fields marked with * are required for that entry.</div>
             <div className="space-y-2 sm:space-y-6">
               {form.experience.map((exp, idx) => (
                 <div key={idx} className="bg-muted rounded-lg p-2 sm:p-4 shadow-sm relative">
@@ -881,8 +1026,8 @@ export default function ContractorApplyPage() {
       case 'Education':
         return (
           <section className="bg-card rounded-xl shadow-md p-1 sm:p-6 mb-1 sm:mb-8">
-            <h2 className="text-sm sm:text-2xl font-bold mb-1 sm:mb-2">Education</h2>
-            <div className="text-muted-foreground text-xs sm:text-sm mb-2 sm:mb-4">Add your educational background. All fields with * are required.</div>
+            <h2 className="text-sm sm:text-2xl font-bold mb-1 sm:mb-2">Education (Optional)</h2>
+            <div className="text-muted-foreground text-xs sm:text-sm mb-2 sm:mb-4">Add your educational background. If you add an entry, all fields marked with * are required for that entry.</div>
             <div className="space-y-2 sm:space-y-6">
               {form.education.map((ed, idx) => (
                 <div key={idx} className="bg-muted rounded-lg p-2 sm:p-4 shadow-sm relative">
@@ -1005,8 +1150,8 @@ export default function ContractorApplyPage() {
       case 'Certifications':
         return (
           <section className="bg-card rounded-xl shadow-md p-1 sm:p-6 mb-1 sm:mb-8">
-            <h2 className="text-sm sm:text-2xl font-bold mb-1 sm:mb-2">Clubs, Organizations, and Certifications</h2>
-            <div className="text-muted-foreground text-xs sm:text-sm mb-2 sm:mb-4">If you participated in high school, college, club, or travel team sports please add it here. We like athletes!</div>
+            <h2 className="text-sm sm:text-2xl font-bold mb-1 sm:mb-2">Clubs, Organizations, and Certifications (Optional)</h2>
+            <div className="text-muted-foreground text-xs sm:text-sm mb-2 sm:mb-4">If you participated in high school, college, club, or travel team sports please add it here. If you add an entry, all fields marked with * are required for that entry.</div>
             <div className="space-y-2 sm:space-y-6">
               {form.certifications.map((c, idx) => (
                 <div key={idx} className="bg-muted rounded-lg p-2 sm:p-4 shadow-sm relative">
@@ -1095,8 +1240,8 @@ export default function ContractorApplyPage() {
       case 'References':
         return (
           <section className="bg-card rounded-xl shadow-md p-1 sm:p-6 mb-1 sm:mb-8">
-            <h2 className="text-sm sm:text-2xl font-bold mb-1 sm:mb-2">References</h2>
-            <div className="text-muted-foreground text-xs sm:text-sm mb-2 sm:mb-4">Please provide professional or character references who can speak to your experience, reliability, or skills. Include name, relationship, phone, and email.</div>
+            <h2 className="text-sm sm:text-2xl font-bold mb-1 sm:mb-2">References (Optional)</h2>
+            <div className="text-muted-foreground text-xs sm:text-sm mb-2 sm:mb-4">Please provide professional or character references. If you add an entry, all fields marked with * are required for that entry.</div>
             <div className="space-y-2 sm:space-y-6">
               {form.references.map((r, idx) => (
                 <div key={idx} className="bg-muted rounded-lg p-2 sm:p-4 shadow-sm relative">
@@ -1175,27 +1320,26 @@ export default function ContractorApplyPage() {
         return (
           <section className="bg-card rounded-xl shadow-md p-1 sm:p-6 mb-1 sm:mb-8">
             <h2 className="text-sm sm:text-2xl font-bold mb-1 sm:mb-2">Driving Range & Service Area</h2>
-            <div className="text-muted-foreground text-xs sm:text-sm mb-2 sm:mb-4">How far are you willing to travel for work? Please specify your maximum driving distance and any specific areas you serve.</div>
+            <div className="text-muted-foreground text-xs sm:text-sm mb-2 sm:mb-4">How far are you willing to travel for work? All fields marked * are required.</div>
             <div className="space-y-2 sm:space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-4">
-                <Input
-                  name="maxDistance"
-                  placeholder="Maximum Distance (miles or km)*"
-                  value={form.drivingRange.maxDistance}
-                  onChange={e => handleDrivingRangeChange('maxDistance', e.target.value)}
-                  required
-                  aria-label="Maximum Distance"
-                  className="h-8 sm:h-10 text-xs sm:text-sm"
-                />
-                <Input
-                  name="areasServed"
-                  placeholder="Areas Served (cities, neighborhoods, etc.)*"
-                  value={form.drivingRange.areasServed}
-                  onChange={e => handleDrivingRangeChange('areasServed', e.target.value)}
-                  required
-                  aria-label="Areas Served"
-                  className="h-8 sm:h-10 text-xs sm:text-sm"
-                />
+                <div>
+                  <label htmlFor="maxDistance" className="block text-sm font-medium mb-1">Maximum Distance (miles)*</label>
+                  <select
+                    id="maxDistance"
+                    name="maxDistance"
+                    value={form.drivingRange.maxDistance}
+                    onChange={e => handleDrivingRangeChange('maxDistance', e.target.value)}
+                    required
+                    className="w-full h-8 sm:h-10 rounded-md border border-input bg-background px-3 py-2 text-xs sm:text-sm"
+                    aria-label="Maximum Distance"
+                  >
+                    <option value="">Select distance...</option>
+                    {[10, 15, 20, 25, 30, 35, 40, 45, 50].map(d => (
+                      <option key={d} value={String(d)}>{d} miles</option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <div className="mt-1 sm:mt-2">
                 <label className="block mb-1 font-medium text-xs sm:text-sm">Willing to travel outside area?*</label>
@@ -1232,6 +1376,10 @@ export default function ContractorApplyPage() {
           <section className="bg-card rounded-xl shadow-md p-1 sm:p-6 mb-1 sm:mb-8">
             <h2 className="text-sm sm:text-2xl font-bold mb-1 sm:mb-2">Review Your Application</h2>
             <div className="text-muted-foreground text-xs sm:text-sm mb-2 sm:mb-4">Please review all your information before submitting your application.</div>
+            
+            {/* Show completion status */}
+            {renderCompletionSummary()}
+            
             <div className="space-y-1 sm:space-y-2 text-left text-xs sm:text-sm">
               <div className="p-2 sm:p-4 bg-muted rounded-lg">
                 <h3 className="font-semibold text-xs sm:text-base mb-1 sm:mb-2">Contact Information</h3>
@@ -1301,7 +1449,6 @@ export default function ContractorApplyPage() {
               <div className="p-2 sm:p-4 bg-muted rounded-lg">
                 <h3 className="font-semibold text-xs sm:text-base mb-1 sm:mb-2">Driving Range & Service Area</h3>
                 <div>Maximum Distance: {form.drivingRange.maxDistance}</div>
-                <div>Areas Served: {form.drivingRange.areasServed}</div>
                 <div>Willing to travel outside area: {form.drivingRange.willTravelOutside === 'yes' ? 'Yes' : 'No'}</div>
               </div>
             </div>
@@ -1312,125 +1459,319 @@ export default function ContractorApplyPage() {
     }
   }
 
+  // Function to check if a step is completed
+  const isStepCompleted = (stepIndex: number): boolean => {
+    const stepName = steps[stepIndex];
+    return validateStep(stepName);
+  };
+  
+  // Update all step completion statuses
+  useEffect(() => {
+    const newCompletionStatus = steps.map((_, i) => isStepCompleted(i));
+    setStepsCompleted(newCompletionStatus);
+  }, [form, stepIndex]);
+  
+  // Calculate overall progress
+  const overallProgress = Math.round((stepsCompleted.filter(Boolean).length / steps.length) * 100);
+
+  // Update the handle step click function
+  const handleStepClick = (index: number) => {
+    // If moving forward from the current step, validate the current step first
+    if (index > stepIndex) {
+      if (!validateStep(step)) {
+        setTouched((prev) => ({ 
+          ...prev, 
+          ...fieldsForStep(step).reduce((acc, f) => ({ ...acc, [f]: true }), {}) 
+        }));
+        setTimeout(scrollToFirstError, 100);
+        // Optionally, prevent navigation if current step is invalid and trying to move forward
+        // For now, we allow navigation but highlight errors.
+        // If strict prevention is desired, add: return; 
+      }
+    }
+
+    // Update visited steps
+    setVisitedSteps(prev => {
+      const updated = [...prev];
+      updated[index] = true;
+      return updated;
+    });
+
+    // Navigate to the selected step
+    setStepIndex(index);
+  };
+
   if (!userLoaded || appStatus === 'loading') {
-    return <main className="max-w-lg mx-auto py-12 px-4"><div>Loading...</div></main>
-  }
-  if (appCheckError) {
-    return <main className="max-w-lg mx-auto py-12 px-4"><div className="text-destructive">{appCheckError}</div></main>
-  }
-  if (appStatus === 'pending') {
     return (
-      <main className="max-w-lg mx-auto py-12 px-4">
-        <h1 className="text-2xl font-bold mb-4">Application Under Review</h1>
-        <p>Your application is still under review. We'll notify you once a decision has been made.</p>
-      </main>
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-12 w-12 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
+          <p className="text-muted-foreground">Loading application data...</p>
+        </div>
+      </div>
     )
   }
+
+  if (appCheckError) {
+    return (
+      <div className="max-w-lg mx-auto py-12 px-4">
+        <Card className="border-destructive">
+          <CardHeader>
+            <CardTitle className="text-destructive flex items-center gap-2">
+              <AlertCircle className="h-5 w-5" />
+              <span>Error</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p>{appCheckError}</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (appStatus === 'pending') {
+    return (
+      <div className="max-w-lg mx-auto py-12 px-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-xl">Application Under Review</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p>Your application is currently being reviewed by our team.</p>
+            <p className="text-muted-foreground">We'll notify you once a decision has been made. Thank you for your patience.</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   if (appStatus === 'approved') {
     return (
-      <main className="max-w-lg mx-auto py-12 px-4">
-        <h1 className="text-2xl font-bold mb-4">You are already approved!</h1>
-        <p>Your contractor application has been approved. You may now access contractor features.</p>
-      </main>
+      <div className="max-w-lg mx-auto py-12 px-4">
+        <Card className="border-green-200 bg-green-50">
+          <CardHeader>
+            <CardTitle className="text-green-700 flex items-center gap-2">
+              <Check className="h-5 w-5" />
+              <span>Approved</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p>Your contractor application has been approved. You may now access all contractor features.</p>
+            <Button className="mt-6" onClick={() => router.push('/dashboard/contractor')}>
+              Go to Contractor Dashboard
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     )
   }
 
   if (success) {
     return (
-      <main className="max-w-lg mx-auto py-12 px-4">
-        <h1 className="text-2xl font-bold mb-4">Application Submitted</h1>
-        <p className="mb-4">Thank you for applying! Your application is under review. We'll notify you after admin approval.</p>
-      </main>
+      <div className="max-w-lg mx-auto py-12 px-4">
+        <Card className="border-green-200">
+          <CardHeader>
+            <CardTitle className="text-xl flex items-center gap-2">
+              <Check className="h-5 w-5 text-green-600" />
+              <span>Application Submitted</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p>Thank you for applying to become a contractor with Borkin Industries!</p>
+            <p>Your application is now under review. We'll notify you once our team has made a decision.</p>
+            <Button variant="outline" className="mt-4" onClick={() => router.push('/')}>
+              Return to Homepage
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     )
   }
 
   return (
-    <div className="flex flex-col md:flex-row min-h-screen bg-muted">
+    <div className="flex flex-col md:flex-row min-h-[calc(100vh-12rem)]">
       {/* Stepper: horizontal on mobile, vertical sidebar on desktop */}
-      <nav className="md:hidden w-full bg-background border-b py-2 flex overflow-x-auto whitespace-nowrap h-16">
+      <nav className="md:hidden w-full bg-background border-b py-2 flex overflow-x-auto whitespace-nowrap h-16 sticky top-0 z-10">
         {steps.map((s, i) => (
-          <div 
-            key={s} 
-            className={`flex flex-col items-center justify-center min-w-[14%] flex-1
-              ${i === stepIndex ? 'text-primary font-semibold' : i < stepIndex ? 'text-green-600' : 'text-muted-foreground'}`}
+          <button 
+            key={s}
+            type="button"
+            onClick={() => handleStepClick(i)}
+            className={`flex flex-col items-center justify-center min-w-[14%] flex-1 cursor-pointer
+              ${i === stepIndex
+                ? 'text-primary font-semibold' // Current step
+                : stepsCompleted[i]
+                  ? 'text-green-600' // Completed step
+                  : visitedSteps[i]
+                    ? 'text-amber-600' // Visited but not completed
+                    : 'text-muted-foreground/50' // Not visited
+              }`}
           >
-            <div className={`w-6 h-6 flex items-center justify-center rounded-full border 
-              ${i < stepIndex ? 'border-green-600 bg-green-600 text-white' : i === stepIndex ? 'border-primary' : 'border-muted-foreground'}`}
+            <div className={`w-6 h-6 flex items-center justify-center rounded-full border-2
+              ${stepsCompleted[i]
+                ? 'border-green-600 bg-green-600 text-white' // Completed
+                : i === stepIndex
+                  ? 'border-primary' // Current
+                  : visitedSteps[i]
+                    ? 'border-amber-500' // Visited but not completed
+                    : 'border-muted-foreground/50' // Not visited
+              }`}
             >
-              {i < stepIndex ? <span className="text-xs">✓</span> : <span className="text-xs">{i + 1}</span>}
+              {stepsCompleted[i] ? <Check className="h-3 w-3" /> : <span className="text-xs">{i + 1}</span>}
             </div>
             <span className="text-[10px] text-center mt-1 leading-tight px-0.5 truncate w-full">{s}</span>
-          </div>
+          </button>
         ))}
       </nav>
+      
       {/* Desktop: vertical sidebar */}
-      <aside className="hidden md:flex w-64 flex-col items-center py-12 pr-4 bg-background border-r">
-        <ol className="space-y-6 w-full">
-          {steps.map((s, i) => (
-            <li key={s} className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors
-              ${i === stepIndex ? 'bg-primary/10 text-primary font-semibold' : i < stepIndex ? 'text-green-600' : 'text-muted-foreground'}`}
-            >
-              <span className={`w-6 h-6 flex items-center justify-center rounded-full border-2
-                ${i < stepIndex ? 'border-green-600 bg-green-600 text-white' : i === stepIndex ? 'border-primary' : 'border-muted-foreground'}`}
+      <aside className="hidden md:block w-64 flex-shrink-0 py-8 pr-6 bg-background border-r">
+        <div className="sticky top-24">
+          <div className="px-4 mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-sm font-semibold text-muted-foreground">APPLICATION PROGRESS</h2>
+              <span className="text-sm font-medium">{overallProgress}%</span>
+            </div>
+            <div className="h-2 bg-muted rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-primary transition-all" 
+                style={{ width: `${overallProgress}%` }}
+              ></div>
+            </div>
+          </div>
+          
+          {/* Completion Summary in Sidebar */}
+          <div className="px-4 mb-6">
+            {renderCompletionSummary()}
+          </div>
+
+          <h2 className="text-sm font-semibold text-muted-foreground mb-2 px-4">APPLICATION STEPS</h2>
+          <ol className="space-y-1">
+            {steps.map((s, i) => (
+              <button 
+                key={s}
+                type="button"
+                onClick={() => handleStepClick(i)}
+                className={`w-full text-left flex items-center gap-3 px-4 py-2 rounded-md transition-colors cursor-pointer
+                  ${i === stepIndex
+                    ? 'bg-primary/10 text-primary font-medium' // Current step
+                    : stepsCompleted[i]
+                      ? 'text-green-600 hover:bg-green-50' // Completed step
+                      : visitedSteps[i]
+                        ? 'text-amber-600 hover:bg-amber-50/30' // Visited but not completed
+                        : 'text-muted-foreground hover:bg-muted' // Not visited or default
+                  }`}
               >
-                {i < stepIndex ? <span className="material-icons text-base">check</span> : i + 1}
-              </span>
-              <span>{s}</span>
-            </li>
-          ))}
-        </ol>
+                <div className={`w-6 h-6 flex items-center justify-center rounded-full border-2
+                  ${stepsCompleted[i]
+                    ? 'border-green-600 bg-green-600 text-white' // Completed
+                    : i === stepIndex
+                      ? 'border-primary' // Current
+                      : visitedSteps[i]
+                        ? 'border-amber-500' // Visited but not completed
+                        : 'border-muted-foreground/50' // Not visited
+                  }`}
+                >
+                  {stepsCompleted[i] ? <Check className="h-3 w-3" /> : <span className="text-xs">{i + 1}</span>}
+                </div>
+                <span>{s}</span>
+                {visitedSteps[i] && i !== stepIndex && (
+                  <div className="ml-auto flex items-center">
+                    {stepsCompleted[i] ? (
+                      <Check className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <AlertCircle className="h-4 w-4 text-amber-500" />
+                    )}
+                  </div>
+                )}
+              </button>
+            ))}
+          </ol>
+          <div className="mt-8 px-4">
+            <div className="text-xs text-muted-foreground space-y-2">
+              <p>Need help with your application?</p>
+              <p>Contact our support team:</p>
+              <p className="font-medium text-foreground">support@borkin.com</p>
+            </div>
+          </div>
+        </div>
       </aside>
 
       {/* Main form area: responsive max-widths */}
-      <main className="flex-1 min-h-0 flex flex-col items-center py-0 sm:py-6 px-0 sm:px-4 overflow-y-auto w-full">
-        <form id="contractorApplication" onSubmit={handleSubmit} className="w-full">
-          <div className="w-full max-w-none sm:max-w-2xl md:max-w-3xl lg:max-w-4xl xl:max-w-5xl sm:mx-auto">
-            <div className="bg-card w-full p-1 sm:p-8 rounded-none sm:rounded-xl shadow-none sm:shadow mb-1 sm:mb-8 text-xs sm:text-lg">
-              <h1 className="text-sm sm:text-2xl font-bold mb-1 sm:mb-6">Contractor Application</h1>
-              <div className="space-y-1 sm:space-y-8">
-                {renderStep()}
-                {error && <div className="text-destructive text-xs sm:text-sm mt-1 sm:mt-2">{error}</div>}
+      <main className="flex-1 py-6 px-4 md:px-8 overflow-y-auto">
+        <form id="contractorApplication" onSubmit={handleSubmit} className="max-w-3xl mx-auto">
+          <div className="mb-6">
+            <h1 className="text-2xl font-bold">{step}</h1>
+            <div className="flex items-center mt-2">
+              <div className="h-2 bg-muted rounded-full overflow-hidden flex-1 mr-2">
+                <div 
+                  className="h-full bg-primary transition-all" 
+                  style={{ width: `${((stepIndex + 1) / steps.length) * 100}%` }}
+                ></div>
               </div>
+              <span className="text-sm text-muted-foreground">Step {stepIndex + 1} of {steps.length}</span>
             </div>
           </div>
-          {/* Footer: mobile w-full, static, no shadow, tight padding; desktop max-w and centered */}
-          <div className="w-full max-w-none sm:max-w-2xl md:max-w-3xl lg:max-w-4xl xl:max-w-5xl sm:mx-auto bg-background border-t py-1 sm:py-4 px-1 sm:px-8 flex flex-col sm:flex-row gap-1 sm:gap-2 justify-between z-10 rounded-none sm:rounded-xl shadow-none sm:shadow">
-            <div className="flex flex-col sm:flex-row w-full gap-1 sm:gap-2">
-              {stepIndex > 0 && (
-                <Button type="button" variant="outline" onClick={handleBack} className="w-full sm:w-auto text-xs sm:text-lg p-1 sm:p-4 h-8 sm:h-auto">
-                  Back
-                </Button>
-              )}
-              <div className="flex-1" />
-              {step !== 'Review & Submit' ? (
-                <Button type="button" onClick={handleNext} className="w-full sm:w-auto text-xs sm:text-lg p-1 sm:p-4 h-8 sm:h-auto">
-                  Next
-                </Button>
-              ) : (
+
+          <div className="space-y-6">
+            {renderStep()}
+            {error && (
+              <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                <p>{error}</p>
+              </div>
+            )}
+          </div>
+          
+          {/* Form navigation */}
+          <div className="sticky bottom-0 mt-8 py-4 bg-background border-t flex justify-between items-center gap-4">
+            {stepIndex > 0 && (
+              <Button type="button" variant="outline" onClick={handleBack}>
+                Back
+              </Button>
+            )}
+            <div className="hidden md:block flex-1 px-4">
+              <div className="flex items-center justify-between text-sm text-muted-foreground mb-1">
+                <span>Overall completion</span>
+                <span>{overallProgress}%</span>
+              </div>
+              <div className="h-2 bg-muted rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-primary transition-all" 
+                  style={{ width: `${overallProgress}%` }}
+                ></div>
+              </div>
+            </div>
+            {step !== 'Review & Submit' ? (
+              <Button type="button" onClick={handleNext}>
+                Next
+              </Button>
+            ) : (
+              <div className="flex flex-col items-end">
+                {!stepsCompleted.every(Boolean) && (
+                  <p className="text-xs text-amber-600 mb-2 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    <span>Complete all sections to submit</span>
+                  </p>
+                )}
                 <Button 
                   type="submit" 
                   form="contractorApplication" 
-                  disabled={isPending} 
-                  className="w-full sm:w-auto text-xs sm:text-lg p-1 sm:p-4 h-8 sm:h-auto"
-                  onClick={(e) => {
-                    // This won't prevent form submission but helps with debugging
-                    console.log('Submit button clicked', form);
-                  }}
+                  disabled={isPending || !stepsCompleted.every(Boolean)} 
+                  className={`${stepsCompleted.every(Boolean) 
+                    ? 'bg-green-600 hover:bg-green-700 shadow-md hover:shadow-lg transition-all py-2.5 px-5 text-base' 
+                    : 'bg-muted text-muted-foreground'}`}
                 >
-                  {isPending ? 'Submitting...' : 'Submit Application'}
+                  {isPending ? 'Submitting...' : stepsCompleted.every(Boolean) 
+                    ? 'Submit Application' 
+                    : 'Complete All Sections to Submit'}
                 </Button>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </form>
       </main>
-      {/* Optional right-side info box (uncomment if needed) */}
-      {/* <aside className="w-80 hidden lg:block py-12 pl-4 pr-8">
-        <div className="bg-muted rounded-xl p-6 text-sm text-muted-foreground">
-          Place of work if accepted into this job vacancy.<br />
-          You can fill in manually if your work address is different from the head office address.
-        </div>
-      </aside> */}
     </div>
   )
 } 

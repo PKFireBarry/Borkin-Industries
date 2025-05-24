@@ -7,7 +7,7 @@
  - add pricing page to admin dashboard
  - add coupons to admin dashboard in the pricing page
  - implement platform fees: 5% base fee for first three months, then 10% base fee after 3 months
- - add internal messaging system for client-contractor communication about gigs
+ - [x] add internal messaging system for client-contractor communication about gigs (Backend Started)
 
 ## Overview
 A web platform for Borkin Industries to connect clients seeking high-quality, luxury at-home pet care with accredited veterinary technicians (contractors). The platform will facilitate client/contractor onboarding, booking management, payment processing, and company oversight, with a focus on Southeast Florida.
@@ -128,6 +128,9 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
 - [x] Install Shadcn UI components
 - [x] Set up project structure (feature-based folders)
 - [x] Configure environment variables for Firebase, Clerk, Stripe
+- [x] Firebase Storage is set up and exported
+- [x] Firebase upload utility is created
+- [x] Center Terms of Service component on homepage
 
 ### 2. Authentication (Clerk)
 - [x] Install Clerk and configure provider
@@ -168,6 +171,11 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
 - [x] Update backend and frontend to fully automate the booking update and payment flow for the user.
 - [x] Fix client booking details modal to always show service names instead of IDs
 - [x] Add contractor name and phone number to booking details model and display in booking details UI
+- [x] Clean up and restyle booking details modal for clarity and client-friendliness
+- [x] Refine dashboard navigation layout to be fully responsive and collapsible for all device types
+- [x] Create reusable PhotoUpload component
+- [x] Integrate PhotoUpload into client profile, contractor profile, and pet management
+- [x] Update forms to save/display photo URLs
 
 ### 5. Contractor Application & Onboarding
 - [x] Build contractor application form (resume, experience, education, address, driving range, certifications, references)
@@ -181,6 +189,13 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
 - [x] Implement booking completion and payment release flow (contractor marks as completed, app captures PaymentIntent)
 - [x] Contractor can update payout method via Stripe Connect Express
 - [x] Fix contractor application redirect and error checking so new contractors are properly redirected to the application form and cannot submit multiple applications.
+- [x] Refine Contractor Application UI/UX:
+  - [x] Allow completing any section at any time.
+  - [x] Only allow form submission when all sections are complete and valid.
+  - [x] Improve stepper navigation and visual cues.
+  - [x] Ensure completion summary is always visible on desktop.
+- [x] Make Experience, Education, Certifications, and References sections optional.
+- [x] Update Driving Range: change maxDistance to select (10-50 miles), remove areasServed.
 
 ### 5A. Contractor Service & Pricing Management
 - [x] Define TypeScript interfaces for PlatformService and ContractorServiceOffering (`types/service.ts`)
@@ -201,10 +216,7 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
   - [x] Modify booking form UI to allow selecting multiple services
   - [x] Update total price calculation based on selected services and their payment types
   - [x] Update booking/gig detail views to display selected services
-- [x] Update contractor profile modal to fetch platform services from Firestore
-  - [x] Remove MOCK_PLATFORM_SERVICES_MODAL constant
-  - [x] Add state for platform services and fetch them when modal is opened
-  - [x] Update getServiceName function to use fetched platform services
+- [x] Update contractor profile modal to show all service offerings with correct payment type and price for clients
 - [ ] (TODO) Update net proceeds calculations for contractors to use their specific service prices.
 - [x] Remove redundant service management page: `app/dashboard/contractor/services/page.tsx` and its component `app/dashboard/contractor/services/components/contractor-service-management.tsx`.
 
@@ -243,10 +255,18 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
 - [ ] Add coupon management to pricing page
 
 ### 9. Notifications & Reviews
-- [ ] Set up email notifications for booking creation, updates, completion (clients & contractors)
+- [ ] Set up email notifications for booking creation, updates, and completion (clients & contractors)
 - [ ] Prompt clients for review/rating after gig completion
 - [ ] Store and display contractor ratings
-- [ ] Implement internal messaging system for client-contractor communication
+- [x] Implement internal messaging system for client-contractor communication (Contextual)
+  - [x] Define messaging data structures (TypeScript interfaces)
+  - [x] Implement Firebase server actions for chat and message CRUD operations
+  - [x] Create UI for individual chat view (`/dashboard/messages/[chatId]`)
+  - [x] Integrate booking status check to enable/disable chat input
+  - [x] Add "Message" buttons to client bookings and contractor gigs lists
+  - [x] Implement real-time message updates (optional, consider for v2)
+  - [x] Implement unread message indicators in chat view (implicitly via markAsRead)
+  - [x] Add profile and booking details modal when clicking on user avatars in chat
 
 ### 10. FAQ & Resource Section
 - [ ] Create FAQ page for clients and contractors
@@ -262,6 +282,9 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
 - [x] Add Google Calendar button to contractor gig cards (shows on all gigs)
 - [x] Remove debugging from client-side bookings page cards
 - [x] Restyle both contractor and client cards for a more refined, Material Design-inspired look
+- [x] Make the Edit Profile button (view mode) and Save/Cancel buttons (edit mode) always fixed at the bottom of the contractor profile page, with proper padding and responsiveness.
+- [x] Refine contractor gigs page and details modal layout to match client-side booking details modal structure and visual hierarchy
+- [x] Refine contractor payments details modal to match style of gigs and bookings modals
 
 ---
 

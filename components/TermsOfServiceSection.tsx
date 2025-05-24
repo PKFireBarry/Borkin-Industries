@@ -8,8 +8,8 @@ export default function TermsOfServiceSection() {
   const [showTerms, setShowTerms] = useState(false);
 
   return (
-    <section className="w-full py-12 md:py-24 lg:py-32 bg-white dark:bg-gray-800 rounded-lg">
-      <div className="container px-4 md:px-6">
+    <section className="container mx-auto py-12 md:py-24 lg:py-32 bg-white dark:bg-gray-800 rounded-lg">
+      <div className="px-4 md:px-6">
         <motion.h2
           className="text-3xl font-bold tracking-tighter sm:text-5xl text-center mb-6 text-purple-600 dark:text-purple-300"
           initial={{ opacity: 0, y: 20 }}

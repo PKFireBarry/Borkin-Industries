@@ -1,6 +1,6 @@
 "use client"
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import type { Contractor } from '@/types/contractor'
 import * as React from 'react'
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { getContractorServiceOfferings } from "@/lib/firebase/contractors";
 import { getAllPlatformServices } from "@/lib/firebase/services";
 import type { ContractorServiceOffering, PlatformService } from "@/types/service";
+import { CompactAvailabilityCalendar } from '../components/compact-availability-calendar';
 
 interface ContractorProfileModalProps {
   contractor: Contractor | null
@@ -22,6 +23,8 @@ interface ContractorProfileModalProps {
 const ContractorMap = dynamic(() => import('@/components/contractor-map'), { ssr: false })
 
 export function ContractorProfileModal({ contractor, open, onClose, onBookNow, clientLocation }: ContractorProfileModalProps) {
+  if (!contractor) return null;
+
   const [clientLatLng, setClientLatLng] = useState<{ lat: number; lng: number } | null>(null)
   const [serviceOfferings, setServiceOfferings] = useState<ContractorServiceOffering[]>([])
   const [platformServices, setPlatformServices] = useState<PlatformService[]>([])
@@ -45,10 +48,9 @@ export function ContractorProfileModal({ contractor, open, onClose, onBookNow, c
       async function fetchData() {
         try {
           const [offerings, services] = await Promise.all([
-            getContractorServiceOfferings(contractor.id),
+            getContractorServiceOfferings(contractor!.id),
             getAllPlatformServices()
           ]);
-          
           setServiceOfferings(offerings);
           setPlatformServices(services);
         } catch (err) {
@@ -58,7 +60,6 @@ export function ContractorProfileModal({ contractor, open, onClose, onBookNow, c
           setIsLoadingServices(false);
         }
       }
-      
       fetchData();
     } else {
       setServiceOfferings([]);
@@ -66,10 +67,11 @@ export function ContractorProfileModal({ contractor, open, onClose, onBookNow, c
     }
   }, [open, contractor])
 
-  if (!contractor) return null
+  // Now do the early return
+  if (!contractor) return null;
 
   // At this point, we know contractor is not null
-  const validContractor = contractor as Contractor;
+  const validContractor = contractor;
 
   // Helper to get service name - assumes serviceOfferings might have denormalized name,
   // or falls back to serviceId. A proper shared utility for platform services is better long-term.
@@ -102,28 +104,33 @@ export function ContractorProfileModal({ contractor, open, onClose, onBookNow, c
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl w-[95vw] md:w-full rounded-lg shadow-xl">
+      <DialogContent 
+        className="max-w-3xl w-[95vw] md:w-full rounded-lg shadow-xl"
+        aria-labelledby="contractorProfileTitle"
+      >
         <div className="p-6 space-y-6 bg-card text-card-foreground overflow-y-auto max-h-[calc(100vh_-_5rem)]">
           <div className="flex flex-col md:flex-row items-center md:items-start gap-6 pb-6 border-b">
             <Avatar className="w-28 h-28 md:w-36 md:h-36 border-4 border-primary shadow-lg">
               <AvatarImage src={contractorProfileImage} alt={contractorName} className="object-cover"/>
               <AvatarFallback className="text-4xl bg-primary/10">{contractorInitial}</AvatarFallback>
             </Avatar>
-            <div className="text-center md:text-left">
-              <DialogTitle className="text-3xl font-bold mb-1">{contractorName}</DialogTitle>
+            <DialogHeader className="text-center md:text-left w-full">
+              <DialogTitle id="contractorProfileTitle" className="text-3xl font-bold mb-1">{contractorName}</DialogTitle>
               <p className="text-sm text-muted-foreground mb-0.5">{contractorEmail}</p>
               <p className="text-xs text-muted-foreground">
                 {contractorLocation}
               </p>
               <p className="text-xs text-muted-foreground mt-1">Driving Range: {contractorDrivingRange}</p>
-            </div>
+            </DialogHeader>
           </div>
 
           <div className="grid md:grid-cols-2 gap-x-8 gap-y-6">
             <div className="space-y-6">
               <div>
                 <h3 className="text-lg font-semibold mb-2 text-primary">About Me</h3>
-                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{contractorBio}</p>
+                <DialogDescription id="contractorProfileBio" className="text-sm text-muted-foreground whitespace-pre-wrap">
+                  {contractorBio}
+                </DialogDescription>
               </div>
 
               <div>
@@ -135,7 +142,12 @@ export function ContractorProfileModal({ contractor, open, onClose, onBookNow, c
                     {serviceOfferings.map(offering => (
                       <li key={offering.serviceId} className="flex justify-between items-center py-1 border-b border-border/50 last:border-b-0">
                         <span>{getServiceName(offering.serviceId)}</span>
-                        <span className="font-medium text-primary">${(offering.price / 100).toFixed(2)} / day</span>
+                        <span className="font-medium text-primary flex items-center gap-2">
+                          ${ (offering.price / 100).toFixed(2) }
+                          <span className="ml-1 px-2 py-0.5 rounded bg-muted text-xs text-muted-foreground">
+                            {offering.paymentType === 'daily' ? '/day' : 'one-time fee'}
+                          </span>
+                        </span>
                       </li>
                     ))}
                   </ul>
@@ -145,16 +157,14 @@ export function ContractorProfileModal({ contractor, open, onClose, onBookNow, c
               </div>
 
               <div>
-                <h3 className="text-lg font-semibold mb-2 text-primary">Availability Notes</h3>
-                {hasUnavailableDates ? (
-                    <ul className="list-disc list-inside pl-1 space-y-1 text-sm text-muted-foreground">
-                        {unavailableDates.map(date => 
-                            <li key={date}>Unavailable on: {new Date(date).toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}</li>
-                        )}
-                    </ul>
-                ) : (
-                    <p className="text-sm text-muted-foreground">No specific unavailability notes. Please confirm when booking.</p>
-                )}
+                <h3 className="text-lg font-semibold mb-2 text-primary">Availability</h3>
+                <CompactAvailabilityCalendar unavailableDates={unavailableDates} />
+                <p className="text-xs text-muted-foreground mt-2 text-center">
+                  Dates marked in red are unavailable. All other dates are generally considered available.
+                </p>
+                 <p className="text-xs text-muted-foreground mt-1 text-center">
+                    Please confirm specific times when booking.
+                </p>
               </div>
             </div>
 

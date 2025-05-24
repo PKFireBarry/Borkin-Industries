@@ -17,6 +17,7 @@ import {
 import { useUser } from '@clerk/nextjs'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
+import { PhotoUpload } from '@/components/PhotoUpload'
 
 interface PetManagementProps {
   initialPets?: Pet[]
@@ -342,7 +343,13 @@ export function PetManagement({ initialPets = [] }: PetManagementProps) {
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
                 <Label htmlFor="photoUrl">Photo URL</Label>
-                <Input id="photoUrl" name="photoUrl" value={addForm.photoUrl} onChange={handleAddChange} placeholder="http://example.com/pet.jpg" />
+                <PhotoUpload
+                  label="Pet Photo"
+                  storagePath={`pets/${user?.id || 'unknown'}-${addForm.name || 'pet'}`}
+                  initialUrl={addForm.photoUrl}
+                  onUpload={url => setAddForm(prev => ({ ...prev, photoUrl: url }))}
+                  disabled={loading}
+                />
               </div>
               <div>
                 <Label htmlFor="name">Name</Label>
@@ -421,7 +428,13 @@ export function PetManagement({ initialPets = [] }: PetManagementProps) {
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
                 <Label htmlFor="edit-photoUrl">Photo URL</Label>
-                <Input id="edit-photoUrl" name="photoUrl" value={editForm.photoUrl} onChange={handleEditChange} placeholder="http://example.com/pet.jpg" />
+                <PhotoUpload
+                  label="Pet Photo"
+                  storagePath={`pets/${user?.id || 'unknown'}-${editForm.name || 'pet'}`}
+                  initialUrl={editForm.photoUrl}
+                  onUpload={url => setEditForm(prev => ({ ...prev, photoUrl: url }))}
+                  disabled={loading}
+                />
               </div>
               <div>
                 <Label htmlFor="edit-name">Name</Label>

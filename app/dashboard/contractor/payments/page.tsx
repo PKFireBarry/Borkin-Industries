@@ -216,84 +216,96 @@ export default function ContractorPaymentsPage() {
       )}
       {/* Gig Details Modal */}
       <Dialog open={!!detailGig} onOpenChange={() => setDetailGig(null)}>
-        <DialogContent className="w-full max-w-lg sm:max-w-xl md:max-w-2xl lg:max-w-3xl xl:max-w-4xl">
+        <DialogContent className="w-full max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Gig Details</DialogTitle>
           </DialogHeader>
           {detailGig && (
-            <div className="space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                  <div className="text-lg font-semibold">Gig Details</div>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <div className="text-xs text-muted-foreground mb-1">Service Type</div>
-                  <div className="font-medium text-base">{detailGig?.serviceType ?? ''}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-muted-foreground mb-1">Status</div>
-                  <span className="inline-block px-2 py-0.5 rounded bg-green-100 text-green-800 text-xs font-medium">
-                    {detailGig?.status?.charAt(0).toUpperCase() + detailGig?.status?.slice(1)}
+            <section className="space-y-6">
+              {/* Status & Dates */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 border-b pb-4">
+                <div className="flex flex-col gap-2">
+                  <span className="text-xs text-muted-foreground">Status</span>
+                  <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold shadow-sm
+                    ${detailGig.status === 'completed' ? 'bg-green-100 text-green-800' :
+                      detailGig.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                      detailGig.status === 'approved' ? 'bg-blue-100 text-blue-800' :
+                      'bg-gray-200 text-gray-700'}`}
+                  >
+                    {detailGig.status?.charAt(0).toUpperCase() + detailGig.status?.slice(1)}
                   </span>
                 </div>
-                <div>
-                  <div className="text-xs text-muted-foreground mb-1">Date & Time</div>
-                  <div className="font-medium text-base">{getGigDisplayDate(detailGig)}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-muted-foreground mb-1">Payment Status</div>
-                  <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${detailGig?.paymentStatus === 'cancelled' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>
-                    {detailGig?.paymentStatus?.charAt(0).toUpperCase() + detailGig?.paymentStatus?.slice(1)}
+                <div className="flex flex-col gap-2">
+                  <span className="text-xs text-muted-foreground">Payment Status</span>
+                  <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold bg-gray-100 text-gray-800 capitalize shadow-sm${detailGig.paymentStatus === 'cancelled' ? ' bg-red-100 text-red-800' : ''}`}> 
+                    {detailGig.paymentStatus}
                   </span>
                 </div>
+                <div className="col-span-1 sm:col-span-2 mt-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6 bg-muted/50 rounded-md px-4 py-3 w-full">
+                    <div className="flex flex-col flex-1 min-w-0">
+                      <span className="text-xs text-muted-foreground">Date & Time</span>
+                      <span className="font-bold text-base flex items-center gap-2 break-words">
+                        {getGigDisplayDate(detailGig)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className="border-t pt-4">
-                <div className="text-xs text-muted-foreground mb-1">Client</div>
-                <div className="font-medium text-base">{detailGig?.clientName}</div>
+              {/* Client Info */}
+              <div className="border-b pb-4">
+                <span className="text-xs text-muted-foreground">Client</span>
+                <div className="font-semibold text-lg mt-1">{detailGig?.clientName}</div>
               </div>
-              <div>
-                <div className="text-xs text-muted-foreground mb-1">Animals</div>
-                <div className="flex flex-wrap gap-2">
+              {/* Animals Info */}
+              <div className="border-b pb-4">
+                <span className="text-xs text-muted-foreground">Animals</span>
+                <div className="flex flex-wrap gap-2 mt-1">
                   {detailGig.petNames ? detailGig.petNames.split(',').map(name => (
-                    <span key={name} className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs font-medium">{name}</span>
-                  )) : <span className="text-muted-foreground text-xs">None</span>}
+                    <span key={name} className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium shadow-sm">{name}</span>
+                  )) : <span className="text-muted-foreground text-sm">None</span>}
                 </div>
               </div>
-              <div className="border-t pt-4">
-                <div className="text-xs text-muted-foreground mb-2 font-semibold">Payment Information</div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <div className="text-xs text-muted-foreground mb-1">Amount</div>
-                    <div className="font-semibold text-base">${detailGig?.amount?.toFixed(2) ?? '0.00'}</div>
+              {/* Payment Information */}
+              <div className="border-b pb-4">
+                <h3 className="text-base font-bold mb-2 flex items-center gap-2">
+                  Payment Information
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center border-t pt-3 mt-2">
+                    <span className="font-semibold text-base">Total Payment</span>
+                    <span className="font-bold text-primary text-xl">${(detailGig.amount || 0).toFixed(2)}</span>
                   </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground mb-1">Platform Fee (5%)</div>
-                    <div className="font-semibold text-base text-red-600">-${detailGig?.platformFee?.toFixed(2) ?? ((detailGig?.amount || 0) * 0.05).toFixed(2)}</div>
+                  <div className="flex justify-between items-center border-t border-dashed pt-3 text-sm">
+                    <span className="text-muted-foreground">Platform Fee (5%)</span>
+                    <span className="text-red-600">-${detailGig?.platformFee?.toFixed(2) ?? ((detailGig?.amount || 0) * 0.05).toFixed(2)}</span>
                   </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground mb-1">Stripe Fee</div>
-                    <div className="font-semibold text-base text-red-600">-${detailGig?.stripeFee?.toFixed(2) ?? (((detailGig?.amount || 0) * 0.029 + 0.3).toFixed(2))}</div>
+                  <div className="flex justify-between items-center text-sm mb-1">
+                    <span className="text-muted-foreground">Stripe Fee</span>
+                    <span className="text-red-600">-${detailGig?.stripeFee?.toFixed(2) ?? (((detailGig?.amount || 0) * 0.029 + 0.3).toFixed(2))}</span>
                   </div>
-                  <div className="col-span-2">
-                    <div className="text-xs text-muted-foreground mb-1">Net to Contractor</div>
-                    <div className="font-semibold text-base text-green-700">${detailGig?.netPayout?.toFixed(2) ?? (((detailGig?.amount || 0) - (detailGig?.platformFee || (detailGig?.amount || 0) * 0.05) - ((detailGig?.amount || 0) * 0.029 + 0.3)).toFixed(2))}</div>
+                  <div className="flex justify-between items-center border-t pt-3">
+                    <span className="font-semibold">Net to Contractor</span>
+                    <span className="font-semibold text-green-600 text-lg">${detailGig?.netPayout?.toFixed(2) ?? (((detailGig?.amount || 0) - (detailGig?.platformFee || (detailGig?.amount || 0) * 0.05) - ((detailGig?.amount || 0) * 0.029 + 0.3)).toFixed(2))}</span>
                   </div>
                 </div>
               </div>
+              {/* Review */}
               {detailGig.review && (
-                <div className="border-t pt-4">
+                <div className="border-b pb-4">
                   <div className="text-xs text-muted-foreground mb-2 font-semibold">Review</div>
                   <div className="text-sm">Rating: <span className="font-bold">{detailGig.review.rating}</span></div>
                   {detailGig.review.comment && <div className="text-sm mt-1">"{detailGig.review.comment}"</div>}
                 </div>
               )}
-              <div className="border-t pt-4 text-xs text-muted-foreground">
-                <div className="mb-1">Booking ID</div>
-                <div className="font-mono break-all mb-1">{detailGig?.id ?? ''}</div>
+              {/* Booking ID */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-t pt-4 mt-2">
+                <div>
+                  <span className="text-xs text-muted-foreground">Booking ID</span>
+                  <div className="font-mono break-all text-xs mt-1">{detailGig?.id ?? ''}</div>
+                </div>
               </div>
-            </div>
+            </section>
           )}
           <DialogFooter>
             <div className="flex w-full justify-end gap-2">

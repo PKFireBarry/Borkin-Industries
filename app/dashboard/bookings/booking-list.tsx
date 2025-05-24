@@ -1,9 +1,8 @@
 import type { Booking } from '@/types/booking'
-import type { Client } from '@/types/client'
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { removeBooking, getBookingsForClient, setClientCompleted, saveBookingReview, updateBookingServices, getBookingById } from '@/lib/firebase/bookings'
+import { removeBooking, getBookingsForClient, setClientCompleted, saveBookingReview, updateBookingServices } from '@/lib/firebase/bookings'
 import { BookingRequestForm } from './booking-request-form'
 import { useUser } from '@clerk/nextjs'
 import { getAllContractors, getContractorServiceOfferings } from '@/lib/firebase/contractors'
@@ -12,14 +11,15 @@ import { getClientProfile } from '@/lib/firebase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
-import { Package, Clock } from 'lucide-react'
+import { Package, Clock, MessageSquare } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { getAllPlatformServices } from '@/lib/firebase/services'
 import type { PlatformService } from '@/types/service'
-import type { Pet } from '@/types/client'
 import { Elements } from '@stripe/react-stripe-js'
 import { loadStripe } from '@stripe/stripe-js'
 import { PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js'
+import { isOpenBookingStatus } from '@/app/actions/messaging-actions'
+import Link from 'next/link'
 
 interface BookingListProps {
   bookings: Booking[]
@@ -180,7 +180,6 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [detailBooking, setDetailBooking] = useState<ExtendedBooking | null>(null)
   const [petNames, setPetNames] = useState<string[]>([])
-  const [userPets, setUserPets] = useState<Pet[]>([])
   const [reviewModal, setReviewModal] = useState<{ open: boolean; booking: ExtendedBooking | null }>({ open: false, booking: null })
   const [defaultMethod, setDefaultMethod] = useState<LocalPaymentMethod | null>(null)
   const [activeTab, setActiveTab] = useState('all')
@@ -200,6 +199,7 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
   const [releasePaymentError, setReleasePaymentError] = useState<string | null>(null)
   const [editModalForceOpen, setEditModalForceOpen] = useState(false);
   const [editModalWarning, setEditModalWarning] = useState<string | null>(null);
+  const [bookingMessageEligibility, setBookingMessageEligibility] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     async function fetchContractors() {
@@ -208,15 +208,6 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
     }
     fetchContractors()
   }, [])
-
-  useEffect(() => {
-    async function fetchUserPets() {
-      if (!user) return
-      const profile = await getClientProfile(user.id)
-      setUserPets(profile?.pets || [])
-    }
-    fetchUserPets()
-  }, [user])
 
   useEffect(() => {
     async function fetchPetNames() {
@@ -307,6 +298,19 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
     }
     fetchPlatformServices()
   }, [])
+
+  useEffect(() => {
+    const checkEligibility = async () => {
+      const eligibility: Record<string, boolean> = {};
+      for (const booking of bookings) {
+        eligibility[booking.id] = await isOpenBookingStatus(booking.status);
+      }
+      setBookingMessageEligibility(eligibility);
+    };
+    if (bookings.length > 0) {
+      checkEligibility();
+    }
+  }, [bookings]);
 
   const contractorNameById = (id?: string) => {
     if (!id) return 'Unassigned'
@@ -420,19 +424,6 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
     return bookings.filter(b => b.status === status).sort((a, b) => new Date(getSortDate(b)).getTime() - new Date(getSortDate(a)).getTime());
   }
 
-  // Helper to safely format date
-  const safeDateString = (date?: string) => {
-    if (!date) return '';
-    try {
-      return new Date(date).toLocaleString();
-    } catch {
-      return '';
-    }
-  };
-
-  const getBookingStartDate = (b: ExtendedBooking | null) => (b?.startDate ?? b?.date ?? '') || '';
-  const getBookingEndDate = (b: ExtendedBooking | null) => (b?.endDate ?? '') || '';
-
   // Refactored date/time display helper
   function getBookingDateTimeRange(b: ExtendedBooking) {
     function parseLocalDate(dateStr?: string) {
@@ -513,31 +504,6 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
     return reviewWithCreatedAt;
   }
 
-  // Add helper function to calculate hours between start and end time
-  function calculateHours(startTime?: string, endTime?: string): number {
-    if (!startTime || !endTime) return 0;
-    
-    const [startHour, startMinute] = startTime.split(':').map(Number);
-    const [endHour, endMinute] = endTime.split(':').map(Number);
-    
-    let hours = endHour - startHour;
-    let minutes = endMinute - startMinute;
-    
-    // Handle negative minutes by borrowing an hour
-    if (minutes < 0) {
-      hours -= 1;
-      minutes += 60;
-    }
-    
-    // If end time is earlier than start time, assume it's for the next day
-    if (hours < 0) {
-      hours += 24;
-    }
-    
-    // Convert to decimal hours (e.g., 1 hour 30 minutes = 1.5 hours)
-    return Math.round((hours + minutes / 60) * 10) / 10;
-  }
-
   const handleSaveEditServices = async () => {
     if (!editServicesModal.booking || !user || !editStartDate || !editEndDate || !editEndTime) return
     setIsEditServicesPending(true)
@@ -616,48 +582,65 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
                 <div className="text-muted-foreground p-8 text-center">No bookings found.</div>
               ) : (
                 filterBookings(tab).map((b) => {
-                  // Pending: can edit if not started yet. Approved: can always edit end date.
                   const today = new Date();
                   today.setHours(0, 0, 0, 0);
                   const bookingDate = new Date(b.startDate);
                   bookingDate.setHours(0, 0, 0, 0);
                   const canEditServices = (b.status === 'approved') || (b.status === 'pending' && bookingDate >= today);
+                  const canMessage = bookingMessageEligibility[b.id] === true;
+
                   return (
-                    <Card key={b.id} className="w-full bg-white rounded-lg shadow-md border border-gray-200">
-                      <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap">
-                        <div>
-                          <CardTitle className="text-lg flex items-center">
+                    <Card
+                      key={b.id}
+                      className="w-full bg-white rounded-lg shadow-md border border-gray-200 flex flex-col gap-0 p-0 sm:p-0 md:p-0 lg:p-0 xl:p-0"
+                    >
+                      <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 flex-wrap p-4 pb-2 border-b">
+                        <div className="flex-1 min-w-0">
+                          <CardTitle className="text-lg flex items-center gap-2 flex-wrap">
                             {hasMultipleServices(b) ? (
                               <Badge variant="outline" className="mr-2 bg-primary/10 text-primary">
                                 <Package className="h-3 w-3 mr-1" />
                                 {b.services?.length} services
                               </Badge>
                             ) : null}
-                            {getServiceNames(b)}
+                            <span className="truncate max-w-xs md:max-w-md lg:max-w-lg xl:max-w-xl">{getServiceNames(b)}</span>
                           </CardTitle>
-                          <div className="text-sm text-gray-500">{getBookingDateTimeRange(b)}</div>
+                          <div className="text-sm text-gray-500 mt-1 flex flex-col sm:flex-row sm:items-center gap-1">
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-4 h-4 text-primary" />
+                              {getBookingDateTimeRange(b)}
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex flex-col items-end gap-2 min-w-[120px]">
+                        <div className="flex flex-row sm:flex-col items-end gap-2 min-w-[120px] sm:min-w-[100px] mt-2 sm:mt-0">
                           <StatusBadge status={b.status} />
                           <span className={`capitalize text-xs${b.paymentStatus === 'cancelled' ? ' text-red-600' : ''}`}>{b.paymentStatus}</span>
                         </div>
                       </CardHeader>
-                      <CardContent className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                        <div className="flex flex-col gap-1">
+                      <CardContent className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-4 pt-2">
+                        <div className="flex flex-col gap-1 flex-1 min-w-0">
                           <span className="text-xs text-muted-foreground">Contractor: <span className="font-medium text-foreground">{contractorNameById(b.contractorId)}</span></span>
                           <span className="text-xs text-muted-foreground">Pets: <span className="font-medium text-foreground">{b.petIds?.length ?? 0}</span></span>
                           {b.review && (
                             <span className="text-xs text-muted-foreground">Review: <span className="font-medium text-foreground">{b.review.rating}★</span> {b.review.comment}</span>
                           )}
                         </div>
-                        <div className="flex flex-wrap gap-2 justify-end items-center">
-                          <Button variant="outline" className="text-sm px-3 py-1 rounded-full shadow-sm" onClick={() => setDetailBooking(b)}>
+                        <div className="flex flex-col sm:flex-row flex-wrap gap-2 justify-end items-center w-full sm:w-auto mt-2 sm:mt-0">
+                          <Button variant="outline" className="text-sm px-3 py-1 rounded-full shadow-sm w-full sm:w-auto" onClick={() => setDetailBooking(b)}>
                             Details
                           </Button>
+                          {canMessage && (
+                            <Link href={`/dashboard/messages/${b.id}`} passHref>
+                              <Button variant="outline" className="text-sm px-3 py-1 rounded-full shadow-sm w-full sm:w-auto">
+                                <MessageSquare className="h-4 w-4 mr-2" />
+                                Message Contractor
+                              </Button>
+                            </Link>
+                          )}
                           {canEditServices && (
                             <Button
                               variant="outline"
-                              className="text-sm px-3 py-1 rounded-full shadow-sm"
+                              className="text-sm px-3 py-1 rounded-full shadow-sm w-full sm:w-auto"
                               onClick={() => setEditServicesModal({ open: true, booking: b })}
                             >
                               Edit Services
@@ -665,7 +648,7 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
                           )}
                           <Button 
                             variant="destructive" 
-                            className="text-sm px-3 py-1 rounded-full shadow-sm" 
+                            className="text-sm px-3 py-1 rounded-full shadow-sm w-full sm:w-auto" 
                             onClick={() => setCancelId(b.id)} 
                             disabled={isPending || !(['pending', 'approved'].includes(b.status))}
                           >
@@ -674,7 +657,7 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
                           {b.status === 'approved' && b.paymentStatus === 'pending' && !b.clientCompleted && (
                             <Button
                               variant="default"
-                              className="text-sm px-3 py-1 rounded-full shadow-sm"
+                              className="text-sm px-3 py-1 rounded-full shadow-sm w-full sm:w-auto"
                               onClick={() => handleClientComplete(b.id)}
                               disabled={isPending}
                             >
@@ -682,12 +665,12 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
                             </Button>
                           )}
                           {b.status === 'approved' && b.paymentStatus === 'pending' && b.clientCompleted && !b.contractorCompleted && (
-                            <span className="text-xs text-muted-foreground">Waiting for contractor...</span>
+                            <span className="text-xs text-muted-foreground w-full sm:w-auto">Waiting for contractor...</span>
                           )}
                           {b.status === 'approved' && b.paymentStatus === 'pending' && b.clientCompleted && b.contractorCompleted && (
                             <Button
                               variant="default"
-                              className="text-sm px-3 py-1 rounded-full shadow-sm"
+                              className="text-sm px-3 py-1 rounded-full shadow-sm w-full sm:w-auto"
                               onClick={() => handleConfirmPayment(b, setIsPending, setError, setBookings)}
                               disabled={isPending}
                             >
@@ -697,7 +680,7 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
                           {b.status === 'completed' && b.paymentStatus === 'paid' && !b.review && (
                             <Button
                               variant="default"
-                              className="text-sm px-3 py-1 rounded-full shadow-sm"
+                              className="text-sm px-3 py-1 rounded-full shadow-sm w-full sm:w-auto"
                               onClick={() => setReviewModal({ open: true, booking: b })}
                             >
                               Leave Review
@@ -760,129 +743,155 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
         </DialogContent>
       </Dialog>
       <Dialog open={!!detailBooking} onOpenChange={() => setDetailBooking(null)}>
-        <DialogContent className="w-full max-w-lg sm:max-w-xl md:max-w-2xl lg:max-w-3xl xl:max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-full max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Booking Details</DialogTitle>
           </DialogHeader>
           {detailBooking && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                </div>
-                <div>
-                  <div className="text-xs text-muted-foreground mb-1">Status</div>
-                  <span className="inline-block px-2 py-0.5 rounded bg-green-100 text-green-800 text-xs font-medium">
-                    {detailBooking?.status?.charAt(0).toUpperCase() + detailBooking?.status?.slice(1)}
+            <section className="space-y-6">
+              {/* Status & Dates */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 border-b pb-4">
+                <div className="flex flex-col gap-2">
+                  <span className="text-xs text-muted-foreground">Status</span>
+                  <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold shadow-sm
+                    ${detailBooking.status === 'completed' ? 'bg-green-100 text-green-800' :
+                      detailBooking.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                      detailBooking.status === 'approved' ? 'bg-blue-100 text-blue-800' :
+                      'bg-gray-200 text-gray-700'}`}
+                  >
+                    {detailBooking.status?.charAt(0).toUpperCase() + detailBooking.status?.slice(1)}
                   </span>
                 </div>
-                <div>
-                  <div className="text-xs text-muted-foreground mb-1">Date & Time</div>
-                  <div className="font-medium text-base">{getBookingDateTimeRange(detailBooking)}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-muted-foreground mb-1">Payment Status</div>
-                  <span className="inline-block px-2 py-0.5 rounded bg-gray-100 text-gray-800 text-xs font-medium capitalize">
-                    {detailBooking?.paymentStatus}
+                <div className="flex flex-col gap-2">
+                  <span className="text-xs text-muted-foreground">Payment Status</span>
+                  <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold bg-gray-100 text-gray-800 capitalize shadow-sm">
+                    {detailBooking.paymentStatus}
                   </span>
                 </div>
-              </div>
-              
-              {/* Add Duration Details section */}
-              {detailBooking?.time?.startTime && detailBooking?.time?.endTime && (
-                <div className="sm:col-span-2 border rounded-md p-4 mt-2 bg-muted/50">
-                  <h3 className="text-sm font-semibold mb-2 flex items-center">
-                    <Clock className="w-4 h-4 mr-1 text-primary" />
-                    Duration Details
-                  </h3>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                    <div>
-                      <span className="text-muted-foreground">Total days:</span>
-                      <span className="font-medium ml-2">
-                        {detailBooking.numberOfDays || 1} day{(detailBooking.numberOfDays || 1) !== 1 ? 's' : ''}
+                {/* Date, Time, and Duration (responsive) */}
+                <div className="col-span-1 sm:col-span-2 mt-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6 bg-muted/50 rounded-md px-4 py-3 w-full">
+                    <div className="flex flex-col flex-1 min-w-0">
+                      <span className="text-xs text-muted-foreground">Date & Time</span>
+                      <span className="font-bold text-base flex items-center gap-2 break-words">
+                        <Clock className="w-4 h-4 text-primary shrink-0" />
+                        {getBookingDateTimeRange(detailBooking)}
                       </span>
+                    </div>
+                    <div className="flex flex-col flex-none sm:border-l sm:border-border sm:pl-6">
+                      <span className="text-xs text-muted-foreground">Duration</span>
+                      <span className="font-semibold text-base">{detailBooking.numberOfDays} day{detailBooking.numberOfDays !== 1 ? 's' : ''}</span>
                     </div>
                   </div>
                 </div>
-              )}
-              
-              {/* Display service details and breakdown */}
-              {detailBooking?.services && detailBooking.services.length > 0 && (
-                <div className="border border-gray-200 rounded-md p-4 mt-4">
-                  <h3 className="text-base font-semibold mb-3 flex items-center">
-                    <Package className="w-5 h-5 mr-2 text-primary"/>
-                    Service Details
-                  </h3>
-                  <div className="space-y-3">
-                    {detailBooking.services.map((service, idx) => {
-                      const platformService = platformServices.find(ps => ps.id === service.serviceId);
-                      return (
-                        <div key={idx} className="flex justify-between items-center pb-2">
-                          <div className="flex flex-col">
-                            <span className="font-medium">{platformService?.name || service.name || service.serviceId}</span>
-                            <span className="text-xs text-muted-foreground">
-                              {service.paymentType === 'one_time' ? 'One-time payment' : 'Daily rate'}
-                            </span>
-                          </div>
-                          <div className="text-right">
-                            <div className="font-medium">
-                              {formatServicePrice(service, detailBooking.numberOfDays || 1)}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    
-                    <div className="border-t pt-3 mt-2 flex justify-between items-center">
-                      <div className="font-semibold">Total Payment:</div>
-                      <div className="font-semibold text-primary text-lg">
-                        ${formatAmount(detailBooking.paymentAmount || 0)}
+              </div>
+              {/* Contractor Info (separate row) */}
+              <div className="border-b pb-4">
+                <span className="text-xs text-muted-foreground">Contractor</span>
+                <div className="flex flex-col sm:flex-row items-center gap-4 mt-2">
+                  {/* Contractor profile image */}
+                  {(() => {
+                    const contractor = contractors.find(c => c.id === detailBooking?.contractorId)
+                    return contractor?.profileImage ? (
+                      <img
+                        src={contractor.profileImage}
+                        alt={contractor.name}
+                        className="w-16 h-16 rounded-full border object-cover flex-shrink-0"
+                      />
+                    ) : (
+                      <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center text-2xl font-bold border flex-shrink-0">
+                        {contractor?.name?.charAt(0) ?? "?"}
+                      </div>
+                    )
+                  })()}
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-lg truncate">{detailBooking?.contractorName || contractorNameById(detailBooking?.contractorId)}</div>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 mt-1">
+                      <div>
+                        <span className="text-xs text-muted-foreground block">Phone</span>
+                        <span className="font-medium text-base block break-all">
+                          {detailBooking?.contractorPhone || (contractors.find(c => c.id === detailBooking?.contractorId)?.phone ?? 'N/A')}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-xs text-muted-foreground block">Location</span>
+                        <span className="font-medium text-base block">
+                          {(() => {
+                            const contractor = contractors.find(c => c.id === detailBooking?.contractorId)
+                            if (contractor?.city || contractor?.state) {
+                              return `${contractor.city || ''}${contractor.city && contractor.state ? ', ' : ''}${contractor.state || ''}`
+                            }
+                            return 'N/A'
+                          })()}
+                        </span>
                       </div>
                     </div>
                   </div>
                 </div>
-              )}
-              
-              <div className="border-t pt-4">
-                <div className="text-xs text-muted-foreground mb-1">Contractor Name</div>
-                <div className="font-medium text-base">{detailBooking?.contractorName || contractorNameById(detailBooking?.contractorId)}</div>
               </div>
-              <div>
-                <div className="text-xs text-muted-foreground mb-1">Contractor Phone</div>
-                <div className="font-medium text-base">{detailBooking?.contractorPhone || (contractors.find(c => c.id === detailBooking?.contractorId)?.phone ?? 'N/A')}</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground mb-1">Pets</div>
-                <div className="flex flex-wrap gap-2">
+              {/* Pets Info (separate row) */}
+              <div className="border-b pb-4">
+                <span className="text-xs text-muted-foreground">Pets</span>
+                <div className="flex flex-wrap gap-2 mt-1">
                   {petNames.length > 0 ? petNames.map(name => (
-                    <span key={name} className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs font-medium">{name}</span>
-                  )) : <span className="text-muted-foreground text-xs">None</span>}
+                    <span key={name} className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium shadow-sm">{name}</span>
+                  )) : <span className="text-muted-foreground text-sm">None</span>}
                 </div>
               </div>
-              <div className="border-t pt-4">
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div className="col-span-2">
-                    <div className="text-xs text-muted-foreground mb-1">Payment Method</div>
-                    <div className="font-medium text-base">{defaultMethod ? `${defaultMethod.brand?.toUpperCase?.() ?? ''} •••• ${defaultMethod.last4 ?? ''}` : 'Not specified'}</div>
+              {/* Services & Payment */}
+              <div className="border-b pb-4">
+                <h3 className="text-base font-bold mb-2 flex items-center gap-2">
+                  <Package className="w-5 h-5 text-primary"/>
+                  Services & Payment
+                </h3>
+                <div className="space-y-3">
+                  {detailBooking.services.map((service, idx) => {
+                    const platformService = platformServices.find(ps => ps.id === service.serviceId);
+                    return (
+                      <div key={idx} className="flex flex-col sm:flex-row sm:justify-between sm:items-center bg-muted/50 rounded-md px-3 py-2">
+                        <div className="flex flex-col">
+                          <span className="font-semibold text-base">{platformService?.name || service.name || service.serviceId}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {service.paymentType === 'one_time' ? 'One-time payment' : 'Daily rate'}
+                          </span>
+                        </div>
+                        <div className="text-right mt-2 sm:mt-0">
+                          <span className="font-bold text-lg">{formatServicePrice(service, detailBooking.numberOfDays || 1)}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div className="flex justify-between items-center border-t pt-3 mt-2">
+                    <span className="font-semibold text-base">Total Payment</span>
+                    <span className="font-bold text-primary text-xl">${formatAmount(detailBooking.paymentAmount || 0)}</span>
                   </div>
                 </div>
               </div>
-              <div className="border-t pt-4 text-xs text-muted-foreground">
-                <div className="mb-1">Booking ID</div>
-                <div className="font-mono break-all mb-1">{detailBooking?.id ?? ''}</div>
+              {/* Duration & Payment Method */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div className="flex flex-col gap-2">
+                  <span className="text-xs text-muted-foreground">Payment Method</span>
+                  <span className="font-medium text-base">{defaultMethod ? `${defaultMethod.brand?.toUpperCase?.() ?? ''} •••• ${defaultMethod.last4 ?? ''}` : 'Not specified'}</span>
+                </div>
               </div>
-            </div>
-          )}
-          {detailBooking && (
-            <div className="flex justify-end mb-4">
-              <a
-                href={getGoogleCalendarUrl(detailBooking, contractorNameById(detailBooking.contractorId), petNames)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-block"
-              >
-                <Button variant="outline" className="text-sm px-3 py-1 rounded-full shadow-sm">Add to Google Calendar</Button>
-              </a>
-            </div>
+              {/* Booking ID & Calendar */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-t pt-4 mt-2">
+                <div>
+                  <span className="text-xs text-muted-foreground">Booking ID</span>
+                  <div className="font-mono break-all text-xs mt-1">{detailBooking?.id ?? ''}</div>
+                </div>
+                <div className="flex justify-end mt-2 sm:mt-0">
+                  <a
+                    href={getGoogleCalendarUrl(detailBooking, contractorNameById(detailBooking.contractorId), petNames)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block"
+                  >
+                    <Button variant="outline" className="text-sm px-3 py-1 rounded-full shadow-sm">Add to Google Calendar</Button>
+                  </a>
+                </div>
+              </div>
+            </section>
           )}
           <DialogFooter>
             <div className="flex w-full justify-end gap-2">
@@ -934,7 +943,7 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
           setEditModalWarning(null);
         }}
       >
-        <DialogContent>
+        <DialogContent className="w-full max-w-screen-sm mx-auto">
           <DialogHeader>
             <DialogTitle>Edit Booking</DialogTitle>
           </DialogHeader>
@@ -942,19 +951,16 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
             <div className="text-xs text-red-600 mb-2">{editModalWarning}</div>
           )}
           {editServicesModal.booking && (
-            <div className="space-y-4">
+            <section className="space-y-6">
               <div className="text-sm mb-2">
                 {editServicesModal.booking.status === 'pending'
                   ? 'You can edit services, end date, and end time.'
                   : 'You can only edit the end date and end time for this booking.'}
               </div>
               {editServicesError && <div className="text-red-600 text-xs mb-2">{editServicesError}</div>}
-              <div className="flex gap-4 mb-2 items-end">
-                <div>
-                  <label className="block text-xs font-medium mb-1">Start Date</label>
-                  <Input type="date" value={editStartDate || ''} readOnly disabled className="bg-gray-100 cursor-not-allowed" />
-                </div>
-                <div>
+              {/* Dates and Duration - Responsive, balanced for desktop */}
+              <div className="flex flex-col md:flex-row md:items-end gap-4 mb-2 w-full">
+                <div className="flex flex-col flex-1 min-w-0">
                   <label className="block text-xs font-medium mb-1">End Date</label>
                   <Input
                     type="date"
@@ -966,22 +972,24 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
                     }}
                   />
                 </div>
-                <div>
+                <div className="flex flex-col flex-1 min-w-0">
                   <label className="block text-xs font-medium mb-1">End Time</label>
                   <Input type="time" value={editEndTime || ''} onChange={e => setEditEndTime(e.target.value)} />
                 </div>
-                <div className="flex flex-col justify-end">
-                  <span className="text-xs text-muted-foreground">{editNumDays} day{editNumDays !== 1 ? 's' : ''}</span>
+                <div className="flex flex-col flex-none md:pl-4 md:items-end">
+                  <span className="text-xs text-muted-foreground">Duration</span>
+                  <span className="font-semibold text-base">{editNumDays} day{editNumDays !== 1 ? 's' : ''}</span>
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {/* Services List - Responsive Grid, balanced for desktop */}
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 w-full">
                 {editServicesOptions.map((offering: any) => {
                   const checked = editServices.some((s: any) => s.serviceId === offering.serviceId)
                   const platformService = platformServices.find(ps => ps.id === offering.serviceId)
                   const isEditable = editServicesModal.booking?.status === 'pending'
                   return (
-                    <label key={offering.serviceId} className={`flex flex-col items-start gap-1 p-2 border rounded-md cursor-pointer ${checked ? 'bg-primary/10 border-primary' : 'hover:bg-accent'}${!isEditable ? ' opacity-50 pointer-events-none' : ''}`}>
-                      <div className="flex items-center w-full">
+                    <label key={offering.serviceId} className={`flex flex-col items-start gap-1 p-3 border rounded-md cursor-pointer transition-colors duration-100 min-w-0 ${checked ? 'bg-primary/10 border-primary' : 'hover:bg-accent'}${!isEditable ? ' opacity-50 pointer-events-none' : ''}`}>
+                      <div className="flex items-center w-full min-w-0">
                         <input
                           type="checkbox"
                           checked={checked}
@@ -992,26 +1000,33 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
                           className="accent-primary h-4 w-4 mr-2"
                           disabled={!isEditable}
                         />
-                        <span className="font-medium">{platformService?.name || offering.serviceId}</span>
+                        <span className="font-medium truncate">{platformService?.name || offering.serviceId}</span>
                         <span className="text-xs text-muted-foreground ml-2">${(offering.price / 100).toFixed(2)}{offering.paymentType === 'daily' ? '/day' : ''}</span>
                       </div>
                       {platformService?.description && (
-                        <span className="text-xs text-muted-foreground ml-6">{platformService.description}</span>
+                        <span className="text-xs text-muted-foreground ml-6 break-words">{platformService.description}</span>
                       )}
                     </label>
                   )
                 })}
               </div>
-              <div className="text-right text-sm font-semibold mt-2">Total: ${(editTotal/100).toFixed(2)}</div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setEditServicesModal({ open: false, booking: null })} disabled={isEditServicesPending || !!pendingPaymentClientSecret || !editServicesModal.booking}>Cancel</Button>
-                <Button
-                  onClick={handleSaveEditServices}
-                  disabled={isEditServicesPending || !!pendingPaymentClientSecret || !editServicesModal.booking}
-                >
-                  Save Changes
-                </Button>
-              </DialogFooter>
+              {/* Total and Actions - Responsive, centered for desktop */}
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mt-2 w-full">
+                <div className="text-right text-sm font-semibold flex-1">
+                  Total: <span className="text-primary text-lg font-bold">${(editTotal/100).toFixed(2)}</span>
+                </div>
+                <DialogFooter className="flex flex-col md:flex-row gap-2 w-full md:w-auto justify-end">
+                  <Button variant="outline" onClick={() => setEditServicesModal({ open: false, booking: null })} disabled={isEditServicesPending || !!pendingPaymentClientSecret || !editServicesModal.booking} className="w-full md:w-auto">Cancel</Button>
+                  <Button
+                    onClick={handleSaveEditServices}
+                    disabled={isEditServicesPending || !!pendingPaymentClientSecret || !editServicesModal.booking}
+                    className="w-full md:w-auto"
+                  >
+                    Save Changes
+                  </Button>
+                </DialogFooter>
+              </div>
+              {/* Payment Reauth (if needed) */}
               {pendingPaymentClientSecret && editServicesModal.booking && pendingPaymentBookingId === editServicesModal.booking.id && (
                 <div className="mt-4">
                   <Elements stripe={stripePromise} options={{ clientSecret: pendingPaymentClientSecret }}>
@@ -1034,7 +1049,7 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
                   </Elements>
                 </div>
               )}
-            </div>
+            </section>
           )}
         </DialogContent>
       </Dialog>

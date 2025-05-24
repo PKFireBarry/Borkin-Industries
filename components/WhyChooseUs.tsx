@@ -59,18 +59,19 @@ const WhyChooseUs = () => {
   return (
     <motion.section
       id="why-choose-us"
-      className="py-16 md:py-24 bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-800 rounded-xl shadow-2xl overflow-hidden"
+      className="w-full bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-800 shadow-xl overflow-hidden"
       style={{ y }}
       initial="visible"
       animate={controls}
     >
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-6xl">
+      <div className="container mx-auto px-4 py-12 md:py-24 lg:py-32">
         <motion.h2
           initial="visible"
           animate={controls}
-          className="text-4xl md:text-5xl font-extrabold text-center mb-16 text-gray-800 dark:text-white"
+          variants={fadeInUp}
+          className="text-3xl font-bold tracking-tighter sm:text-5xl text-center mb-10 md:mb-12 text-purple-600 dark:text-purple-300"
         >
-          Why Choose My Pet Care Service?
+          Why Choose Our Pet Care Service?
         </motion.h2>
 
         <motion.div
@@ -107,12 +108,12 @@ const WhyChooseUs = () => {
           className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12 md:mb-16"
         >
           <MotionFeatureCard
-            icon={<Users className="w-12 h-12 md:w-16 md:h-16 text-purple-600 dark:text-purple-400" />}
+            icon={<Users className="w-10 h-10 md:w-12 md:h-12 text-purple-600 dark:text-purple-300" />}
             title="Meet Your Sitter Before Scheduling"
             description="We offer an in-home consultation before your first service for a small fee. This allows you and your pet to get comfortable with your sitter, ensuring it's the perfect fit for your furry family member's needs."
           />
           <MotionFeatureCard
-            icon={<Heart className="w-12 h-12 md:w-16 md:h-16 text-purple-600 dark:text-purple-400" />}
+            icon={<Heart className="w-10 h-10 md:w-12 md:h-12 text-purple-600 dark:text-purple-300" />}
             title="Consistent Care from a Trusted Sitter"
             description="We provide care for both small and large animals with a focus on consistent communication and daily updates. Our goal is to give you peace of mind, knowing that your furry family members are being properly cared for with the love and attention they deserve."
           />
@@ -127,28 +128,28 @@ const WhyChooseUs = () => {
               transition: { staggerChildren: 0.15, delayChildren: 0.8 },
             },
           }}
-          className="bg-white dark:bg-gray-700 p-8 md:p-10 rounded-2xl shadow-2xl"
+          className="bg-white dark:bg-gray-700 p-8 md:p-10 rounded-lg shadow-md"
         >
           <motion.h3
             variants={fadeInUp}
-            className="text-2xl md:text-3xl font-bold mb-6 md:mb-8 text-center text-gray-800 dark:text-white"
+            className="text-2xl font-semibold mb-6 md:mb-8 text-center text-gray-700 dark:text-gray-300"
           >
             Consistent Availability, Flexible Scheduling
           </motion.h3>
 
           <motion.div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
             <MotionSchedulingFeature
-              icon={<Clock className="w-6 h-6 text-purple-600 dark:text-purple-400" />}
+              icon={<Clock className="w-6 h-6 text-purple-600 dark:text-purple-300" />}
               title="Last-minute Requests"
               description="Kaitlyn is available for unexpected needs, if notified within the first 24 hours."
             />
             <MotionSchedulingFeature
-              icon={<Calendar className="w-6 h-6 text-purple-600 dark:text-purple-400" />}
+              icon={<Calendar className="w-6 h-6 text-purple-600 dark:text-purple-300" />}
               title="Schedule Changes"
               description="Easily extend your service if your plans change."
             />
             <MotionSchedulingFeature
-              icon={<Check className="w-6 h-6 text-purple-600 dark:text-purple-400" />}
+              icon={<Check className="w-6 h-6 text-purple-600 dark:text-purple-300" />}
               title="Flexible Cancellations"
               description="Our cancellation policies are designed with you in mind."
             />
@@ -164,10 +165,10 @@ const StatCard = forwardRef<HTMLDivElement, StatCardProps>(({ number, label }, r
     <motion.div
       ref={ref}
       variants={subtleScale}
-      className="bg-white dark:bg-gray-800 p-6 md:p-8 rounded-2xl shadow-xl transform hover:scale-105 transition-transform duration-300"
+      className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md transform hover:scale-105 transition-transform duration-300"
     >
-      <p className="text-4xl md:text-5xl font-bold text-purple-600 dark:text-purple-400 mb-2">{number}</p>
-      <p className="text-base md:text-lg text-gray-600 dark:text-gray-300">{label}</p>
+      <p className="text-4xl font-bold text-purple-600 dark:text-purple-300 mb-2">{number}</p>
+      <p className="text-base text-gray-600 dark:text-gray-400">{label}</p>
     </motion.div>
   )
 })
@@ -180,13 +181,13 @@ const FeatureCard = forwardRef<HTMLDivElement, FeatureCardProps>(({ icon, title,
     <motion.div
       ref={ref}
       variants={fadeInUp}
-      className="bg-white dark:bg-gray-800 p-6 md:p-8 rounded-2xl shadow-xl transform hover:scale-105 transition-transform duration-300"
+      className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md transform hover:scale-105 transition-transform duration-300"
     >
-      <div className="flex flex-col items-center mb-4 md:mb-6">
+      <div className="flex flex-col items-center mb-4">
         {icon}
-        <h3 className="text-xl md:text-2xl font-semibold mt-4 text-gray-800 dark:text-white text-center">{title}</h3>
+        <h3 className="text-xl font-semibold mt-4 text-center text-gray-700 dark:text-gray-300">{title}</h3>
       </div>
-      <p className="text-sm md:text-base text-gray-600 dark:text-gray-300 text-center">{description}</p>
+      <p className="text-sm text-gray-600 dark:text-gray-400 text-center leading-relaxed">{description}</p>
     </motion.div>
   )
 })
@@ -197,10 +198,10 @@ const MotionFeatureCard = motion(FeatureCard)
 const SchedulingFeature = forwardRef<HTMLDivElement, SchedulingFeatureProps>(({ icon, title, description }, ref) => {
   return (
     <motion.div ref={ref} variants={fadeInUp} className="flex items-start text-left w-full md:w-auto">
-      <div className="bg-purple-100 dark:bg-purple-800 p-3 rounded-full mr-4 flex-shrink-0">{icon}</div>
+      <div className="bg-purple-100 dark:bg-purple-800/50 p-3 rounded-full mr-4 flex-shrink-0">{icon}</div>
       <div>
-        <h4 className="text-lg font-semibold mb-2 text-gray-800 dark:text-white">{title}</h4>
-        <p className="text-sm text-gray-600 dark:text-gray-300">{description}</p>
+        <h4 className="text-lg font-semibold mb-1 text-gray-700 dark:text-gray-300">{title}</h4>
+        <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{description}</p>
       </div>
     </motion.div>
   )
