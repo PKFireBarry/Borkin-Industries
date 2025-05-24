@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/firebase'
 import { doc, getDoc } from 'firebase/firestore'
 
-export async function GET(req: NextRequest, context: { params: { id: string } }) {
-  const { params } = context;
-  const { id } = await params;
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const { id } = params;
   if (!id) return NextResponse.json({ error: 'Missing contractor ID' }, { status: 400 })
   try {
     const contractorRef = doc(db, 'contractors', id)

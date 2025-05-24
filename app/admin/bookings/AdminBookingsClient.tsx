@@ -6,21 +6,26 @@ interface Booking {
   clientId?: string;
   contractorId?: string;
   serviceType?: string;
-  date: string | Date; // Can be string from server, or Date object
+  date: string | Date | { seconds: number, nanoseconds: number }; // Can be string, Date, or Firestore timestamp
   status: 'pending' | 'approved' | 'completed' | 'cancelled' | 'paid' | string; // Allow for other statuses
   paymentStatus?: string;
   paymentAmount?: number;
   stripeCustomerId?: string;
   paymentIntentId?: string;
   petIds?: string[] | string;
-  // Add any other fields that might be present
-  [key: string]: any; // Allow other properties not explicitly defined
+  // Allow other properties not explicitly defined with unknown type
+  [key: string]: unknown;
 }
 
-function formatDate(date: Date | string | null) {
+function formatDate(date: Date | string | { seconds: number, nanoseconds: number } | null) {
   if (!date) return '-'
   if (typeof date === 'string') return new Date(date).toLocaleString()
-  return date.toLocaleString()
+  if (date instanceof Date) return date.toLocaleString()
+  // Handle Firestore timestamp
+  if ('seconds' in date && 'nanoseconds' in date) {
+    return new Date(date.seconds * 1000).toLocaleString()
+  }
+  return '-'
 }
 
 const statusColors = {
@@ -44,7 +49,13 @@ export default function AdminBookingsClient({ bookings }: { bookings: Booking[] 
     if (contractor && b.contractorId !== contractor) return false
     if (status && b.status !== status) return false
     if (date) {
-      const d = typeof b.date === 'string' ? new Date(b.date) : b.date
+      const d = typeof b.date === 'string' 
+        ? new Date(b.date) 
+        : b.date instanceof Date 
+          ? b.date 
+          : 'seconds' in b.date 
+            ? new Date(b.date.seconds * 1000) 
+            : null
       if (!d) return false
       const filterDate = new Date(date)
       if (d.toDateString() !== filterDate.toDateString()) return false

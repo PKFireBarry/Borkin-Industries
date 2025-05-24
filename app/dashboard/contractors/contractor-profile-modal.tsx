@@ -23,15 +23,13 @@ interface ContractorProfileModalProps {
 const ContractorMap = dynamic(() => import('@/components/contractor-map'), { ssr: false })
 
 export function ContractorProfileModal({ contractor, open, onClose, onBookNow, clientLocation }: ContractorProfileModalProps) {
-  if (!contractor) return null;
-
   const [clientLatLng, setClientLatLng] = useState<{ lat: number; lng: number } | null>(null)
   const [serviceOfferings, setServiceOfferings] = useState<ContractorServiceOffering[]>([])
   const [platformServices, setPlatformServices] = useState<PlatformService[]>([])
   const [isLoadingServices, setIsLoadingServices] = useState(false)
 
   useEffect(() => {
-    if (!clientLocation) return
+    if (!contractor || !clientLocation) return
     const query = [clientLocation.address, clientLocation.city, clientLocation.state, clientLocation.postalCode].filter(Boolean).join(', ')
     if (!query) return
     fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`)
@@ -40,7 +38,7 @@ export function ContractorProfileModal({ contractor, open, onClose, onBookNow, c
         if (data && data[0]) setClientLatLng({ lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) })
       })
       .catch(() => setClientLatLng(null))
-  }, [clientLocation])
+  }, [clientLocation, contractor])
 
   useEffect(() => {
     if (open && contractor) {
@@ -48,7 +46,7 @@ export function ContractorProfileModal({ contractor, open, onClose, onBookNow, c
       async function fetchData() {
         try {
           const [offerings, services] = await Promise.all([
-            getContractorServiceOfferings(contractor!.id),
+            getContractorServiceOfferings(contractor.id),
             getAllPlatformServices()
           ]);
           setServiceOfferings(offerings);
@@ -67,7 +65,7 @@ export function ContractorProfileModal({ contractor, open, onClose, onBookNow, c
     }
   }, [open, contractor])
 
-  // Now do the early return
+  // Now do the return if contractor is null
   if (!contractor) return null;
 
   // At this point, we know contractor is not null

@@ -13,7 +13,7 @@ export interface Application {
   state?: string;
   country?: string;
   postalCode?: string;
-  createdAt: string | Date; // Can be string from server, or Date object
+  createdAt: string | Date | { seconds: number; nanoseconds: number }; // Can be string, Date, or Firestore timestamp
   status: 'pending' | 'approved' | 'rejected';
   certifications?: Array<{ name?: string } | string>;
   education?: Array<{
@@ -43,14 +43,19 @@ export interface Application {
     relationship?: string;
     notes?: string;
   }>;
-  // Add any other fields that might be present
-  [key: string]: any; // Allow other properties not explicitly defined
+  // Add other potential fields with specific types
+  [key: string]: unknown; // Allow other properties not explicitly defined with unknown type
 }
 
-function formatDate(date: Date | string | null) {
+function formatDate(date: Date | string | { seconds: number; nanoseconds: number } | null) {
   if (!date) return '-'
   if (typeof date === 'string') return new Date(date).toLocaleString()
-  return date.toLocaleString()
+  if (date instanceof Date) return date.toLocaleString()
+  // Handle Firestore timestamp
+  if ('seconds' in date && 'nanoseconds' in date) {
+    return new Date(date.seconds * 1000).toLocaleString()
+  }
+  return '-'
 }
 
 export default function AdminApplicationsClient({ applications, onApprove, onReject, onReinstate }: {
@@ -75,7 +80,13 @@ export default function AdminApplicationsClient({ applications, onApprove, onRej
       )) return false
     }
     if (date) {
-      const d = typeof a.createdAt === 'string' ? new Date(a.createdAt) : a.createdAt
+      const d = typeof a.createdAt === 'string' 
+        ? new Date(a.createdAt) 
+        : a.createdAt instanceof Date 
+          ? a.createdAt 
+          : 'seconds' in a.createdAt 
+            ? new Date(a.createdAt.seconds * 1000) 
+            : null
       if (!d) return false
       const filterDate = new Date(date)
       if (d.toDateString() !== filterDate.toDateString()) return false

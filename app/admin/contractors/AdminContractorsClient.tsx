@@ -112,7 +112,7 @@ export default function AdminContractorsClient({ contractors, bookings }: Props)
       } else {
         showToast('error', data.error || data.warning || 'Failed to remove contractor.')
       }
-    } catch (_error) {
+    } catch {
       showToast('error', 'Failed to remove contractor. Please try again.')
     } finally {
       setRemoving(null)

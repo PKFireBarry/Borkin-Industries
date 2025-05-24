@@ -1,7 +1,8 @@
 'use client'
 import { useSearchParams } from 'next/navigation'
+import { Suspense } from 'react'
 
-export default function NotAuthorizedPage() {
+function NotAuthorizedContent() {
   const searchParams = useSearchParams()
   const isBanned = searchParams?.get('banned') === '1'
   return (
@@ -13,5 +14,13 @@ export default function NotAuthorizedPage() {
         <p className="text-lg">You do not have permission to view this page.</p>
       )}
     </main>
+  )
+}
+
+export default function NotAuthorizedPage() {
+  return (
+    <Suspense fallback={<div className="max-w-xl mx-auto py-16 text-center">Loading...</div>}>
+      <NotAuthorizedContent />
+    </Suspense>
   )
 } 

@@ -92,7 +92,7 @@ export async function createOrGetChat(
       return { success: true, data: { ...chatData, id: chatDocSnap.id } as Chat };
     } else {
       // Chat doesn't exist, create it
-      const newChatFirestoreData: { [key: string]: any | FieldValue } = {
+      const newChatFirestoreData: Record<string, any> = {
         bookingId: chatInput.bookingId,
         client: {
           userId: chatInput.clientUserId,
@@ -142,7 +142,7 @@ export async function createOrGetChat(
 
       return { success: true, data: createdChat };
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error in createOrGetChat:", error);
     return {
       success: false,
@@ -182,9 +182,9 @@ export async function sendMessage(
     if (!chatDocSnap.exists()) {
       return { success: false, error: "Chat not found.", errorCode: "NOT_FOUND" };
     }
-    const chatData = chatDocSnap.data() as Chat; // Assuming Chat type matches Firestore structure for participants
+    const chatData = chatDocSnap.data() as Chat;
     if (currentUserId !== chatData.client.userId && currentUserId !== chatData.contractor.userId) {
-        return { success: false, error: "User is not a participant of this chat.", errorCode: "FORBIDDEN" };
+      return { success: false, error: "User is not a participant of this chat.", errorCode: "FORBIDDEN" };
     }
 
     // TODO: Check if booking associated with chatId is "open" (e.g., ACTIVE, CONFIRMED)
@@ -199,7 +199,7 @@ export async function sendMessage(
 
     // Add the new message
     const newMessageRef = doc(collection(db, "chats", chatId, "messages"));
-    const newMessageDataForFirestore: { [key: string]: any | FieldValue } = {
+    const newMessageDataForFirestore: Record<string, unknown> = {
       chatId,
       senderId,
       receiverId, // Store receiverId for clarity, though chat context is primary
@@ -210,7 +210,7 @@ export async function sendMessage(
     batch.set(newMessageRef, newMessageDataForFirestore);
 
     // Update the chat document with last message and unread counts
-    const updateData: { [key: string]: any | FieldValue } = {
+    const updateData: Record<string, unknown> = {
       lastMessage: {
         // Storing a snippet of the message
         id: newMessageRef.id, // Store the new message ID
@@ -231,6 +231,22 @@ export async function sendMessage(
 
     batch.update(chatDocRef, updateData);
 
+    // Mark individual messages as read
+    // Fetch all messages and update those not read by the user.
+    const allMessagesQuery = query(
+      collection(db, "chats", chatId, "messages"),
+      orderBy("timestamp", "desc") // Process recent ones first if we were to limit
+    );
+    const messagesSnap = await getDocs(allMessagesQuery);
+    messagesSnap.forEach(msgDoc => {
+      const msgData = msgDoc.data() as Message;
+      // Check if the message was sent by the other party and not yet read by current user
+      if (msgData.senderId !== currentUserId && (!msgData.readBy || !msgData.readBy[currentUserId])) {
+        const messageRef = doc(db, "chats", chatId, "messages", msgDoc.id);
+        batch.update(messageRef, { [`readBy.${currentUserId}`]: true });
+      }
+    });
+
     await batch.commit();
 
     const createdMessage: Message = {
@@ -244,7 +260,7 @@ export async function sendMessage(
     };
 
     return { success: true, data: createdMessage };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error in sendMessage:", error);
     const errorMessage = error instanceof Error ? error.message : "Failed to send message.";
     return {
@@ -298,12 +314,11 @@ export async function getChatsForUser(): Promise<ActionResult<Chat[]>> {
     const chats = Array.from(chatsMap.values()).sort((a, b) => b.lastMessageAt - a.lastMessageAt);
 
     return { success: true, data: chats };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error in getChatsForUser:", error);
-    const errorMessage = error instanceof Error ? error.message : "Failed to get chats for user.";
     return {
       success: false,
-      error: errorMessage,
+      error: "Failed to get chats.",
       errorCode: "FIRESTORE_ERROR",
     };
   }
@@ -368,12 +383,11 @@ export async function getMessagesForChat(
     });
 
     return { success: true, data: messages };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error in getMessagesForChat:", error);
-    const errorMessage = error instanceof Error ? error.message : "Failed to get messages for chat.";
     return {
       success: false,
-      error: errorMessage,
+      error: "Failed to get messages.",
       errorCode: "FIRESTORE_ERROR",
     };
   }
@@ -418,7 +432,7 @@ export async function markMessagesAsRead(
     const batch = writeBatch(db);
 
     // Update unread count on the chat document
-    const chatUpdateData: { [key: string]: any | FieldValue } = {};
+    const chatUpdateData: Record<string, any> = {};
     if (isClient) {
       chatUpdateData.clientUnreadMessages = 0;
     } else {
@@ -462,12 +476,11 @@ export async function markMessagesAsRead(
     await batch.commit();
     return { success: true };
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error in markMessagesAsRead:", error);
-    const errorMessage = error instanceof Error ? error.message : "Failed to mark messages as read.";
     return {
       success: false,
-      error: errorMessage,
+      error: "Failed to mark messages as read.",
       errorCode: "FIRESTORE_ERROR",
     };
   }
@@ -483,4 +496,41 @@ export async function isOpenBookingStatus(status?: string): Promise<boolean> {
   // Updated to include pending and approved for initiating chat
   const openStatuses = ["pending", "approved", "active", "confirmed", "pending_payment", "payment_succeeded", "in_progress"]; 
   return openStatuses.includes(status.toLowerCase());
+}
+
+/**
+ * Deletes a chat.
+ */
+export async function deleteChat(
+  chatId: string,
+): Promise<ActionResult> {
+  const authResult = await auth();
+  if (!authResult || !authResult.userId) {
+    return { success: false, error: "User not authenticated.", errorCode: "UNAUTHENTICATED" };
+  }
+  const { userId: currentUserId } = authResult;
+
+  const chatDocRef = doc(db, "chats", chatId);
+
+  try {
+    const chatDocSnap = await getDoc(chatDocRef);
+    if (!chatDocSnap.exists()) {
+      return { success: false, error: "Chat not found.", errorCode: "NOT_FOUND" };
+    }
+    const chatData = chatDocSnap.data() as Chat;
+
+    if (currentUserId !== chatData.client.userId && currentUserId !== chatData.contractor.userId) {
+      return { success: false, error: "User is not a participant of this chat.", errorCode: "FORBIDDEN" };
+    }
+
+    await writeBatch(db).delete(chatDocRef).commit();
+    return { success: true };
+  } catch (error: unknown) {
+    console.error("Error in deleteChat:", error);
+    return {
+      success: false,
+      error: "Failed to delete chat.",
+      errorCode: "FIRESTORE_ERROR",
+    };
+  }
 } 

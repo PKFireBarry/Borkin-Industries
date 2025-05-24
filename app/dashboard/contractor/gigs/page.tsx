@@ -240,7 +240,6 @@ export default function ContractorGigsPage() {
 
   useEffect(() => {
     fetchGigs()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user])
 
   useEffect(() => {

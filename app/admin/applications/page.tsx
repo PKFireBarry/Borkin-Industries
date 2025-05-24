@@ -34,8 +34,10 @@ export default async function AdminApplicationsPage() {
       if (typeof a.createdAt === 'number') timeA = a.createdAt;
       else if (typeof a.createdAt === 'string') timeA = new Date(a.createdAt).getTime();
       else if (a.createdAt instanceof Date) timeA = a.createdAt.getTime();
-      else if (typeof a.createdAt === 'object' && 'seconds' in a.createdAt && typeof (a.createdAt as any).seconds === 'number' && typeof (a.createdAt as any).nanoseconds === 'number') { // Firestore Timestamp like object
-        timeA = (a.createdAt as any).seconds * 1000 + (a.createdAt as any).nanoseconds / 1000000;
+      else if (typeof a.createdAt === 'object' && 'seconds' in a.createdAt && 
+               typeof a.createdAt.seconds === 'number' && 
+               typeof a.createdAt.nanoseconds === 'number') { // Firestore Timestamp like object
+        timeA = a.createdAt.seconds * 1000 + a.createdAt.nanoseconds / 1000000;
       }
     }
 
@@ -44,8 +46,10 @@ export default async function AdminApplicationsPage() {
       if (typeof b.createdAt === 'number') timeB = b.createdAt;
       else if (typeof b.createdAt === 'string') timeB = new Date(b.createdAt).getTime();
       else if (b.createdAt instanceof Date) timeB = b.createdAt.getTime();
-      else if (typeof b.createdAt === 'object' && 'seconds' in b.createdAt && typeof (b.createdAt as any).seconds === 'number' && typeof (b.createdAt as any).nanoseconds === 'number') { // Firestore Timestamp like object
-        timeB = (b.createdAt as any).seconds * 1000 + (b.createdAt as any).nanoseconds / 1000000;
+      else if (typeof b.createdAt === 'object' && 'seconds' in b.createdAt && 
+               typeof b.createdAt.seconds === 'number' && 
+               typeof b.createdAt.nanoseconds === 'number') { // Firestore Timestamp like object
+        timeB = b.createdAt.seconds * 1000 + b.createdAt.nanoseconds / 1000000;
       }
     }
     return timeB - timeA; // Sort descending
