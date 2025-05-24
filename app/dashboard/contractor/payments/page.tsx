@@ -5,10 +5,16 @@ import { useUser } from '@clerk/nextjs'
 import { Card, CardContent, CardTitle, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Input } from '@/components/ui/input'
+import { CalendarIcon, DollarSign, TrendingUp, Clock } from 'lucide-react'
+import { getPlatformServiceById } from '@/lib/firebase/services'
 
 interface PaymentGig {
   id: string
   serviceType: string
+  serviceName?: string
   clientName: string
   date: string
   amount: number
@@ -21,6 +27,13 @@ interface PaymentGig {
   review?: { rating: number; comment?: string }
 }
 
+interface MonthlyEarnings {
+  month: string;
+  total: number;
+  net: number;
+  count: number;
+}
+
 export default function ContractorPaymentsPage() {
   const { isLoaded, isAuthorized } = useRequireRole('contractor')
   const { user } = useUser()
@@ -31,6 +44,10 @@ export default function ContractorPaymentsPage() {
   const [payoutMethod, setPayoutMethod] = useState<{ last4: string; brand: string } | null>(null)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [detailGig, setDetailGig] = useState<PaymentGig | null>(null)
+  const [filterStatus, setFilterStatus] = useState<string>('all')
+  const [searchTerm, setSearchTerm] = useState<string>('')
+  const [sortBy, setSortBy] = useState<string>('date-desc')
+  const [activeTab, setActiveTab] = useState<string>('all')
 
   useEffect(() => {
     if (!user) return
@@ -71,16 +88,27 @@ export default function ContractorPaymentsPage() {
             const mappedGigs = await Promise.all((data.gigs || []).map(async (b: any) => {
               let clientName = 'N/A'
               let petNames = ''
+              let serviceName = b.serviceType || 'N/A'
               try {
                 const client = await import('@/lib/firebase/client').then(m => m.getClientById(b.clientId))
                 clientName = client?.name || 'N/A'
                 if (b.petIds && Array.isArray(b.petIds) && client?.pets) {
                   petNames = b.petIds.map((pid: string) => client.pets.find((p: any) => p.id === pid)?.name).filter(Boolean).join(', ')
                 }
-              } catch {}
+                // Fetch service name
+                if (b.serviceType) {
+                  const serviceDetails = await getPlatformServiceById(b.serviceType)
+                  if (serviceDetails && serviceDetails.name) {
+                    serviceName = serviceDetails.name
+                  }
+                }
+              } catch (fetchError) {
+                console.error('Error fetching related data for gig:', fetchError) 
+              }
               return {
                 id: b.id,
                 serviceType: b.serviceType || 'N/A',
+                serviceName,
                 clientName,
                 date: b.date || b.startDate || 'N/A',
                 amount: b.paymentAmount || 0,
@@ -94,7 +122,8 @@ export default function ContractorPaymentsPage() {
               }
             }))
             setGigs(mappedGigs.filter(g => g.paymentStatus === 'paid'))
-          } catch {
+          } catch (apiError) {
+            console.error('Error fetching payouts:', apiError)
             setGigs([])
           }
         } else {
@@ -102,13 +131,54 @@ export default function ContractorPaymentsPage() {
           setGigs([])
         }
       })
-      .catch(() => setError('Failed to load payments'))
+      .catch((profileError) => {
+        console.error('Error fetching contractor profile:', profileError)
+        setError('Failed to load payments')
+      })
       .finally(() => setLoading(false))
   }, [user])
 
-  // Payment summary
+  // Payment summary calculations
   const totalNetPayout = gigs.reduce((acc, gig) => acc + (gig.netPayout ?? (gig.amount - (gig.platformFee ?? gig.amount * 0.05) - (gig.stripeFee ?? (gig.amount * 0.029 + 0.3)))), 0)
+  const totalGrossAmount = gigs.reduce((acc, gig) => acc + gig.amount, 0)
+  const totalPlatformFees = gigs.reduce((acc, gig) => acc + (gig.platformFee ?? gig.amount * 0.05), 0)
+  const totalStripeFees = gigs.reduce((acc, gig) => acc + (gig.stripeFee ?? (gig.amount * 0.029 + 0.3)), 0)
   const paidGigsCount = gigs.length
+  const avgEarningPerGig = paidGigsCount > 0 ? totalNetPayout / paidGigsCount : 0
+
+  // Monthly earnings breakdown
+  const getMonthlyEarnings = (): MonthlyEarnings[] => {
+    const monthlyData: Record<string, MonthlyEarnings> = {}
+    
+    gigs.forEach(gig => {
+      try {
+        const date = new Date(gig.date)
+        const monthYear = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+        const monthName = date.toLocaleString('default', { month: 'short', year: 'numeric' })
+        
+        if (!monthlyData[monthYear]) {
+          monthlyData[monthYear] = {
+            month: monthName,
+            total: 0,
+            net: 0,
+            count: 0
+          }
+        }
+        
+        monthlyData[monthYear].total += gig.amount
+        monthlyData[monthYear].net += (gig.netPayout ?? (gig.amount - (gig.platformFee ?? gig.amount * 0.05) - (gig.stripeFee ?? (gig.amount * 0.029 + 0.3))))
+        monthlyData[monthYear].count += 1
+      } catch (e) {
+        // Skip invalid dates
+      }
+    })
+    
+    return Object.values(monthlyData).sort((a, b) => 
+      new Date(b.month).getTime() - new Date(a.month).getTime()
+    )
+  }
+
+  const monthlyEarnings = getMonthlyEarnings()
 
   // Helper to format date(s) like booking-list
   const safeDateString = (date: string) => {
@@ -131,26 +201,99 @@ export default function ContractorPaymentsPage() {
     return <span className={`px-2 py-0.5 rounded text-xs font-medium ${color}`}>{status.charAt(0).toUpperCase() + status.slice(1)}</span>
   }
 
+  // Filter and sort gigs
+  const filteredGigs = gigs.filter(gig => {
+    // Filter by status
+    if (activeTab !== 'all' && gig.status !== activeTab) {
+      return false
+    }
+    
+    // Filter by search term
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase()
+      return (
+        gig.serviceName?.toLowerCase().includes(searchLower) ||
+        gig.clientName.toLowerCase().includes(searchLower) ||
+        (gig.petNames && gig.petNames.toLowerCase().includes(searchLower))
+      )
+    }
+    
+    return true
+  }).sort((a, b) => {
+    // Sort by selected option
+    switch (sortBy) {
+      case 'date-desc':
+        return new Date(b.date).getTime() - new Date(a.date).getTime()
+      case 'date-asc':
+        return new Date(a.date).getTime() - new Date(b.date).getTime()
+      case 'amount-desc':
+        return b.amount - a.amount
+      case 'amount-asc':
+        return a.amount - b.amount
+      default:
+        return 0
+    }
+  })
+
   if (!isLoaded || !isAuthorized) return null
   if (loading) return <div className="p-8 text-center text-muted-foreground">Loading payments...</div>
   if (error) return <div className="p-8 text-center text-destructive">{error}</div>
 
   return (
-    <main className="max-w-3xl mx-auto py-10 px-4">
-      <h1 className="text-2xl font-bold mb-6">Paid Gigs</h1>
-      {/* Payment Summary Card */}
-      <div className="mb-6 p-4 border rounded bg-blue-50 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div className="flex-1 grid grid-cols-2 gap-4">
-          <div>
-            <div className="text-lg font-bold">${totalNetPayout.toFixed(2)}</div>
-            <div className="text-xs text-muted-foreground">Total Net Payout</div>
-          </div>
-          <div>
-            <div className="text-lg font-bold">{paidGigsCount}</div>
-            <div className="text-xs text-muted-foreground">Paid Gigs</div>
-          </div>
-        </div>
+    <main className="max-w-6xl mx-auto py-10 px-4">
+      <h1 className="text-3xl font-bold mb-6">Payment Dashboard</h1>
+      
+      {/* Payment Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-blue-700">Total Net Earnings</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center">
+              <DollarSign className="h-5 w-5 text-blue-500 mr-2" />
+              <div className="text-2xl font-bold">${totalNetPayout.toFixed(2)}</div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-green-700">Average Per Gig</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center">
+              <TrendingUp className="h-5 w-5 text-green-500 mr-2" />
+              <div className="text-2xl font-bold">${avgEarningPerGig.toFixed(2)}</div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-purple-700">Completed Gigs</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center">
+              <Clock className="h-5 w-5 text-purple-500 mr-2" />
+              <div className="text-2xl font-bold">{paidGigsCount}</div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-amber-700">Platform Fees</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center">
+              <CalendarIcon className="h-5 w-5 text-amber-500 mr-2" />
+              <div className="text-2xl font-bold">${totalPlatformFees.toFixed(2)}</div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
+      
       {/* Payout Method UI */}
       {!stripeAccountId ? (
         <div className="mb-6 p-4 border rounded bg-yellow-50 flex items-center gap-4">
@@ -179,41 +322,151 @@ export default function ContractorPaymentsPage() {
           <Button variant="outline" onClick={() => window.location.href = '/dashboard/contractor/profile'}>Update Payout Method</Button>
         </div>
       )}
+
+      {/* Monthly Earnings Breakdown */}
+      <Card className="mb-8">
+        <CardHeader>
+          <CardTitle>Monthly Earnings</CardTitle>
+          <div className="text-sm text-muted-foreground pt-1">Breakdown of your earnings by month</div>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left py-3 px-4">Month</th>
+                  <th className="text-right py-3 px-4">Gigs</th>
+                  <th className="text-right py-3 px-4">Gross</th>
+                  <th className="text-right py-3 px-4">Net</th>
+                </tr>
+              </thead>
+              <tbody>
+                {monthlyEarnings.length > 0 ? (
+                  monthlyEarnings.map((month, idx) => (
+                    <tr key={idx} className="border-b hover:bg-muted/50">
+                      <td className="py-3 px-4 font-medium">{month.month}</td>
+                      <td className="py-3 px-4 text-right">{month.count}</td>
+                      <td className="py-3 px-4 text-right">${month.total.toFixed(2)}</td>
+                      <td className="py-3 px-4 text-right font-medium text-green-600">${month.net.toFixed(2)}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={4} className="py-4 text-center text-muted-foreground">No monthly data available</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Filters and Tabs */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <Tabs defaultValue="all" className="w-full sm:w-auto" onValueChange={setActiveTab}>
+          <TabsList>
+            <TabsTrigger value="all">All Gigs</TabsTrigger>
+            <TabsTrigger value="completed">Completed</TabsTrigger>
+            <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          <div className="flex items-center gap-2">
+            <Input 
+              placeholder="Search gigs..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full sm:w-[200px]"
+            />
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <Select value={sortBy} onValueChange={setSortBy}>
+              <SelectTrigger className="w-full sm:w-[180px]">
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="date-desc">Newest First</SelectItem>
+                <SelectItem value="date-asc">Oldest First</SelectItem>
+                <SelectItem value="amount-desc">Highest Amount</SelectItem>
+                <SelectItem value="amount-asc">Lowest Amount</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </div>
+
       {/* Paid Gigs List */}
-      {gigs.length === 0 ? (
-        <div className="text-muted-foreground">No paid gigs found.</div>
+      {filteredGigs.length === 0 ? (
+        <div className="text-center p-8 bg-muted/20 rounded-lg">
+          <div className="text-muted-foreground">No paid gigs found matching your filters.</div>
+          {(searchTerm || activeTab !== 'all') && (
+            <Button 
+              variant="outline" 
+              className="mt-2" 
+              onClick={() => {
+                setSearchTerm('');
+                setActiveTab('all');
+              }}
+            >
+              Clear Filters
+            </Button>
+          )}
+        </div>
       ) : (
-        <div className="space-y-6">
-          {gigs.map(gig => (
-            <Card key={gig.id} className="shadow-sm">
-              <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap">
+        <div className="space-y-4">
+          {filteredGigs.map(gig => (
+            <Card key={gig.id} className="shadow-sm hover:shadow-md transition-shadow">
+              <CardHeader className="flex flex-row items-center justify-between gap-4 pb-2">
                 <div>
-                  <CardTitle className="text-lg">{gig.serviceType}</CardTitle>
-                  <div className="text-sm text-gray-500">{getGigDisplayDate(gig)}</div>
+                  <CardTitle className="text-lg">{gig.serviceName || gig.serviceType}</CardTitle>
+                  <div className="text-sm text-muted-foreground">{getGigDisplayDate(gig)}</div>
                 </div>
-                <div className="flex flex-col items-end gap-2 min-w-[120px]">
-                  <StatusBadge status={gig.status} />
-                  <span className={`capitalize text-xs${gig.paymentStatus === 'cancelled' ? ' text-red-600' : ''}`}>{gig.paymentStatus}</span>
-                </div>
+                <StatusBadge status={gig.status} />
               </CardHeader>
-              <CardContent className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <div className="flex flex-col gap-1">
-                  <span className="text-xs text-muted-foreground">Client: <span className="font-medium text-foreground">{gig.clientName}</span></span>
-                  <span className="text-xs text-muted-foreground">Animals: <span className="font-medium text-foreground">{gig.petNames || 'None'}</span></span>
-                  {gig.review && (
-                    <span className="text-xs text-muted-foreground">Review: <span className="font-medium text-foreground">{gig.review.rating}★</span> {gig.review.comment}</span>
-                  )}
+              <CardContent className="pb-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Client</div>
+                    <div className="font-medium">{gig.clientName}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Animals</div>
+                    <div className="font-medium">{gig.petNames || 'None'}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Payment</div>
+                    <div className="font-medium text-green-600">${(gig.netPayout ?? (gig.amount - (gig.platformFee ?? gig.amount * 0.05) - (gig.stripeFee ?? (gig.amount * 0.029 + 0.3)))).toFixed(2)}</div>
+                    <div className="text-xs text-muted-foreground">(Gross: ${gig.amount.toFixed(2)})</div>
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-2 justify-end">
-                  <Button variant="outline" className="text-sm px-2 py-1" onClick={() => setDetailGig(gig)}>
-                    Details
-                  </Button>
-                </div>
+                
+                {gig.review && (
+                  <div className="mt-3 pt-3 border-t">
+                    <div className="flex items-center">
+                      <div className="text-xs text-muted-foreground mr-2">Rating:</div>
+                      <div className="flex items-center">
+                        <span className="font-medium">{gig.review.rating}</span>
+                        <span className="text-yellow-500 ml-1">★</span>
+                      </div>
+                      {gig.review.comment && (
+                        <div className="ml-4 text-sm italic truncate">{gig.review.comment}</div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </CardContent>
+              <div className="p-6 pt-0 flex justify-end">
+                <Button variant="outline" className="ml-auto" onClick={() => setDetailGig(gig)}>
+                  View Details
+                </Button>
+              </div>
             </Card>
           ))}
         </div>
       )}
+      
       {/* Gig Details Modal */}
       <Dialog open={!!detailGig} onOpenChange={() => setDetailGig(null)}>
         <DialogContent className="w-full max-w-xl max-h-[90vh] overflow-y-auto">
