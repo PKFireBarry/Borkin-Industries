@@ -21,11 +21,11 @@ export default function Header() {
       initial={{ y: -100 }}
       animate={{ y: 0 }}
       transition={{ type: "spring", stiffness: 100 }}
-      className="w-full px-4 lg:px-6 h-16 flex items-center bg-white dark:bg-gray-800 backdrop-blur-sm bg-opacity-80 dark:bg-opacity-80 shadow-lg sticky top-0 z-50"
+      className="w-full px-2 sm:px-4 lg:px-6 h-16 flex items-center bg-white dark:bg-gray-800 backdrop-blur-sm bg-opacity-80 dark:bg-opacity-80 shadow-lg sticky top-0 z-50"
     >
-      <div className="w-full max-w-7xl mx-auto flex justify-between items-center">
+      <div className="w-full max-w-7xl mx-auto flex justify-between items-center min-w-0">
         <Link 
-          className="flex items-center justify-center group" 
+          className="flex items-center justify-center group flex-shrink-0" 
           href="#"
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
@@ -34,19 +34,20 @@ export default function Header() {
             animate={{ rotate: isHovered ? 360 : 0 }}
             transition={{ duration: 0.5 }}
           >
-            <Paw className="h-8 w-8 text-pink-500" />
+            <Paw className="h-6 w-6 sm:h-8 sm:w-8 text-pink-500" />
           </motion.div>
           <motion.span 
-            className="ml-2 text-2xl font-bold bg-gradient-to-r from-purple-600 to-pink-500 bg-clip-text text-transparent dark:from-purple-300 dark:to-pink-300"
+            className="ml-1 sm:ml-2 text-lg sm:text-2xl font-bold bg-gradient-to-r from-purple-600 to-pink-500 bg-clip-text text-transparent dark:from-purple-300 dark:to-pink-300 truncate"
             whileHover={{ scale: 1.05 }}
             transition={{ type: "spring", stiffness: 400 }}
           >
-            Borkin Industries
+            <span className="hidden sm:inline">Borkin Industries</span>
+            <span className="sm:hidden">Borkin</span>
           </motion.span>
         </Link>
         
-        <div className="flex items-center gap-4">
-          <nav className="flex gap-4 sm:gap-6">
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+          <nav className="hidden lg:flex gap-4 sm:gap-6">
             {navItems.map((item) => (
               <motion.div
                 key={item.href}
@@ -64,15 +65,15 @@ export default function Header() {
             ))}
           </nav>
           
-          <div className="flex items-center gap-2 ml-4">
+          <div className="flex items-center gap-2 ml-2 sm:ml-4 flex-shrink-0">
             <SignedOut>
               <SignInButton mode="modal">
-                <Button variant="default" className="text-sm px-3 py-1">
+                <Button variant="default" className="text-sm px-3 py-1 h-9">
                   Sign In
                 </Button>
               </SignInButton>
               <SignUpButton mode="modal">
-                <Button variant="outline" className="text-sm px-3 py-1">
+                <Button variant="outline" className="text-sm px-3 py-1 h-9">
                   Sign Up
                 </Button>
               </SignUpButton>
@@ -80,7 +81,7 @@ export default function Header() {
             
             <SignedIn>
               <Link href="/dashboard">
-                <Button variant="default" className="text-sm px-3 py-1 mr-2">
+                <Button variant="default" className="text-sm px-3 py-1 h-9 mr-2">
                   Dashboard
                 </Button>
               </Link>

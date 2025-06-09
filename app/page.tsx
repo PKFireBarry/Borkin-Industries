@@ -25,9 +25,9 @@ export default async function Home() {
   if (user && !role) redirect('/select-role');
 
   return (
-    <div className="flex flex-col min-h-screen w-full">
+    <div className="flex flex-col min-h-screen w-full overflow-x-hidden">
       <Header />
-      <main className="flex-1 flex flex-col w-full">
+      <main className="flex-1 flex flex-col w-full overflow-x-hidden">
         {/* Admin-only: Generate test data button */}
         {user && role === 'admin' && <div className="container mx-auto px-4 py-8"><GenerateTestDataButton /></div>}
         
@@ -37,7 +37,7 @@ export default async function Home() {
         <WhyChooseUs/>
         <ServicesSection />
         <div id="contact"><ContactComponent /></div>
-        <div className="flex justify-center w-full">
+        <div className="flex justify-center w-full px-4">
           <TermsOfServiceSection />
         </div>
       </main>

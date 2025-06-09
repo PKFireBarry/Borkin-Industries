@@ -15,7 +15,7 @@ export default function HeroSection() {
 
   // Function to generate random horizontal position for pet icons
   const randomHorizontalPosition = () => ({
-    left: `${Math.random() * 100}%`,
+    left: `${Math.random() * 80 + 10}%`, // Keep within 10-90% to prevent overflow
   })
 
   // Function to get a random icon from the petIcons array
@@ -56,7 +56,7 @@ export default function HeroSection() {
 
       {/* Main Content */}
       <motion.div
-        className="px-4 md:px-8 z-10 text-center"
+        className="px-4 md:px-8 z-10 text-center max-w-full"
         initial={{ opacity: 0, y: 200 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8 }}
@@ -70,7 +70,7 @@ export default function HeroSection() {
               className="rounded-full object-cover"
             />
           </div>
-          <h1 className="text-4xl font-bold tracking-tighter sm:text-5xl md:text-6xl lg:text-7xl text-white">
+          <h1 className="text-4xl font-bold tracking-tighter sm:text-5xl md:text-6xl lg:text-7xl text-white break-words">
             {letters.map((letter, index) => (
               <motion.span
                 key={index}
@@ -90,7 +90,7 @@ export default function HeroSection() {
           </h1>
 
           <motion.p
-            className="mx-auto max-w-[700px] text-lg md:text-xl lg:text-4xl font-bold text-blue-100"
+            className="mx-auto max-w-[700px] text-lg md:text-xl lg:text-4xl font-bold text-blue-100 px-4"
             initial={{ rotateY: 90, opacity: 0 }}
             animate={{ rotateY: 0, opacity: 1 }}
             transition={{
@@ -102,11 +102,11 @@ export default function HeroSection() {
             Professional at-home pet care.
           </motion.p>
 
-          <div className="space-x-4 mt-6">
+          <div className="flex flex-col sm:flex-row gap-4 sm:space-x-4 mt-6 justify-center items-center px-4">
             <SignedOut>
               <SignInButton mode="modal">
                 <motion.button
-                  className="bg-yellow-400 text-blue-900 px-6 py-3 rounded-full transition-all duration-300 transform hover:scale-105 hover:bg-yellow-300"
+                  className="bg-yellow-400 text-blue-900 px-6 py-3 rounded-full transition-all duration-300 transform hover:scale-105 hover:bg-yellow-300 w-full sm:w-auto"
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                 >
@@ -118,7 +118,7 @@ export default function HeroSection() {
             <SignedIn>
               <Link href="/dashboard">
                 <motion.button
-                  className="bg-yellow-400 text-blue-900 px-6 py-3 rounded-full transition-all duration-300 transform hover:scale-105 hover:bg-yellow-300"
+                  className="bg-yellow-400 text-blue-900 px-6 py-3 rounded-full transition-all duration-300 transform hover:scale-105 hover:bg-yellow-300 w-full sm:w-auto"
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                 >
@@ -128,7 +128,7 @@ export default function HeroSection() {
             </SignedIn>
             
             <motion.a
-              className="text-white border border-white px-6 py-3 rounded-full transition-all duration-300 transform hover:scale-105 hover:bg-white hover:text-blue-600"
+              className="text-white border border-white px-6 py-3 rounded-full transition-all duration-300 transform hover:scale-105 hover:bg-white hover:text-blue-600 w-full sm:w-auto text-center"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               href="#about"
@@ -139,12 +139,12 @@ export default function HeroSection() {
         </div>
       </motion.div>
 
-      {/* Floating Hearts */}
+      {/* Floating Hearts - constrained positioning */}
       {[...Array(3)].map((_, index) => (
         <motion.div
           key={index}
           className="absolute text-red-400"
-          initial={{ opacity: 0, scale: 0, x: `${index * 30 + 10}%`, y: "100%" }}
+          initial={{ opacity: 0, scale: 0, x: `${Math.min(Math.max(index * 30 + 10, 10), 80)}%`, y: "100%" }}
           animate={{
             opacity: [0, 1, 0],
             scale: [0, 1, 0],
@@ -162,9 +162,9 @@ export default function HeroSection() {
         </motion.div>
       ))}
 
-      {/* Sun */}
+      {/* Sun - positioned safely within viewport */}
       <motion.div
-        className="absolute top-10 right-10 text-yellow-300"
+        className="absolute top-4 right-4 sm:top-10 sm:right-10 text-yellow-300"
         animate={{
           rotate: 360,
           scale: [1, 1.1, 1],
@@ -176,12 +176,12 @@ export default function HeroSection() {
           ease: "linear",
         }}
       >
-        <Sun size={64} />
+        <Sun size={48} className="sm:w-16 sm:h-16" />
       </motion.div>
 
       {/* Decorative SVG */}
-      <div className="absolute bottom-0 left-0 right-0">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 320" className="w-full h-auto">
+      <div className="absolute bottom-0 left-0 right-0 w-full">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 320" className="w-full h-auto max-w-full">
           <path
             fill="#ffffff"
             fillOpacity="1"
