@@ -170,6 +170,7 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
 - [x] Integrate Stripe Elements payment re-authorization in the edit services modal for bookings when a new PaymentIntent is required after editing services.
 - [x] Update backend and frontend to fully automate the booking update and payment flow for the user.
 - [x] Fix client booking details modal to always show service names instead of IDs
+- [x] Fix service name display in booking edit modal to show human-readable names instead of primitive service IDs
 - [x] Add contractor name and phone number to booking details model and display in booking details UI
 - [x] Clean up and restyle booking details modal for clarity and client-friendliness
 - [x] Refine dashboard navigation layout to be fully responsive and collapsible for all device types

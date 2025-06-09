@@ -262,7 +262,13 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
       try {
         const offerings = await getContractorServiceOfferings(editServicesModal.booking.contractorId)
         setEditServicesOptions(offerings)
-        setEditServices(editServicesModal.booking.services)
+        
+        // Enhance existing services with platform service names if missing
+        const servicesWithNames = editServicesModal.booking.services.map(service => ({
+          ...service,
+          name: service.name || platformServices.find(ps => ps.id === service.serviceId)?.name || service.serviceId
+        }))
+        setEditServices(servicesWithNames)
       } catch (err: any) {
         setEditServicesError('Failed to load contractor services')
       } finally {
@@ -270,7 +276,7 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
       }
     }
     fetchOfferings()
-  }, [editServicesModal])
+  }, [editServicesModal, platformServices])
 
   // When modal opens, set initial dates and recalc
   useEffect(() => {
@@ -503,7 +509,7 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
   }
 
   // Helper function to format service price
-  const formatServicePrice = (service: { price: number; paymentType: 'one_time' | 'daily' | 'per_day' }, numberOfDays: number = 1) => {
+  const formatServicePrice = (service: { price: number; paymentType: 'one_time' | 'daily' }, numberOfDays: number = 1) => {
     if (!service || typeof service.price === 'undefined') return '';
 
     const priceInDollars = service.price / 100;
@@ -519,7 +525,7 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
         return `$${dailyRateInDollars.toFixed(2)}/day × ${numberOfDays} day${numberOfDays !== 1 ? 's' : ''} = $${totalPriceInDollars.toFixed(2)}`;
     }
     // If numberOfDays is not applicable or 0, just show base rate
-    return `$${dailyRateInDollars.toFixed(2)}${service.paymentType !== 'one_time' ? '/day' : ''}`;
+    return `$${dailyRateInDollars.toFixed(2)}${service.paymentType === 'daily' ? '/day' : ''}`;
   };
 
   // Helper to convert price to dollars (assume all values are in dollars, never cents)
@@ -1062,7 +1068,8 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
                             if (!isEditable) return
                             const serviceToAdd = {
                               ...offering,
-                              paymentType: offering.paymentType === 'per_day' ? 'daily' : offering.paymentType
+                              paymentType: offering.paymentType === 'per_day' ? 'daily' : offering.paymentType,
+                              name: platformService?.name || offering.serviceId
                             };
                             setEditServices(prev => 
                               checked 

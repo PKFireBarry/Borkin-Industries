@@ -2,6 +2,7 @@ import { db } from '../../firebase'
 import { collection, query, where, getDocs, doc, setDoc, deleteDoc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore'
 import type { Booking } from '@/types/booking'
 import type { ContractorServiceOffering } from '@/types/service'
+import { getAllPlatformServices } from './services'
 
 // Helper function to calculate the number of days
 function calculateNumberOfDays(startDateISO: string, endDateISO: string): number {
@@ -65,7 +66,24 @@ export async function getBookingsForClient(clientId: string): Promise<Booking[]>
   const bookingsRef = collection(db, 'bookings')
   const q = query(bookingsRef, where('clientId', '==', clientId))
   const snapshot = await getDocs(q)
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Booking))
+  const bookings = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Booking))
+  
+  // Enhance bookings with service names if missing
+  try {
+    const platformServices = await getAllPlatformServices()
+    const serviceNameMap = new Map(platformServices.map(s => [s.id, s.name]))
+    
+    return bookings.map(booking => ({
+      ...booking,
+      services: booking.services?.map(service => ({
+        ...service,
+        name: service.name || serviceNameMap.get(service.serviceId) || service.serviceId
+      })) || []
+    }))
+  } catch (error) {
+    console.warn('Failed to enhance bookings with service names:', error)
+    return bookings
+  }
 }
 
 export async function addTestBooking(booking: Booking): Promise<void> {
@@ -268,7 +286,24 @@ export async function getGigsForContractor(contractorId: string): Promise<Bookin
   const bookingsRef = collection(db, 'bookings')
   const q = query(bookingsRef, where('contractorId', '==', contractorId))
   const snapshot = await getDocs(q)
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Booking))
+  const bookings = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Booking))
+  
+  // Enhance bookings with service names if missing
+  try {
+    const platformServices = await getAllPlatformServices()
+    const serviceNameMap = new Map(platformServices.map(s => [s.id, s.name]))
+    
+    return bookings.map(booking => ({
+      ...booking,
+      services: booking.services?.map(service => ({
+        ...service,
+        name: service.name || serviceNameMap.get(service.serviceId) || service.serviceId
+      })) || []
+    }))
+  } catch (error) {
+    console.warn('Failed to enhance bookings with service names:', error)
+    return bookings
+  }
 }
 
 export async function updateBookingStatus(bookingId: string, status: Booking['status']): Promise<void> {
@@ -340,7 +375,24 @@ export async function saveBookingReview(
 export async function getAllBookings(): Promise<Booking[]> {
   const bookingsRef = collection(db, 'bookings')
   const snapshot = await getDocs(bookingsRef)
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Booking))
+  const bookings = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Booking))
+  
+  // Enhance bookings with service names if missing
+  try {
+    const platformServices = await getAllPlatformServices()
+    const serviceNameMap = new Map(platformServices.map(s => [s.id, s.name]))
+    
+    return bookings.map(booking => ({
+      ...booking,
+      services: booking.services?.map(service => ({
+        ...service,
+        name: service.name || serviceNameMap.get(service.serviceId) || service.serviceId
+      })) || []
+    }))
+  } catch (error) {
+    console.warn('Failed to enhance bookings with service names:', error)
+    return bookings
+  }
 }
 
 export async function getBookingById(bookingId: string): Promise<Booking | null> {
@@ -350,7 +402,25 @@ export async function getBookingById(bookingId: string): Promise<Booking | null>
     console.warn(`[getBookingById] No booking found with ID: ${bookingId}`);
     return null;
   }
-  return { id: snapshot.id, ...snapshot.data() } as Booking;
+  
+  const booking = { id: snapshot.id, ...snapshot.data() } as Booking;
+  
+  // Enhance booking with service names if missing
+  try {
+    const platformServices = await getAllPlatformServices()
+    const serviceNameMap = new Map(platformServices.map(s => [s.id, s.name]))
+    
+    return {
+      ...booking,
+      services: booking.services?.map(service => ({
+        ...service,
+        name: service.name || serviceNameMap.get(service.serviceId) || service.serviceId
+      })) || []
+    }
+  } catch (error) {
+    console.warn('Failed to enhance booking with service names:', error)
+    return booking
+  }
 }
 
 /**
