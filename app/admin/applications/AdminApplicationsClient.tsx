@@ -4,8 +4,10 @@ import { Button } from '@/components/ui/button'
 
 export interface Application {
   id: string;
+  userId?: string;
   firstName?: string;
   lastName?: string;
+  name?: string;
   email?: string;
   phone?: string;
   address?: string;
@@ -43,6 +45,10 @@ export interface Application {
     relationship?: string;
     notes?: string;
   }>;
+  drivingRange?: {
+    maxDistance?: string;
+    willTravelOutside?: string;
+  };
   // Add other potential fields with specific types
   [key: string]: unknown; // Allow other properties not explicitly defined with unknown type
 }

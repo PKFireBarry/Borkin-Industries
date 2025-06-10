@@ -1,22 +1,118 @@
 import { currentUser } from '@clerk/nextjs/server'
 import { isAdmin } from '@/lib/auth/role-helpers'
 import { redirect } from 'next/navigation'
-import { getAllContractorApplications, updateContractorApplicationStatus } from '@/lib/firebase/contractors'
+import { getAllContractorApplications, updateContractorApplicationStatus, updateContractorProfile } from '@/lib/firebase/contractors'
 import AdminApplicationsClient, { type Application } from './AdminApplicationsClient'
 
 async function approveContractor(id: string) {
   'use server'
   await updateContractorApplicationStatus(id, 'approved')
+  
+  const applicationsData = await getAllContractorApplications()
+  const application = applicationsData.find((app: any) => app.id === id) as any
+  
+  if (application && application.userId) {
+    await updateContractorProfile(application.userId, {
+      id: application.userId,
+      name: application.name || `${application.firstName || ''} ${application.lastName || ''}`.trim(),
+      email: application.email || '',
+      phone: application.phone || '',
+      address: application.address || '',
+      application: {
+        status: 'approved',
+        submittedAt: application.createdAt ? 
+          (application.createdAt instanceof Date ? application.createdAt.toISOString() :
+           typeof application.createdAt === 'string' ? application.createdAt :
+           new Date(application.createdAt.seconds * 1000).toISOString()) : 
+          new Date().toISOString(),
+        reviewedAt: new Date().toISOString(),
+        experience: Array.isArray(application.experience) ? 
+          application.experience.map((exp: any) => exp.description || '').join('; ') : '',
+        education: Array.isArray(application.education) ? 
+          application.education.map((edu: any) => `${edu.degree || ''} in ${edu.fieldOfStudy || ''}`).join('; ') : '',
+        address: application.address || '',
+        drivingRange: application.drivingRange?.maxDistance || '',
+        certifications: Array.isArray(application.certifications) ? 
+          application.certifications.map((cert: any) => typeof cert === 'string' ? cert : cert.name || '').filter(Boolean) : [],
+        references: Array.isArray(application.references) ? 
+          application.references.map((ref: any) => `${ref.name || ''} (${ref.relationship || ''})`).filter(Boolean) : []
+      }
+    })
+  }
 }
 
 async function rejectContractor(id: string) {
   'use server'
   await updateContractorApplicationStatus(id, 'rejected')
+  
+  const applicationsData = await getAllContractorApplications()
+  const application = applicationsData.find((app: any) => app.id === id) as any
+  
+  if (application && application.userId) {
+    await updateContractorProfile(application.userId, {
+      id: application.userId,
+      name: application.name || `${application.firstName || ''} ${application.lastName || ''}`.trim(),
+      email: application.email || '',
+      phone: application.phone || '',
+      address: application.address || '',
+      application: {
+        status: 'rejected',
+        submittedAt: application.createdAt ? 
+          (application.createdAt instanceof Date ? application.createdAt.toISOString() :
+           typeof application.createdAt === 'string' ? application.createdAt :
+           new Date(application.createdAt.seconds * 1000).toISOString()) : 
+          new Date().toISOString(),
+        reviewedAt: new Date().toISOString(),
+        experience: Array.isArray(application.experience) ? 
+          application.experience.map((exp: any) => exp.description || '').join('; ') : '',
+        education: Array.isArray(application.education) ? 
+          application.education.map((edu: any) => `${edu.degree || ''} in ${edu.fieldOfStudy || ''}`).join('; ') : '',
+        address: application.address || '',
+        drivingRange: application.drivingRange?.maxDistance || '',
+        certifications: Array.isArray(application.certifications) ? 
+          application.certifications.map((cert: any) => typeof cert === 'string' ? cert : cert.name || '').filter(Boolean) : [],
+        references: Array.isArray(application.references) ? 
+          application.references.map((ref: any) => `${ref.name || ''} (${ref.relationship || ''})`).filter(Boolean) : []
+      }
+    })
+  }
 }
 
 async function reinstateContractor(id: string) {
   'use server'
   await updateContractorApplicationStatus(id, 'pending')
+  
+  const applicationsData = await getAllContractorApplications()
+  const application = applicationsData.find((app: any) => app.id === id) as any
+  
+  if (application && application.userId) {
+    await updateContractorProfile(application.userId, {
+      id: application.userId,
+      name: application.name || `${application.firstName || ''} ${application.lastName || ''}`.trim(),
+      email: application.email || '',
+      phone: application.phone || '',
+      address: application.address || '',
+      application: {
+        status: 'pending',
+        submittedAt: application.createdAt ? 
+          (application.createdAt instanceof Date ? application.createdAt.toISOString() :
+           typeof application.createdAt === 'string' ? application.createdAt :
+           new Date(application.createdAt.seconds * 1000).toISOString()) : 
+          new Date().toISOString(),
+        reviewedAt: new Date().toISOString(),
+        experience: Array.isArray(application.experience) ? 
+          application.experience.map((exp: any) => exp.description || '').join('; ') : '',
+        education: Array.isArray(application.education) ? 
+          application.education.map((edu: any) => `${edu.degree || ''} in ${edu.fieldOfStudy || ''}`).join('; ') : '',
+        address: application.address || '',
+        drivingRange: application.drivingRange?.maxDistance || '',
+        certifications: Array.isArray(application.certifications) ? 
+          application.certifications.map((cert: any) => typeof cert === 'string' ? cert : cert.name || '').filter(Boolean) : [],
+        references: Array.isArray(application.references) ? 
+          application.references.map((ref: any) => `${ref.name || ''} (${ref.relationship || ''})`).filter(Boolean) : []
+      }
+    })
+  }
 }
 
 export default async function AdminApplicationsPage() {

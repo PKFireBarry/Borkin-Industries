@@ -1,9 +1,7 @@
 "use client"
 import { useRequireRole } from '../use-require-role'
-import { useRequireContractorApproval } from './useRequireContractorApproval'
 
 export default function ContractorDashboardHome() {
-  useRequireContractorApproval()
   const { isLoaded, isAuthorized } = useRequireRole('contractor')
   if (!isLoaded || !isAuthorized) return null
   return (

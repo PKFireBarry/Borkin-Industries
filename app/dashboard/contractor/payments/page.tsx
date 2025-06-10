@@ -48,6 +48,31 @@ export default function ContractorPaymentsPage() {
   const [searchTerm, setSearchTerm] = useState<string>('')
   const [sortBy, setSortBy] = useState<string>('date-desc')
   const [activeTab, setActiveTab] = useState<string>('all')
+  const [stripeOnboardingLoading, setStripeOnboardingLoading] = useState(false)
+
+  const handleStripeOnboarding = async () => {
+    if (!user) return
+    
+    setStripeOnboardingLoading(true)
+    try {
+      const response = await fetch('/api/stripe/connect-onboard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to create onboarding link')
+      }
+      
+      const { url } = await response.json()
+      window.location.href = url
+    } catch (error) {
+      console.error('Stripe onboarding error:', error)
+      setError('Failed to start payment setup. Please try again.')
+    } finally {
+      setStripeOnboardingLoading(false)
+    }
+  }
 
   useEffect(() => {
     if (!user) return
@@ -301,7 +326,13 @@ export default function ContractorPaymentsPage() {
             <div className="font-medium mb-1">Set up payouts to receive your earnings</div>
             <div className="text-sm text-muted-foreground mb-2">Add a card or bank account to receive payments via Stripe.</div>
           </div>
-          <Button variant="default" onClick={() => window.location.href = '/dashboard/contractor/profile'}>Set Up Payouts</Button>
+          <Button 
+            variant="default" 
+            onClick={handleStripeOnboarding}
+            disabled={stripeOnboardingLoading}
+          >
+            {stripeOnboardingLoading ? 'Setting up...' : 'Set Up Payouts'}
+          </Button>
         </div>
       ) : !payoutMethod ? (
         <div className="mb-6 p-4 border rounded bg-yellow-50 flex items-center gap-4">
@@ -309,7 +340,13 @@ export default function ContractorPaymentsPage() {
             <div className="font-medium mb-1">No payout method on file</div>
             <div className="text-sm text-muted-foreground">Add a card or bank account to receive payments via Stripe.</div>
           </div>
-          <Button variant="outline" onClick={() => window.location.href = '/dashboard/contractor/profile'}>Add Payout Method</Button>
+          <Button 
+            variant="outline" 
+            onClick={handleStripeOnboarding}
+            disabled={stripeOnboardingLoading}
+          >
+            {stripeOnboardingLoading ? 'Setting up...' : 'Add Payout Method'}
+          </Button>
         </div>
       ) : (
         <div className="mb-6 p-4 border rounded bg-green-50 flex items-center gap-4">
@@ -319,7 +356,13 @@ export default function ContractorPaymentsPage() {
               {payoutMethod.brand} •••• {payoutMethod.last4}
             </div>
           </div>
-          <Button variant="outline" onClick={() => window.location.href = '/dashboard/contractor/profile'}>Update Payout Method</Button>
+          <Button 
+            variant="outline" 
+            onClick={handleStripeOnboarding}
+            disabled={stripeOnboardingLoading}
+          >
+            {stripeOnboardingLoading ? 'Updating...' : 'Update Payout Method'}
+          </Button>
         </div>
       )}
 
