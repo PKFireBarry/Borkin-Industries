@@ -62,8 +62,20 @@ export async function POST(req: NextRequest) {
         }
       }
       return NextResponse.json({ hasPayoutMethod, payoutMethod })
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to check payout method:', err)
+      
+      // Handle test/live mode mismatch
+      if (err.message?.includes('test') || err.message?.includes('live mode')) {
+        console.log(`Mode mismatch detected for account ${stripeAccountId}`)
+        return NextResponse.json({ 
+          hasPayoutMethod: false, 
+          payoutMethod: null,
+          modeMismatch: true,
+          error: 'Account was created in a different mode. Please reconnect your Stripe account.'
+        })
+      }
+      
       return NextResponse.json({ error: 'Stripe error' }, { status: 500 })
     }
   }

@@ -34,3 +34,22 @@ export function getBaseAppUrl(): string {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'localhost:3000'
   return ensureUrlScheme(baseUrl)
 }
+
+/**
+ * Detects if we're in Stripe test mode or live mode
+ * @returns true if in test mode, false if in live mode
+ */
+export function isStripeTestMode(): boolean {
+  return process.env.STRIPE_SECRET_KEY?.startsWith('sk_test_') ?? true
+}
+
+/**
+ * Checks if a Stripe account ID was created in test mode
+ * @param accountId - The Stripe account ID to check
+ * @returns true if it's a test account, false if live
+ */
+export function isTestStripeAccount(accountId: string): boolean {
+  // Test accounts typically start with 'acct_' followed by test-specific patterns
+  // This is a heuristic - in practice, you'd need to call Stripe API to be certain
+  return accountId.includes('test') || accountId.length < 20
+}

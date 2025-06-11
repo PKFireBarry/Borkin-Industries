@@ -96,4 +96,6 @@ export interface Client {
   paymentMethods: PaymentMethod[]
   bookingHistory: Booking[]
   stripeCustomerId?: string
+  stripeCustomerMode?: 'test' | 'live' // Track which mode the customer was created in
+  stripeCustomerCreatedAt?: string // ISO date string when Stripe customer was created
 } 
