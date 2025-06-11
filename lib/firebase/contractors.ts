@@ -1,5 +1,5 @@
 import { db } from '../../firebase'
-import { collection, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore'
+import { collection, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, arrayUnion } from 'firebase/firestore'
 import type { Contractor } from '@/types/contractor'
 import type { ContractorServiceOffering } from '@/types/service'
 
@@ -106,4 +106,98 @@ export async function allowReapplication(userId: string): Promise<void> {
 export async function setContractorApplicationPending(userId: string): Promise<void> {
   const contractorRef = doc(db, 'contractors', userId)
   await setDoc(contractorRef, { application: { status: 'pending' } }, { merge: true })
+}
+
+/**
+ * Add approved gig dates to contractor's unavailable dates
+ * This function is called when a gig is approved to block those dates in the contractor's calendar
+ */
+export async function addGigDatesToContractorCalendar(contractorId: string, startDate: string, endDate: string): Promise<void> {
+  try {
+    const contractorRef = doc(db, 'contractors', contractorId)
+    
+    // Get current contractor data
+    const contractorSnap = await getDoc(contractorRef)
+    if (!contractorSnap.exists()) {
+      throw new Error(`Contractor ${contractorId} not found`)
+    }
+    
+    const contractor = contractorSnap.data() as Contractor
+    const currentUnavailableDates = contractor.availability?.unavailableDates || []
+    
+    // Generate all dates in the range (inclusive)
+    const gigDates: string[] = []
+    const start = new Date(startDate)
+    const end = new Date(endDate)
+    
+    // Reset time to midnight to ensure consistent date handling
+    start.setUTCHours(0, 0, 0, 0)
+    end.setUTCHours(0, 0, 0, 0)
+    
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const isoDate = d.toISOString().slice(0, 10) // YYYY-MM-DD format
+      gigDates.push(isoDate)
+    }
+    
+    // Merge with existing unavailable dates and remove duplicates
+    const updatedUnavailableDates = [...new Set([...currentUnavailableDates, ...gigDates])]
+    
+    // Update contractor availability
+    await updateDoc(contractorRef, {
+      'availability.unavailableDates': updatedUnavailableDates,
+      updatedAt: serverTimestamp()
+    })
+    
+    console.log(`Added ${gigDates.length} gig dates to contractor ${contractorId}'s calendar:`, gigDates)
+  } catch (error) {
+    console.error('Error adding gig dates to contractor calendar:', error)
+    throw new Error('Failed to update contractor calendar')
+  }
+}
+
+/**
+ * Remove cancelled gig dates from contractor's unavailable dates
+ * This function is called when a gig is cancelled to free up those dates in the contractor's calendar
+ */
+export async function removeGigDatesFromContractorCalendar(contractorId: string, startDate: string, endDate: string): Promise<void> {
+  try {
+    const contractorRef = doc(db, 'contractors', contractorId)
+    
+    // Get current contractor data
+    const contractorSnap = await getDoc(contractorRef)
+    if (!contractorSnap.exists()) {
+      throw new Error(`Contractor ${contractorId} not found`)
+    }
+    
+    const contractor = contractorSnap.data() as Contractor
+    const currentUnavailableDates = contractor.availability?.unavailableDates || []
+    
+    // Generate all dates in the range (inclusive)
+    const gigDates: string[] = []
+    const start = new Date(startDate)
+    const end = new Date(endDate)
+    
+    // Reset time to midnight to ensure consistent date handling
+    start.setUTCHours(0, 0, 0, 0)
+    end.setUTCHours(0, 0, 0, 0)
+    
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const isoDate = d.toISOString().slice(0, 10) // YYYY-MM-DD format
+      gigDates.push(isoDate)
+    }
+    
+    // Remove gig dates from unavailable dates
+    const updatedUnavailableDates = currentUnavailableDates.filter(date => !gigDates.includes(date))
+    
+    // Update contractor availability
+    await updateDoc(contractorRef, {
+      'availability.unavailableDates': updatedUnavailableDates,
+      updatedAt: serverTimestamp()
+    })
+    
+    console.log(`Removed ${gigDates.length} gig dates from contractor ${contractorId}'s calendar:`, gigDates)
+  } catch (error) {
+    console.error('Error removing gig dates from contractor calendar:', error)
+    throw new Error('Failed to update contractor calendar')
+  }
 } 

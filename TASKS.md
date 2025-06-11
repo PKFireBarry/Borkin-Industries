@@ -224,13 +224,17 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
 ### 6. Booking & Calendar Features
 - [ ] Implement booking creation and status tracking
 - [ ] Contractor approval flow for bookings
-- [ ] Build contractor availability calendar (set unavailable days)
+- [x] Build contractor availability calendar (set unavailable days)
 - [ ] Display contractor calendar to clients
 - [ ] Booking status updates (pending, approved, completed, cancelled)
 - [x] Booking detail view for both client and contractor
 - [x] Emergency booking cancellation for both clients and contractors after approval
 - [x] Add time selection to booking form and display time information in booking details
 - [x] Display booking duration in hours based on start and end times
+- [x] Automatically add approved gig dates to contractor's unavailable calendar
+  - When a contractor approves a gig, the date range is automatically added to their unavailable dates
+  - When a gig is cancelled, the dates are removed from the contractor's unavailable calendar
+  - This prevents double-booking and keeps contractor availability accurate
 
 ### 7. Payments (Stripe)
 - [x] Integrate Stripe for client payments
@@ -251,6 +255,13 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
 - [x] Bookings summary with metrics and visualizations
 - [x] Add admin navigation links for admin users
 - [x] Admin services management page for adding/editing/removing platform services
+- [x] Redesign contractor applications page for better readability and professional appearance
+  - Clean, modern card-based layout with proper visual hierarchy
+  - Organized sections for contact info, experience, education, certifications, and references
+  - Better formatting for dates, experience entries, and education details
+  - Improved action buttons and status indicators
+  - Enhanced search functionality including phone number search
+  - Application counts in filter buttons for better overview
 - [ ] Manage Clients
 - [ ] Add phone number filter to contractor application filters
 - [ ] Add coupon management to pricing page

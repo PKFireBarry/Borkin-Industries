@@ -394,7 +394,10 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
             const captureRes = await fetch('/api/stripe/capture-payment-intent', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ paymentIntentId: booking.paymentIntentId }),
+                body: JSON.stringify({ 
+                    paymentIntentId: booking.paymentIntentId,
+                    bookingId: booking.id 
+                }),
             });
             const captureData = await captureRes.json();
 

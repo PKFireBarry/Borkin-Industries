@@ -31,8 +31,23 @@ export function ensureUrlScheme(url: string): string {
  * @returns Base app URL with scheme
  */
 export function getBaseAppUrl(): string {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'localhost:3000'
-  return ensureUrlScheme(baseUrl)
+  // Check for explicit environment variable first
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    return ensureUrlScheme(process.env.NEXT_PUBLIC_APP_URL)
+  }
+  
+  // Check for Vercel environment variables
+  if (process.env.VERCEL_URL) {
+    return ensureUrlScheme(process.env.VERCEL_URL)
+  }
+  
+  // Check if we're in production and use the known production URL
+  if (process.env.NODE_ENV === 'production') {
+    return 'https://borkinindustries.vercel.app'
+  }
+  
+  // Default to localhost for development
+  return 'http://localhost:3000'
 }
 
 /**

@@ -3,6 +3,7 @@ import { collection, query, where, getDocs, doc, setDoc, deleteDoc, getDoc, upda
 import type { Booking } from '@/types/booking'
 import type { ContractorServiceOffering } from '@/types/service'
 import { getAllPlatformServices } from './services'
+import { addGigDatesToContractorCalendar, removeGigDatesFromContractorCalendar } from './contractors'
 
 // Helper function to calculate the number of days
 function calculateNumberOfDays(startDateISO: string, endDateISO: string): number {
@@ -308,34 +309,62 @@ export async function getGigsForContractor(contractorId: string): Promise<Bookin
 
 export async function updateBookingStatus(bookingId: string, status: Booking['status']): Promise<void> {
   const bookingRef = doc(db, 'bookings', bookingId)
-  // ... (rest of updateBookingStatus - needs careful review if payment cancellation logic changes)
-  // For now, focusing on addBooking. The cancellation logic might need adjustment based on multi-day implications.
+  
+  // Get booking data first to access contractor and date information
+  const bookingSnap = await getDoc(bookingRef)
+  if (!bookingSnap.exists()) {
+    throw new Error('Booking not found')
+  }
+  
+  const booking = bookingSnap.data() as Booking
+  
+  // Handle cancellation logic
   if (status === 'cancelled') {
-    const snap = await getDoc(bookingRef);
-    if (snap.exists()) {
-      const booking = snap.data() as Booking;
-      let paymentStatusToUpdate: Booking['paymentStatus'] = booking.paymentStatus;
-      if (booking.paymentIntentId && booking.paymentStatus === 'pending') {
-        try {
-          const cancelRes = await fetch('/api/stripe/cancel-payment-intent', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ paymentIntentId: booking.paymentIntentId }),
-          });
-          const cancelData = await cancelRes.json();
-          if (cancelRes.ok && cancelData.status === 'canceled') {
-            paymentStatusToUpdate = 'cancelled';
-          } else {
-            console.warn("Stripe PI cancellation failed or status not 'canceled'. Payment status not updated to cancelled.", cancelData);
-          }
-        } catch(err) {
-          console.error("Error cancelling Stripe PI. Payment status not updated to cancelled.", err);
+    let paymentStatusToUpdate: Booking['paymentStatus'] = booking.paymentStatus;
+    if (booking.paymentIntentId && booking.paymentStatus === 'pending') {
+      try {
+        const cancelRes = await fetch('/api/stripe/cancel-payment-intent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paymentIntentId: booking.paymentIntentId }),
+        });
+        const cancelData = await cancelRes.json();
+        if (cancelRes.ok && cancelData.status === 'canceled') {
+          paymentStatusToUpdate = 'cancelled';
+        } else {
+          console.warn("Stripe PI cancellation failed or status not 'canceled'. Payment status not updated to cancelled.", cancelData);
         }
+      } catch(err) {
+        console.error("Error cancelling Stripe PI. Payment status not updated to cancelled.", err);
       }
-      await updateDoc(bookingRef, { status, paymentStatus: paymentStatusToUpdate });
-      return;
+    }
+    
+    // Remove gig dates from contractor's calendar when cancelled
+    try {
+      await removeGigDatesFromContractorCalendar(booking.contractorId, booking.startDate, booking.endDate)
+      console.log(`Removed gig dates from contractor ${booking.contractorId}'s calendar for cancelled booking ${bookingId}`)
+    } catch (error) {
+      console.error('Failed to remove gig dates from contractor calendar:', error)
+      // Don't throw error here - we still want to cancel the booking even if calendar update fails
+    }
+    
+    await updateDoc(bookingRef, { status, paymentStatus: paymentStatusToUpdate });
+    return;
+  }
+  
+  // Handle approval - add dates to contractor's calendar
+  if (status === 'approved') {
+    try {
+      // Add gig dates to contractor's unavailable dates
+      await addGigDatesToContractorCalendar(booking.contractorId, booking.startDate, booking.endDate)
+      console.log(`Added gig dates to contractor ${booking.contractorId}'s calendar for booking ${bookingId}`)
+    } catch (error) {
+      console.error('Failed to add gig dates to contractor calendar:', error)
+      // Don't throw error here - we still want to approve the booking even if calendar update fails
     }
   }
+  
+  // Update booking status
   await updateDoc(bookingRef, { status });
 }
 
