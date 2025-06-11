@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { currentUser } from '@clerk/nextjs/server'
 import Stripe from 'stripe'
 import { getClientProfile, updateClientProfile } from '@/lib/firebase/client'
+import { getBaseAppUrl } from '@/lib/utils'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2025-03-31.basil' })
 
@@ -27,9 +28,17 @@ export async function POST(_req: NextRequest) {
       await updateClientProfile(user.id, { stripeCustomerId: customerId })
     }
 
+    // Construct the return URL with proper scheme
+    const returnUrl = getBaseAppUrl() + '/dashboard/payments'
+    
+    // Debug logging
+    console.log('Environment NEXT_PUBLIC_APP_URL:', process.env.NEXT_PUBLIC_APP_URL)
+    console.log('Base app URL:', getBaseAppUrl())
+    console.log('Final return URL:', returnUrl)
+
     const session = await stripe.billingPortal.sessions.create({
       customer: customerId,
-      return_url: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000/dashboard/payments',
+      return_url: returnUrl,
     })
     return NextResponse.json({ url: session.url })
   } catch (err) {

@@ -3,6 +3,7 @@ import Stripe from 'stripe'
 import { getAuth } from '@clerk/nextjs/server'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { db } from '@/firebase'
+import { getBaseAppUrl } from '@/lib/utils'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
 
@@ -25,14 +26,17 @@ export async function POST(req: NextRequest) {
     await setDoc(contractorRef, { stripeAccountId }, { merge: true })
   }
 
-  // 3. Always use 'account_onboarding' for Express accounts
+  // 3. Construct URLs with proper scheme
+  const paymentsUrl = getBaseAppUrl() + '/dashboard/contractor/payments'
+
+  // 4. Always use 'account_onboarding' for Express accounts
   const accountLink = await stripe.accountLinks.create({
     account: stripeAccountId,
-    refresh_url: process.env.NEXT_PUBLIC_BASE_URL + '/dashboard/contractor/payments',
-    return_url: process.env.NEXT_PUBLIC_BASE_URL + '/dashboard/contractor/payments',
+    refresh_url: paymentsUrl,
+    return_url: paymentsUrl,
     type: 'account_onboarding',
   })
 
-  // 4. Return onboarding/update link
+  // 5. Return onboarding/update link
   return NextResponse.json({ url: accountLink.url })
 } 
