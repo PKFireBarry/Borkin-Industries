@@ -300,8 +300,8 @@ export default function ContractorProfilePage() {
                 <p><strong>Phone:</strong> {form.phone}</p>
                 <p><strong>Driving Range:</strong> {form.drivingRange || 'N/A'}</p>
                 {form.locationLat && form.locationLng && (
-                    <div className="w-full h-64 mt-4 rounded-md overflow-hidden">
-                    <MapWithCircle lat={form.locationLat} lng={form.locationLng} miles={getDrivingRangeMiles()} />
+                    <div className="w-full h-64 mt-4 rounded-md overflow-hidden relative z-0">
+                        <MapWithCircle lat={form.locationLat} lng={form.locationLng} miles={getDrivingRangeMiles()} />
                     </div>
                 )}
             </div>
@@ -430,8 +430,8 @@ export default function ContractorProfilePage() {
                          <p><strong>Phone:</strong> {form.phone}</p>
                          <p><strong>Driving Range:</strong> {form.drivingRange || 'N/A'}</p>
                          {form.locationLat && form.locationLng && (
-                             <div className="w-full h-64 mt-4 rounded-md overflow-hidden">
-                             <MapWithCircle lat={form.locationLat} lng={form.locationLng} miles={getDrivingRangeMiles()} />
+                             <div className="w-full h-64 mt-4 rounded-md overflow-hidden relative z-0">
+                                 <MapWithCircle lat={form.locationLat} lng={form.locationLng} miles={getDrivingRangeMiles()} />
                              </div>
                          )}
                      </div>

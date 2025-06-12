@@ -592,367 +592,396 @@ export default function ContractorGigsPage() {
   const filteredGigs = filter === 'all' ? gigs : gigs.filter(g => g.status === filter)
 
   return (
-    <main className="max-w-3xl mx-auto py-10 px-4">
-      <h1 className="text-2xl font-bold mb-6">Your Gigs</h1>
-      {/* Status Filter Bar */}
-      <div className="flex gap-2 mb-6">
-        {(['all', 'pending', 'approved', 'completed', 'cancelled'] as const).map((status) => (
-          <Button
-            key={status}
-            variant={filter === status ? 'default' : 'outline'}
-            onClick={() => setFilter(status)}
-            className="capitalize"
-          >
-            {status === 'all' ? 'All' : statusLabels[status as keyof typeof statusLabels]}
-          </Button>
-        ))}
-      </div>
-      {/* Gigs List */}
-      {filteredGigs.length === 0 ? (
-        <div className="text-muted-foreground">No gigs found for this status.</div>
-      ) : (
-        <div className="grid gap-4 w-full">
-          {filteredGigs.map(gig => {
-            const canMessage = gigMessageEligibility[gig.id] === true;
-            return (
-              <Card key={gig.id} className="w-full bg-white rounded-lg shadow-md border border-gray-200 flex flex-col gap-0">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 flex-wrap p-4 pb-2 border-b">
-                  <div className="flex-1 min-w-0">
-                    <CardTitle className="text-lg flex items-center gap-2 flex-wrap">
-                      {hasMultipleServices(gig) ? (
-                        <Badge variant="outline" className="mr-2 bg-primary/10 text-primary">
-                          <Package className="h-3 w-3 mr-1" />
-                          {gig.services?.length} services
-                        </Badge>
-                      ) : null}
-                      <span className="truncate max-w-xs md:max-w-md lg:max-w-lg xl:max-w-xl">{getServiceNames(gig)}</span>
-                    </CardTitle>
-                    <div className="text-sm text-gray-500 mt-1 flex flex-col sm:flex-row sm:items-center gap-1">
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-4 h-4 text-primary" />
-                        {getGigDateTimeRange(gig)}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex flex-row sm:flex-col items-end gap-2 min-w-[120px] sm:min-w-[100px] mt-2 sm:mt-0">
-                    <StatusBadge status={gig.status} />
-                    <span className={`capitalize text-xs${gig.paymentStatus === 'cancelled' ? ' text-red-600' : ''}`}>{gig.paymentStatus}</span>
-                  </div>
-                </div>
-                <CardContent className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-4 pt-2">
-                  <div className="flex flex-col gap-1 flex-1 min-w-0">
-                    <span className="text-xs text-muted-foreground">Client: <span className="font-medium text-foreground">{gig.clientName}</span></span>
-                    <span className="text-xs text-muted-foreground">Pets: <span className="font-medium text-foreground">{gig.pets.join(', ')}</span></span>
-                    {gig.review && (
-                      <span className="text-xs text-muted-foreground">Review: <span className="font-medium text-foreground">{gig.review.rating}★</span> {gig.review.comment}</span>
-                    )}
-                  </div>
-                  <div className="flex flex-col sm:flex-row flex-wrap gap-2 justify-end items-center w-full sm:w-auto mt-2 sm:mt-0">
-                    <Button variant="outline" className="text-sm px-3 py-1 rounded-full shadow-sm w-full sm:w-auto" onClick={() => setDetailGig(gig)}>
-                      Details
-                    </Button>
-                    {canMessage && (
-                      <Link href={`/dashboard/messages/${gig.id}`} passHref>
-                        <Button variant="outline" className="text-sm px-3 py-1 rounded-full shadow-sm w-full sm:w-auto">
-                          <MessageSquare className="h-4 w-4 mr-2" />
-                          Message Client
-                        </Button>
-                      </Link>
-                    )}
-                    {gig.status === 'pending' && (
-                      <>
-                        <Button variant="default" disabled={actionLoading === gig.id} onClick={() => handleAccept(gig.id)}>
-                          {actionLoading === gig.id ? 'Accepting...' : 'Accept'}
-                        </Button>
-                        <Button variant="destructive" disabled={actionLoading === gig.id} onClick={() => handleDecline(gig.id)}>
-                          {actionLoading === gig.id ? 'Declining...' : 'Decline'}
-                        </Button>
-                      </>
-                    )}
-                    {gig.status === 'approved' && !gig.contractorCompleted && (
-                      <>
-                        <Button variant="default" disabled={actionLoading === gig.id} onClick={() => handleMarkCompleted(gig.id)}>
-                          {actionLoading === gig.id ? 'Marking...' : 'Mark as Completed'}
-                        </Button>
-                        <Button 
-                          variant="destructive" 
-                          className="text-sm px-3 py-1 rounded-full shadow-sm"
-                          onClick={() => setCancelGigId(gig.id)}
-                          disabled={actionLoading === gig.id}
-                        >
-                          Cancel
-                        </Button>
-                      </>
-                    )}
-                    {gig.status === 'approved' && gig.contractorCompleted && (
-                      <span className="text-xs text-muted-foreground">Waiting for client...</span>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          })}
-        </div>
-      )}
-      {/* Gig Details Modal */}
-      <Dialog open={!!detailGig} onOpenChange={() => setDetailGig(null)}>
-        <DialogContent className="w-full max-w-xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Gig Details</DialogTitle>
-          </DialogHeader>
-          {isDetailLoading ? (
-            <div className="flex flex-col items-center justify-center min-h-[300px] py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
-              <div className="text-muted-foreground text-sm">Loading gig details...</div>
+    <main className="min-h-screen bg-gray-50 py-6 px-4 sm:py-10 sm:px-6">
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-2xl font-bold mb-6 text-center sm:text-left">Your Gigs</h1>
+        
+        {/* Status Filter Bar */}
+        <div className="mb-8">
+          {/* Mobile Filter - Compact Grid */}
+          <div className="sm:hidden bg-white rounded-xl shadow-sm p-4">
+            <div className="grid grid-cols-2 gap-2">
+              {(['all', 'pending', 'approved', 'completed', 'cancelled'] as const).map((status) => (
+                <Button
+                  key={status}
+                  variant={filter === status ? 'default' : 'outline'}
+                  onClick={() => setFilter(status)}
+                  className={`capitalize text-sm rounded-lg ${status === 'cancelled' ? 'col-span-2' : ''}`}
+                >
+                  {status === 'all' ? 'All' : statusLabels[status as keyof typeof statusLabels]}
+                </Button>
+              ))}
             </div>
-          ) : detailGig && (
-            <section className="space-y-6">
-              {/* Status & Dates */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 border-b pb-4">
-                <div className="flex flex-col gap-2">
-                  <span className="text-xs text-muted-foreground">Status</span>
-                  <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold shadow-sm
-                    ${detailGig.status === 'completed' ? 'bg-green-100 text-green-800' :
-                      detailGig.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                      detailGig.status === 'approved' ? 'bg-blue-100 text-blue-800' :
-                      'bg-gray-200 text-gray-700'}`}
-                  >
-                    {detailGig.status?.charAt(0).toUpperCase() + detailGig.status?.slice(1)}
-                  </span>
-                </div>
-                <div className="flex flex-col gap-2">
-                  <span className="text-xs text-muted-foreground">Payment Status</span>
-                  <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold bg-gray-100 text-gray-800 capitalize shadow-sm">
-                    {detailGig.paymentStatus}
-                  </span>
-                </div>
-                {/* Date, Time, and Duration (responsive) */}
-                <div className="col-span-1 sm:col-span-2 mt-2">
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6 bg-muted/50 rounded-md px-4 py-3 w-full">
-                    <div className="flex flex-col flex-1 min-w-0">
-                      <span className="text-xs text-muted-foreground">Date & Time</span>
-                      <span className="font-bold text-base flex items-center gap-2 break-words">
-                        <Clock className="w-4 h-4 text-primary shrink-0" />
-                        {getGigDateTimeRange(detailGig)}
-                      </span>
-                    </div>
-                    <div className="flex flex-col flex-none sm:border-l sm:border-border sm:pl-6">
-                      <span className="text-xs text-muted-foreground">Duration</span>
-                      <span className="font-semibold text-base">{detailGig.numberOfDays} day{detailGig.numberOfDays !== 1 ? 's' : ''}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              {/* Client Info (separate row) */}
-              {clientProfile && (
-                <div className="border-b pb-4 flex items-center gap-4">
-                  <Avatar className="h-16 w-16">
-                    {clientProfile.avatar ? (
-                      <AvatarImage src={clientProfile.avatar} alt={clientProfile.name} />
-                    ) : (
-                      <AvatarFallback>{clientProfile.name?.charAt(0) ?? '?'}</AvatarFallback>
-                    )}
-                  </Avatar>
-                  <div>
-                    <div className="font-semibold text-lg">{clientProfile.name}</div>
-                    <div className="text-xs text-muted-foreground">{clientProfile.email}</div>
-                    <div className="text-xs text-muted-foreground">{clientProfile.phone}</div>
-                    <div className="text-xs text-muted-foreground">{[clientProfile.address, clientProfile.city, clientProfile.state, clientProfile.postalCode].filter(Boolean).join(', ')}</div>
-                  </div>
-                </div>
-              )}
-              {/* Map Section */}
-              {(contractorLatLng && clientLatLng) && (
-                <div className="w-full h-64 mb-2 relative">
-                  <ContractorMap
-                    lat={contractorLatLng.lat}
-                    lng={contractorLatLng.lng}
-                    miles={contractorDrivingRange}
-                    clientLat={clientLatLng?.lat}
-                    clientLng={clientLatLng?.lng}
-                  />
-                  <div className="absolute top-2 left-2 bg-background/80 rounded px-3 py-1 text-xs font-medium shadow border border-gray-200">
-                    Contractor Driving Range: <span className="font-semibold">{contractorDrivingRange} miles</span>
-                  </div>
-                </div>
-              )}
-              {/* Distance to Gig */}
-              {(contractorLatLng && clientLatLng && typeof distanceMiles === 'number') && (
-                <div className="mb-2 text-sm text-muted-foreground">
-                  <span className="font-medium">Distance to Gig:</span> {distanceMiles.toFixed(2)} miles
-                </div>
-              )}
-              {/* Service & Payment */}
-              <div className="border-b pb-4">
-                <h3 className="text-base font-bold mb-2 flex items-center gap-2">
-                  <Package className="w-5 h-5 text-primary"/>
-                  Services & Payment
-                </h3>
-                <div className="space-y-3">
-                  {detailGig.services && detailGig.services.length > 0 ? detailGig.services.map((service, idx) => (
-                    <div key={idx} className="flex flex-col sm:flex-row sm:justify-between sm:items-center bg-muted/50 rounded-md px-3 py-2">
-                      <div className="flex flex-col">
-                        <span className="font-semibold text-base">{service.name || service.serviceId}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {service.paymentType === 'one_time' ? 'One-time payment' : 'Daily rate'}
+          </div>
+          
+          {/* Desktop Filter - Horizontal */}
+          <div className="hidden sm:flex gap-2 justify-center lg:justify-start">
+            {(['all', 'pending', 'approved', 'completed', 'cancelled'] as const).map((status) => (
+              <Button
+                key={status}
+                variant={filter === status ? 'default' : 'outline'}
+                onClick={() => setFilter(status)}
+                className="capitalize"
+              >
+                {status === 'all' ? 'All' : statusLabels[status as keyof typeof statusLabels]}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        {/* Gigs List or Empty State */}
+        {filteredGigs.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16">
+            <svg className="w-16 h-16 text-muted-foreground mb-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div className="text-lg text-muted-foreground font-medium text-center">No gigs found for this status.</div>
+          </div>
+        ) : (
+          <div className="grid gap-4 w-full">
+            {filteredGigs.map(gig => {
+              const canMessage = gigMessageEligibility[gig.id] === true;
+              return (
+                <Card key={gig.id} className="w-full bg-white rounded-lg shadow-md border border-gray-200 flex flex-col gap-0">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 p-4 pb-2 border-b">
+                    <div className="flex-1 min-w-0">
+                      <CardTitle className="text-lg flex items-center gap-2 flex-wrap">
+                        {hasMultipleServices(gig) ? (
+                          <Badge variant="outline" className="mr-2 bg-primary/10 text-primary">
+                            <Package className="h-3 w-3 mr-1" />
+                            {gig.services?.length} services
+                          </Badge>
+                        ) : null}
+                        <span className="truncate">{getServiceNames(gig)}</span>
+                      </CardTitle>
+                      <div className="text-sm text-gray-500 mt-1 flex flex-col sm:flex-row sm:items-center gap-1">
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-4 h-4 text-primary" />
+                          {getGigDateTimeRange(gig)}
                         </span>
                       </div>
-                      <div className="text-right mt-2 sm:mt-0">
-                        <span className="font-bold text-lg">{formatPrice(service.price, service.paymentType, detailGig.numberOfDays || 1)}</span>
+                    </div>
+                    <div className="flex flex-row sm:flex-col items-end gap-2 min-w-[120px] sm:min-w-[100px] mt-2 sm:mt-0">
+                      <StatusBadge status={gig.status} />
+                      <span className={`capitalize text-xs${gig.paymentStatus === 'cancelled' ? ' text-red-600' : ''}`}>{gig.paymentStatus}</span>
+                    </div>
+                  </div>
+                  <CardContent className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-4 pt-2">
+                    <div className="flex flex-col gap-1 flex-1 min-w-0">
+                      <span className="text-xs text-muted-foreground">Client: <span className="font-medium text-foreground">{gig.clientName}</span></span>
+                      <span className="text-xs text-muted-foreground">Pets: <span className="font-medium text-foreground">{gig.pets.join(', ')}</span></span>
+                      {gig.review && (
+                        <span className="text-xs text-muted-foreground">Review: <span className="font-medium text-foreground">{gig.review.rating}★</span> {gig.review.comment}</span>
+                      )}
+                    </div>
+                    <div className="flex flex-col sm:flex-row flex-wrap gap-2 justify-end items-stretch sm:items-center w-full sm:w-auto mt-2 sm:mt-0">
+                      <Button variant="outline" className="text-sm px-3 py-1 rounded-full shadow-sm w-full sm:w-auto" onClick={() => setDetailGig(gig)}>
+                        Details
+                      </Button>
+                      {canMessage && (
+                        <Link href={`/dashboard/messages/${gig.id}`} passHref>
+                          <Button variant="outline" className="text-sm px-3 py-1 rounded-full shadow-sm w-full sm:w-auto">
+                            <MessageSquare className="h-4 w-4 mr-2" />
+                            Message Client
+                          </Button>
+                        </Link>
+                      )}
+                      {gig.status === 'pending' && (
+                        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                          <Button variant="default" disabled={actionLoading === gig.id} onClick={() => handleAccept(gig.id)} className="w-full sm:w-auto">
+                            {actionLoading === gig.id ? 'Accepting...' : 'Accept'}
+                          </Button>
+                          <Button variant="destructive" disabled={actionLoading === gig.id} onClick={() => handleDecline(gig.id)} className="w-full sm:w-auto">
+                            {actionLoading === gig.id ? 'Declining...' : 'Decline'}
+                          </Button>
+                        </div>
+                      )}
+                      {gig.status === 'approved' && !gig.contractorCompleted && (
+                        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                          <Button variant="default" disabled={actionLoading === gig.id} onClick={() => handleMarkCompleted(gig.id)} className="w-full sm:w-auto">
+                            {actionLoading === gig.id ? 'Marking...' : 'Mark as Completed'}
+                          </Button>
+                          <Button 
+                            variant="destructive" 
+                            className="text-sm px-3 py-1 rounded-full shadow-sm w-full sm:w-auto"
+                            onClick={() => setCancelGigId(gig.id)}
+                            disabled={actionLoading === gig.id}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      )}
+                      {gig.status === 'approved' && gig.contractorCompleted && (
+                        <span className="text-xs text-muted-foreground">Waiting for client...</span>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+        )}
+        
+        {/* Gig Details Modal */}
+        <Dialog open={!!detailGig} onOpenChange={() => setDetailGig(null)}>
+          <DialogContent className="w-[95vw] sm:w-full max-w-xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Gig Details</DialogTitle>
+            </DialogHeader>
+            {isDetailLoading ? (
+              <div className="flex flex-col items-center justify-center min-h-[300px] py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
+                <div className="text-muted-foreground text-sm">Loading gig details...</div>
+              </div>
+            ) : detailGig && (
+              <section className="space-y-6">
+                {/* Status & Dates */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 border-b pb-4">
+                  <div className="flex flex-col gap-2">
+                    <span className="text-xs text-muted-foreground">Status</span>
+                    <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold shadow-sm
+                      ${detailGig.status === 'completed' ? 'bg-green-100 text-green-800' :
+                        detailGig.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                        detailGig.status === 'approved' ? 'bg-blue-100 text-blue-800' :
+                        'bg-gray-200 text-gray-700'}`}
+                    >
+                      {detailGig.status?.charAt(0).toUpperCase() + detailGig.status?.slice(1)}
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <span className="text-xs text-muted-foreground">Payment Status</span>
+                    <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold bg-gray-100 text-gray-800 capitalize shadow-sm">
+                      {detailGig.paymentStatus}
+                    </span>
+                  </div>
+                  {/* Date, Time, and Duration (responsive) */}
+                  <div className="col-span-1 sm:col-span-2 mt-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6 bg-muted/50 rounded-md px-4 py-3 w-full">
+                      <div className="flex flex-col flex-1 min-w-0">
+                        <span className="text-xs text-muted-foreground">Date & Time</span>
+                        <span className="font-bold text-base flex items-center gap-2 break-words">
+                          <Clock className="w-4 h-4 text-primary shrink-0" />
+                          {getGigDateTimeRange(detailGig)}
+                        </span>
+                      </div>
+                      <div className="flex flex-col flex-none sm:border-l sm:border-border sm:pl-6">
+                        <span className="text-xs text-muted-foreground">Duration</span>
+                        <span className="font-semibold text-base">{detailGig.numberOfDays} day{detailGig.numberOfDays !== 1 ? 's' : ''}</span>
                       </div>
                     </div>
-                  )) : <div className="text-muted-foreground">No service details available</div>}
-                  <div className="flex justify-between items-center border-t pt-3 mt-2">
-                    <span className="font-semibold text-base">Total Payment</span>
-                    <span className="font-bold text-primary text-xl">${(detailGig.paymentAmount || 0).toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between items-center border-t border-dashed pt-3 text-sm">
-                    <span className="text-muted-foreground">Platform Fee (5%)</span>
-                    <span className="text-red-600">-${(detailGig.platformFee || 0).toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-sm mb-1">
-                    <span className="text-muted-foreground">Processing Fee</span>
-                    <span className="text-red-600">-${((detailGig.stripeFee && detailGig.stripeFee > 0 ? detailGig.stripeFee : (detailGig.paymentAmount || 0) * 0.029 + 0.3).toFixed(2))}</span>
-                  </div>
-                  <div className="flex justify-between items-center border-t pt-3">
-                    <span className="font-semibold">Your Payout</span>
-                    <span className="font-semibold text-green-600 text-lg">${getNetPayout(detailGig).toFixed(2)}</span>
                   </div>
                 </div>
-              </div>
-              {/* Pet Info */}
-              {bookedPetsDetails.length > 0 && (
-                <div className="border-b pb-4">
-                  <h3 className="text-lg font-semibold mb-3 text-gray-700 flex items-center"><PawPrint className="w-5 h-5 mr-2 text-primary"/>Pet Information</h3>
-                  <div className="flex flex-col gap-2">
-                    {bookedPetsDetails.map((pet, index) => {
-                      const isExpanded = expandedPetIndex === index
-                      return (
-                        <div key={pet.id} className={`rounded-lg border border-gray-200 bg-muted/50 transition-shadow ${isExpanded ? 'shadow-lg' : 'hover:shadow'} relative`}> 
-                          <button
-                            type="button"
-                            className="w-full flex items-center gap-4 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/50 text-left"
-                            aria-expanded={isExpanded}
-                            onClick={() => setExpandedPetIndex(isExpanded ? -1 : index)}
-                          >
-                            <Avatar className="w-12 h-12 border-2 border-primary/50">
-                              <AvatarImage src={pet.photoUrl || '/avatars/default-pet.png'} alt={pet.name} className="object-cover" />
-                              <AvatarFallback className="bg-primary/10 text-primary text-xl">{pet.name ? pet.name[0].toUpperCase() : 'P'}</AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1 min-w-0">
-                              <div className="font-semibold text-base truncate">{pet.name}</div>
-                              <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground mt-0.5">
-                                {pet.animalType && <span><strong>Type:</strong> {pet.animalType}</span>}
-                                {pet.breed && <span><strong>Breed:</strong> {pet.breed}</span>}
-                                {pet.age && <span><strong>Age:</strong> {pet.age} yrs</span>}
-                                {pet.weight && <span><strong>Weight:</strong> {pet.weight}</span>}
-                              </div>
-                            </div>
-                            <span className="ml-2 text-primary">{isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}</span>
-                          </button>
-                          {isExpanded && (
-                            <div className="px-6 pb-4 pt-1 animate-fade-in">
-                              <div className="grid md:grid-cols-2 gap-x-6 gap-y-2 mt-2">
-                                <PetDetailItem icon={Pill} label="Medications" value={pet.medications} />
-                                <PetDetailItem icon={Utensils} label="Food" value={pet.food} />
-                                <PetDetailItem icon={Clock} label="Food Schedule" value={pet.foodSchedule} />
-                                <PetDetailItem icon={Clock} label="General Schedule" value={pet.schedule} />
-                                <PetDetailItem icon={Dog} label="Temperament" value={pet.temperament} />
-                                <PetDetailItem icon={Info} label="Allergies" value={pet.allergies} />
-                                <PetDetailItem icon={Info} label="Need to Know" value={pet.needToKnow} />
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
-              {/* Review */}
-              {detailGig.review && (
-                <div className="border-b pb-4">
-                  <div className="text-xs text-muted-foreground mb-2 font-semibold">Review</div>
-                  <div className="text-sm">Rating: <span className="font-bold">{detailGig.review.rating}</span></div>
-                  {detailGig.review.comment && <div className="text-sm mt-1">"{detailGig.review.comment}"</div>}
-                </div>
-              )}
-              {/* Booking ID & Calendar */}
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-t pt-4 mt-2">
-                <div>
-                  <span className="text-xs text-muted-foreground">Booking ID</span>
-                  <div className="font-mono break-all text-xs mt-1">{detailGig?.id ?? ''}</div>
-                </div>
+                {/* Client Info (separate row) */}
                 {clientProfile && (
-                  <div className="flex justify-end mt-2 sm:mt-0">
-                    <a
-                      href={getGoogleCalendarUrl(detailGig, detailGig.clientName, detailGig.pets, clientProfile)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-block"
-                    >
-                      <Button variant="outline" className="text-sm px-3 py-1 rounded-full shadow-sm">Add to Google Calendar</Button>
-                    </a>
+                  <div className="border-b pb-4 flex items-center gap-4">
+                    <Avatar className="h-16 w-16">
+                      {clientProfile.avatar ? (
+                        <AvatarImage src={clientProfile.avatar} alt={clientProfile.name} />
+                      ) : (
+                        <AvatarFallback>{clientProfile.name?.charAt(0) ?? '?'}</AvatarFallback>
+                      )}
+                    </Avatar>
+                    <div>
+                      <div className="font-semibold text-lg">{clientProfile.name}</div>
+                      <div className="text-xs text-muted-foreground">{clientProfile.email}</div>
+                      <div className="text-xs text-muted-foreground">{clientProfile.phone}</div>
+                      <div className="text-xs text-muted-foreground">{[clientProfile.address, clientProfile.city, clientProfile.state, clientProfile.postalCode].filter(Boolean).join(', ')}</div>
+                    </div>
                   </div>
                 )}
+                {/* Map Section */}
+                {(contractorLatLng && clientLatLng) && (
+                  <div className="w-full h-64 mb-2 relative">
+                    <ContractorMap
+                      lat={contractorLatLng.lat}
+                      lng={contractorLatLng.lng}
+                      miles={contractorDrivingRange}
+                      clientLat={clientLatLng?.lat}
+                      clientLng={clientLatLng?.lng}
+                    />
+                    <div className="absolute top-2 left-2 bg-background/80 rounded px-3 py-1 text-xs font-medium shadow border border-gray-200">
+                      Contractor Driving Range: <span className="font-semibold">{contractorDrivingRange} miles</span>
+                    </div>
+                  </div>
+                )}
+                {/* Distance to Gig */}
+                {(contractorLatLng && clientLatLng && typeof distanceMiles === 'number') && (
+                  <div className="mb-2 text-sm text-muted-foreground">
+                    <span className="font-medium">Distance to Gig:</span> {distanceMiles.toFixed(2)} miles
+                  </div>
+                )}
+                {/* Service & Payment */}
+                <div className="border-b pb-4">
+                  <h3 className="text-base font-bold mb-2 flex items-center gap-2">
+                    <Package className="w-5 h-5 text-primary"/>
+                    Services & Payment
+                  </h3>
+                  <div className="space-y-3">
+                    {detailGig.services && detailGig.services.length > 0 ? detailGig.services.map((service, idx) => (
+                      <div key={idx} className="flex flex-col sm:flex-row sm:justify-between sm:items-center bg-muted/50 rounded-md px-3 py-2">
+                        <div className="flex flex-col">
+                          <span className="font-semibold text-base">{service.name || service.serviceId}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {service.paymentType === 'one_time' ? 'One-time payment' : 'Daily rate'}
+                          </span>
+                        </div>
+                        <div className="text-right mt-2 sm:mt-0">
+                          <span className="font-bold text-lg">{formatPrice(service.price, service.paymentType, detailGig.numberOfDays || 1)}</span>
+                        </div>
+                      </div>
+                    )) : <div className="text-muted-foreground">No service details available</div>}
+                    <div className="flex justify-between items-center border-t pt-3 mt-2">
+                      <span className="font-semibold text-base">Total Payment</span>
+                      <span className="font-bold text-primary text-xl">${(detailGig.paymentAmount || 0).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between items-center border-t border-dashed pt-3 text-sm">
+                      <span className="text-muted-foreground">Platform Fee (5%)</span>
+                      <span className="text-red-600">-${(detailGig.platformFee || 0).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm mb-1">
+                      <span className="text-muted-foreground">Processing Fee</span>
+                      <span className="text-red-600">-${((detailGig.stripeFee && detailGig.stripeFee > 0 ? detailGig.stripeFee : (detailGig.paymentAmount || 0) * 0.029 + 0.3).toFixed(2))}</span>
+                    </div>
+                    <div className="flex justify-between items-center border-t pt-3">
+                      <span className="font-semibold">Your Payout</span>
+                      <span className="font-semibold text-green-600 text-lg">${getNetPayout(detailGig).toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+                {/* Pet Info */}
+                {bookedPetsDetails.length > 0 && (
+                  <div className="border-b pb-4">
+                    <h3 className="text-lg font-semibold mb-3 text-gray-700 flex items-center"><PawPrint className="w-5 h-5 mr-2 text-primary"/>Pet Information</h3>
+                    <div className="flex flex-col gap-2">
+                      {bookedPetsDetails.map((pet, index) => {
+                        const isExpanded = expandedPetIndex === index
+                        return (
+                          <div key={pet.id} className={`rounded-lg border border-gray-200 bg-muted/50 transition-shadow ${isExpanded ? 'shadow-lg' : 'hover:shadow'} relative`}> 
+                            <button
+                              type="button"
+                              className="w-full flex items-center gap-4 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/50 text-left"
+                              aria-expanded={isExpanded}
+                              onClick={() => setExpandedPetIndex(isExpanded ? -1 : index)}
+                            >
+                              <Avatar className="w-12 h-12 border-2 border-primary/50">
+                                <AvatarImage src={pet.photoUrl || '/avatars/default-pet.png'} alt={pet.name} className="object-cover" />
+                                <AvatarFallback className="bg-primary/10 text-primary text-xl">{pet.name ? pet.name[0].toUpperCase() : 'P'}</AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1 min-w-0">
+                                <div className="font-semibold text-base truncate">{pet.name}</div>
+                                <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground mt-0.5">
+                                  {pet.animalType && <span><strong>Type:</strong> {pet.animalType}</span>}
+                                  {pet.breed && <span><strong>Breed:</strong> {pet.breed}</span>}
+                                  {pet.age && <span><strong>Age:</strong> {pet.age} yrs</span>}
+                                  {pet.weight && <span><strong>Weight:</strong> {pet.weight}</span>}
+                                </div>
+                              </div>
+                              <span className="ml-2 text-primary">{isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}</span>
+                            </button>
+                            {isExpanded && (
+                              <div className="px-6 pb-4 pt-1 animate-fade-in">
+                                <div className="grid md:grid-cols-2 gap-x-6 gap-y-2 mt-2">
+                                  <PetDetailItem icon={Pill} label="Medications" value={pet.medications} />
+                                  <PetDetailItem icon={Utensils} label="Food" value={pet.food} />
+                                  <PetDetailItem icon={Clock} label="Food Schedule" value={pet.foodSchedule} />
+                                  <PetDetailItem icon={Clock} label="General Schedule" value={pet.schedule} />
+                                  <PetDetailItem icon={Dog} label="Temperament" value={pet.temperament} />
+                                  <PetDetailItem icon={Info} label="Allergies" value={pet.allergies} />
+                                  <PetDetailItem icon={Info} label="Need to Know" value={pet.needToKnow} />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+                {/* Review */}
+                {detailGig.review && (
+                  <div className="border-b pb-4">
+                    <div className="text-xs text-muted-foreground mb-2 font-semibold">Review</div>
+                    <div className="text-sm">Rating: <span className="font-bold">{detailGig.review.rating}</span></div>
+                    {detailGig.review.comment && <div className="text-sm mt-1">"{detailGig.review.comment}"</div>}
+                  </div>
+                )}
+                {/* Booking ID & Calendar */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-t pt-4 mt-2">
+                  <div>
+                    <span className="text-xs text-muted-foreground">Booking ID</span>
+                    <div className="font-mono break-all text-xs mt-1">{detailGig?.id ?? ''}</div>
+                  </div>
+                  {clientProfile && (
+                    <div className="flex justify-end mt-2 sm:mt-0">
+                      <a
+                        href={getGoogleCalendarUrl(detailGig, detailGig.clientName, detailGig.pets, clientProfile)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-block"
+                      >
+                        <Button variant="outline" className="text-sm px-3 py-1 rounded-full shadow-sm">Add to Google Calendar</Button>
+                      </a>
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
+            <DialogFooter>
+              <div className="flex w-full justify-end gap-2">
+                <Button variant="outline" onClick={() => setDetailGig(null)}>Close</Button>
+                {detailGig?.status === 'approved' && !detailGig.contractorCompleted && (
+                  <Button 
+                    variant="destructive" 
+                    onClick={() => { 
+                      setCancelGigId(detailGig.id); 
+                      setDetailGig(null); 
+                    }}
+                    disabled={isCancelling}
+                  >
+                    Emergency Cancel
+                  </Button>
+                )}
               </div>
-            </section>
-          )}
-          <DialogFooter>
-            <div className="flex w-full justify-end gap-2">
-              <Button variant="outline" onClick={() => setDetailGig(null)}>Close</Button>
-              {detailGig?.status === 'approved' && !detailGig.contractorCompleted && (
-                <Button 
-                  variant="destructive" 
-                  onClick={() => { 
-                    setCancelGigId(detailGig.id); 
-                    setDetailGig(null); 
-                  }}
-                  disabled={isCancelling}
-                >
-                  Emergency Cancel
-                </Button>
-              )}
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      {/* Emergency Cancellation Dialog */}
-      <Dialog open={!!cancelGigId} onOpenChange={(open) => !open && setCancelGigId(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="text-destructive">Emergency Gig Cancellation</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <p className="text-sm">
-              You are about to cancel this gig. This action is <strong>irreversible</strong> and should only be used in case of:
-            </p>
-            <ul className="list-disc pl-5 text-sm space-y-1">
-              <li>Emergencies that prevent you from fulfilling the gig</li>
-              <li>Serious misunderstandings about service requirements</li>
-              <li>Safety concerns</li>
-            </ul>
-            <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-sm">
-              <p className="font-medium text-amber-800">What happens when you cancel:</p>
-              <ul className="list-disc pl-5 text-amber-700 mt-1">
-                <li>Any pending payment will be canceled</li>
-                <li>The client will be notified</li>
-                <li>The gig will be permanently marked as cancelled</li>
-                <li>Frequent cancellations may affect your contractor rating</li>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        {/* Emergency Cancellation Dialog */}
+        <Dialog open={!!cancelGigId} onOpenChange={(open) => !open && setCancelGigId(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="text-destructive">Emergency Gig Cancellation</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <p className="text-sm">
+                You are about to cancel this gig. This action is <strong>irreversible</strong> and should only be used in case of:
+              </p>
+              <ul className="list-disc pl-5 text-sm space-y-1">
+                <li>Emergencies that prevent you from fulfilling the gig</li>
+                <li>Serious misunderstandings about service requirements</li>
+                <li>Safety concerns</li>
               </ul>
+              <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-sm">
+                <p className="font-medium text-amber-800">What happens when you cancel:</p>
+                <ul className="list-disc pl-5 text-amber-700 mt-1">
+                  <li>Any pending payment will be canceled</li>
+                  <li>The client will be notified</li>
+                  <li>The gig will be permanently marked as cancelled</li>
+                  <li>Frequent cancellations may affect your contractor rating</li>
+                </ul>
+              </div>
+              {cancelError && <div className="text-destructive text-sm mt-2">{cancelError}</div>}
             </div>
-            {cancelError && <div className="text-destructive text-sm mt-2">{cancelError}</div>}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCancelGigId(null)} disabled={isCancelling}>
-              No, Keep Gig
-            </Button>
-            <Button variant="destructive" onClick={handleEmergencyCancel} disabled={isCancelling}>
-              {isCancelling ? 'Cancelling...' : 'Yes, Cancel Gig'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setCancelGigId(null)} disabled={isCancelling}>
+                No, Keep Gig
+              </Button>
+              <Button variant="destructive" onClick={handleEmergencyCancel} disabled={isCancelling}>
+                {isCancelling ? 'Cancelling...' : 'Yes, Cancel Gig'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
     </main>
   )
 }

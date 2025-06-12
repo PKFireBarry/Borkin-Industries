@@ -199,7 +199,18 @@ export function ContractorProfileModal({ contractor, open, onClose, onBookNow, c
                           ))}
                         </div>
                         {review.comment && <p className="text-muted-foreground mb-1">{review.comment}</p>}
-                        <p className="text-xs text-muted-foreground/80">{new Date(review.date).toLocaleDateString()}</p>
+                        {review.contractorFeedback && (
+                          <div className="mt-2 pt-2 border-t border-border/30 bg-blue-50/50 rounded p-2">
+                            <div className="flex items-center gap-1 mb-1">
+                              <span className="text-xs font-medium text-blue-700">Contractor Response:</span>
+                              <span className="text-xs text-blue-600">
+                                {new Date(review.contractorFeedback.date).toLocaleDateString()}
+                              </span>
+                            </div>
+                            <p className="text-xs text-blue-700 italic">"{review.contractorFeedback.comment}"</p>
+                          </div>
+                        )}
+                        <p className="text-xs text-muted-foreground/80 mt-1">{new Date(review.date).toLocaleDateString()}</p>
                       </div>
                     ))}
                   </div>

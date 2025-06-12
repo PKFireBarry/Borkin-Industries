@@ -3,12 +3,15 @@
 import { useState, useEffect } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { useRequireRole } from '../../use-require-role';
-import { getContractorProfile } from '@/lib/firebase/contractors';
+import { getContractorProfile, saveContractorFeedback } from '@/lib/firebase/contractors';
 import { getBookingById } from '@/lib/firebase/bookings';
 import { getClientById, getPetsByIds } from '@/lib/firebase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Star, Dog } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Star, Dog, MessageSquare, Send } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface Review {
   rating: number;
@@ -18,6 +21,10 @@ interface Review {
   clientName?: string;
   clientAvatar?: string;
   petNames?: string[];
+  contractorFeedback?: {
+    comment: string;
+    date: string;
+  };
 }
 
 const StarRatingDisplay = ({ rating, maxStars = 5 }: { rating: number; maxStars?: number }) => {
@@ -37,6 +44,120 @@ const StarRatingDisplay = ({ rating, maxStars = 5 }: { rating: number; maxStars?
   );
 };
 
+function FeedbackForm({ review, contractorId, onFeedbackSaved }: { 
+  review: Review; 
+  contractorId: string; 
+  onFeedbackSaved: (bookingId: string, feedback: { comment: string; date: string }) => void;
+}) {
+  const [feedbackText, setFeedbackText] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!feedbackText.trim()) {
+      toast.error('Please enter your feedback');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await saveContractorFeedback(contractorId, review.bookingId, feedbackText.trim());
+      const newFeedback = {
+        comment: feedbackText.trim(),
+        date: new Date().toISOString()
+      };
+      onFeedbackSaved(review.bookingId, newFeedback);
+      setFeedbackText('');
+      setShowForm(false);
+      toast.success('Feedback submitted successfully!');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to submit feedback');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (review.contractorFeedback) {
+    return (
+      <div className="mt-4 pt-4 border-t bg-blue-50 rounded-lg p-3">
+        <div className="flex items-center gap-2 mb-2">
+          <MessageSquare className="h-4 w-4 text-blue-600" />
+          <span className="text-sm font-medium text-blue-800">Your Response</span>
+          <span className="text-xs text-blue-600">
+            {new Date(review.contractorFeedback.date).toLocaleDateString()}
+          </span>
+        </div>
+        <p className="text-sm text-blue-700 italic">"{review.contractorFeedback.comment}"</p>
+      </div>
+    );
+  }
+
+  if (!showForm) {
+    return (
+      <div className="mt-4 pt-4 border-t">
+        <Button
+          variant="outline"
+          onClick={() => setShowForm(true)}
+          className="w-full"
+        >
+          <MessageSquare className="h-4 w-4 mr-2" />
+          Respond to this review
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 pt-4 border-t">
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div>
+          <label className="text-sm font-medium text-gray-700 mb-2 block">
+            Your response to this review:
+          </label>
+          <Textarea
+            value={feedbackText}
+            onChange={(e) => setFeedbackText(e.target.value)}
+            placeholder="Thank the client or provide additional context..."
+            className="min-h-[80px]"
+            maxLength={500}
+          />
+          <div className="text-xs text-gray-500 mt-1">
+            {feedbackText.length}/500 characters
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            type="submit"
+            disabled={isSubmitting || !feedbackText.trim()}
+            className="flex-1"
+          >
+            {isSubmitting ? (
+              <>Submitting...</>
+            ) : (
+              <>
+                <Send className="h-4 w-4 mr-2" />
+                Submit Response
+              </>
+            )}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setShowForm(false);
+              setFeedbackText('');
+            }}
+            disabled={isSubmitting}
+          >
+            Cancel
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export default function ContractorReviewsPage() {
   const { isLoaded: isAuthLoaded, isAuthorized } = useRequireRole('contractor');
   const { user, isLoaded: isUserLoaded } = useUser();
@@ -44,6 +165,14 @@ export default function ContractorReviewsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [contractorName, setContractorName] = useState<string>('');
+
+  const handleFeedbackSaved = (bookingId: string, feedback: { comment: string; date: string }) => {
+    setReviews(prev => prev.map(review => 
+      review.bookingId === bookingId 
+        ? { ...review, contractorFeedback: feedback }
+        : review
+    ));
+  };
 
   useEffect(() => {
     if (isAuthLoaded && isUserLoaded && isAuthorized && user) {
@@ -137,7 +266,7 @@ export default function ContractorReviewsPage() {
       <header className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight">{contractorName} Reviews</h1>
         <p className="text-muted-foreground">
-          Here's what clients are saying about your services.
+          Here's what clients are saying about your services. You can respond to each review once.
         </p>
       </header>
 
@@ -186,6 +315,14 @@ export default function ContractorReviewsPage() {
                       ))}
                     </div>
                   </div>
+                )}
+
+                {user && (
+                  <FeedbackForm 
+                    review={review} 
+                    contractorId={user.id} 
+                    onFeedbackSaved={handleFeedbackSaved}
+                  />
                 )}
               </CardContent>
               <CardContent className="pt-3 pb-4 border-t bg-muted/50">

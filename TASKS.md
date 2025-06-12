@@ -245,6 +245,7 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
 - [ ] Implement platform fees: 5% for first three months, 10% after
 - [ ] Implement tier-based payment structure (entry, vet assistant, CVT)
 - [ ] Add coupon system for discounts
+- [x] Fix payment intent capture API missing bookingId parameter (production 400 error)
 
 ### 8. Admin/Owner Features
 - [x] Protected admin route for reviewing contractor applications
@@ -270,6 +271,12 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
 - [ ] Set up email notifications for booking creation, updates, and completion (clients & contractors)
 - [ ] Prompt clients for review/rating after gig completion
 - [ ] Store and display contractor ratings
+- [x] Allow contractors to leave feedback on reviews (one-time response per review)
+  - Updated Rating interface to include optional contractorFeedback field
+  - Created saveContractorFeedback function in Firebase contractors module
+  - Enhanced contractor reviews page with feedback form and display
+  - Updated contractor profile modal to show contractor responses to reviews
+  - Contractors can now respond to client reviews once per review with professional feedback
 - [x] Implement internal messaging system for client-contractor communication (Contextual)
   - [x] Define messaging data structures (TypeScript interfaces)
   - [x] Implement Firebase server actions for chat and message CRUD operations

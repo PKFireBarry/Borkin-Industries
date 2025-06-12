@@ -50,6 +50,10 @@ export interface Rating {
   rating: number
   comment?: string
   date: string // ISO date
+  contractorFeedback?: {
+    comment: string
+    date: string // ISO date
+  }
 }
 
 export interface Contractor {

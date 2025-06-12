@@ -1,5 +1,5 @@
 import { db } from '../../firebase'
-import { collection, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, arrayUnion } from 'firebase/firestore'
+import { collection, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, arrayUnion, arrayRemove } from 'firebase/firestore'
 import type { Contractor } from '@/types/contractor'
 import type { ContractorServiceOffering } from '@/types/service'
 
@@ -200,4 +200,51 @@ export async function removeGigDatesFromContractorCalendar(contractorId: string,
     console.error('Error removing gig dates from contractor calendar:', error)
     throw new Error('Failed to update contractor calendar')
   }
+}
+
+export async function saveContractorFeedback(
+  contractorId: string,
+  bookingId: string,
+  feedbackComment: string
+): Promise<void> {
+  const contractorRef = doc(db, 'contractors', contractorId)
+  const contractorSnap = await getDoc(contractorRef)
+  
+  if (!contractorSnap.exists()) {
+    throw new Error('Contractor not found')
+  }
+  
+  const contractorData = contractorSnap.data()
+  const ratings = contractorData.ratings || []
+  
+  // Find the specific rating to update
+  const ratingIndex = ratings.findIndex((r: any) => r.bookingId === bookingId)
+  if (ratingIndex === -1) {
+    throw new Error('Review not found')
+  }
+  
+  const rating = ratings[ratingIndex]
+  
+  // Check if feedback already exists
+  if (rating.contractorFeedback) {
+    throw new Error('Feedback has already been provided for this review')
+  }
+  
+  // Create updated rating with feedback
+  const updatedRating = {
+    ...rating,
+    contractorFeedback: {
+      comment: feedbackComment,
+      date: new Date().toISOString()
+    }
+  }
+  
+  // Remove old rating and add updated one
+  await updateDoc(contractorRef, {
+    ratings: arrayRemove(rating)
+  })
+  
+  await updateDoc(contractorRef, {
+    ratings: arrayUnion(updatedRating)
+  })
 } 

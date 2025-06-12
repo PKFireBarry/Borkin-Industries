@@ -36,7 +36,7 @@ export default function ContractorMap({ lat, lng, miles, clientLat, clientLng }:
       center={[lat, lng]}
       zoom={8}
       scrollWheelZoom={true}
-      style={{ height: '100%', width: '100%', borderRadius: 12 }}
+      style={{ height: '100%', width: '100%', borderRadius: 12, position: 'relative', zIndex: 0 }}
       dragging={true}
       doubleClickZoom={true}
       zoomControl={true}
