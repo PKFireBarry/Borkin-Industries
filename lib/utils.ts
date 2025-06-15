@@ -68,3 +68,33 @@ export function isTestStripeAccount(accountId: string): boolean {
   // This is a heuristic - in practice, you'd need to call Stripe API to be certain
   return accountId.includes('test') || accountId.length < 20
 }
+
+/**
+ * Calculate platform fee (5%) in cents
+ */
+export function calculatePlatformFee(amountInCents: number): number {
+  return Math.round(amountInCents * 0.05);
+}
+
+/**
+ * Calculate estimated Stripe processing fee in cents
+ * Stripe charges 2.9% + $0.30 per transaction
+ */
+export function calculateStripeFee(amountInCents: number): number {
+  return Math.round(amountInCents * 0.029 + 30);
+}
+
+/**
+ * Calculate estimated Stripe processing fee in dollars
+ * Stripe charges 2.9% + $0.30 per transaction
+ */
+export function calculateStripeFeeInDollars(amountInDollars: number): number {
+  return amountInDollars * 0.029 + 0.3;
+}
+
+/**
+ * Calculate net payout to contractor after fees
+ */
+export function calculateNetPayout(totalAmount: number, platformFee: number, stripeFee: number): number {
+  return totalAmount - platformFee - stripeFee;
+}

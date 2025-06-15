@@ -3,6 +3,7 @@ import Stripe from 'stripe'
 import { db } from '@/firebase'
 import { doc, getDoc } from 'firebase/firestore'
 import type { Contractor } from '@/types/contractor'
+import { calculatePlatformFee, calculateStripeFee } from '@/lib/utils'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2025-03-31.basil' })
 
@@ -25,9 +26,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Contractor has no Stripe account' }, { status: 400 })
   }
   try {
-    const transferData = { destination: contractor.stripeAccountId }
-    // Calculate 5% platform fee in cents
-    const applicationFeeAmount = Math.round(amount * 0.05)
+    // Calculate fees that will be deducted from contractor's payment
+    const platformFeeAmount = calculatePlatformFee(amount) // 5% platform fee
+    const estimatedStripeFee = calculateStripeFee(amount) // 2.9% + $0.30 Stripe fee
+    
+    // Calculate the amount to transfer to contractor (total - platform fee - stripe fee)
+    const transferAmount = amount - platformFeeAmount - estimatedStripeFee
+    
+    // Ensure transfer amount is positive
+    if (transferAmount <= 0) {
+      return NextResponse.json({ error: 'Transfer amount would be negative after fees' }, { status: 400 })
+    }
+
+    const transferData = { 
+      destination: contractor.stripeAccountId,
+      amount: transferAmount
+    }
+    
     let paymentIntent
     if (paymentMethodId) {
       paymentIntent = await stripe.paymentIntents.create({
@@ -39,8 +54,13 @@ export async function POST(req: NextRequest) {
         confirm: true,
         capture_method: 'manual',
         transfer_data: transferData,
-        application_fee_amount: applicationFeeAmount,
-        metadata: { app: 'boorkin', contractorId },
+        metadata: { 
+          app: 'boorkin', 
+          contractorId,
+          platformFee: platformFeeAmount.toString(),
+          estimatedStripeFee: estimatedStripeFee.toString(),
+          transferAmount: transferAmount.toString()
+        },
       })
     } else {
       paymentIntent = await stripe.paymentIntents.create({
@@ -49,8 +69,13 @@ export async function POST(req: NextRequest) {
         customer: customerId,
         capture_method: 'manual',
         transfer_data: transferData,
-        application_fee_amount: applicationFeeAmount,
-        metadata: { app: 'boorkin', contractorId },
+        metadata: { 
+          app: 'boorkin', 
+          contractorId,
+          platformFee: platformFeeAmount.toString(),
+          estimatedStripeFee: estimatedStripeFee.toString(),
+          transferAmount: transferAmount.toString()
+        },
       })
     }
     return NextResponse.json({ id: paymentIntent.id, clientSecret: paymentIntent.client_secret })

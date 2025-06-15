@@ -3,6 +3,7 @@ import Stripe from 'stripe'
 import { db } from '@/firebase'
 import { doc, getDoc } from 'firebase/firestore'
 import type { Contractor } from '@/types/contractor'
+import { calculatePlatformFee, calculateStripeFee } from '@/lib/utils'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2025-03-31.basil' })
 
@@ -19,8 +20,19 @@ export async function POST(req: NextRequest) {
     if (!paymentIntentId || !newAmount || !currency || !customerId || !contractorId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
-    // Calculate 5% platform fee in cents
-    const applicationFeeAmount = Math.round(newAmount * 0.05)
+    
+    // Calculate fees that will be deducted from contractor's payment
+    const platformFeeAmount = calculatePlatformFee(newAmount) // 5% platform fee
+    const estimatedStripeFee = calculateStripeFee(newAmount) // 2.9% + $0.30 Stripe fee
+    
+    // Calculate the amount to transfer to contractor (total - platform fee - stripe fee)
+    const transferAmount = newAmount - platformFeeAmount - estimatedStripeFee
+    
+    // Ensure transfer amount is positive
+    if (transferAmount <= 0) {
+      return NextResponse.json({ error: 'Transfer amount would be negative after fees' }, { status: 400 })
+    }
+    
     // Fetch the PaymentIntent
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId)
     // Allowed statuses for update
@@ -33,7 +45,12 @@ export async function POST(req: NextRequest) {
       // Update in place
       const updatedIntent = await stripe.paymentIntents.update(paymentIntentId, {
         amount: newAmount,
-        application_fee_amount: applicationFeeAmount,
+        metadata: {
+          ...paymentIntent.metadata,
+          platformFee: platformFeeAmount.toString(),
+          estimatedStripeFee: estimatedStripeFee.toString(),
+          transferAmount: transferAmount.toString()
+        }
       })
       return NextResponse.json({ success: true, paymentIntentId, updatedIntent, clientSecret: updatedIntent.client_secret, status: updatedIntent.status })
     } else {
@@ -49,7 +66,10 @@ export async function POST(req: NextRequest) {
       if (!contractor.stripeAccountId) {
         return NextResponse.json({ error: 'Contractor has no Stripe account' }, { status: 400 })
       }
-      const transferData = { destination: contractor.stripeAccountId }
+      const transferData = { 
+        destination: contractor.stripeAccountId,
+        amount: transferAmount
+      }
       // Create a new PaymentIntent
       let newIntent
       if (paymentMethodId) {
@@ -62,8 +82,13 @@ export async function POST(req: NextRequest) {
           confirm: true,
           capture_method: 'manual',
           transfer_data: transferData,
-          application_fee_amount: applicationFeeAmount,
-          metadata: { app: 'boorkin', contractorId },
+          metadata: { 
+            app: 'boorkin', 
+            contractorId,
+            platformFee: platformFeeAmount.toString(),
+            estimatedStripeFee: estimatedStripeFee.toString(),
+            transferAmount: transferAmount.toString()
+          },
         })
       } else {
         newIntent = await stripe.paymentIntents.create({
@@ -72,22 +97,19 @@ export async function POST(req: NextRequest) {
           customer: customerId,
           capture_method: 'manual',
           transfer_data: transferData,
-          application_fee_amount: applicationFeeAmount,
-          metadata: { app: 'boorkin', contractorId },
+          metadata: { 
+            app: 'boorkin', 
+            contractorId,
+            platformFee: platformFeeAmount.toString(),
+            estimatedStripeFee: estimatedStripeFee.toString(),
+            transferAmount: transferAmount.toString()
+          },
         })
       }
-      return NextResponse.json({
-        success: true,
-        paymentIntentId: newIntent.id,
-        clientSecret: newIntent.client_secret,
-        newIntent,
-        replaced: true,
-        status: newIntent.status
-      })
+      return NextResponse.json({ success: true, paymentIntentId: newIntent.id, newIntent, clientSecret: newIntent.client_secret, status: newIntent.status })
     }
-  } catch (err: unknown) {
-    console.error('[update-payment-intent] Failed to update PaymentIntent:', err)
-    const errorMessage = err instanceof Error ? err.message : 'Stripe error';
-    return NextResponse.json({ error: errorMessage, details: err }, { status: 500 })
+  } catch (err) {
+    console.error('Failed to update PaymentIntent:', err)
+    return NextResponse.json({ error: 'Stripe error' }, { status: 500 })
   }
 } 

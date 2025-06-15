@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
-import { Calendar, Clock, MapPin, Phone, Mail, PawPrint, Package } from 'lucide-react';
+import { Calendar, Clock, MapPin, Phone, Mail, PawPrint, Package, AlertTriangle } from 'lucide-react';
 import { getBookingById } from '@/lib/firebase/bookings';
 import { getClientProfile } from '@/lib/firebase/client';
 import { getContractorProfile } from '@/lib/firebase/contractors';
@@ -73,13 +73,18 @@ export function UserProfileModal({ isOpen, onClose, participant, bookingId, curr
         }
         
         // Determine if participant is client or contractor
-        const isParticipantClient = participant.userId !== currentUserId && bookingData?.clientId === participant.userId;
+        const isParticipantClient = bookingData?.clientId === participant.userId;
+        const isParticipantContractor = bookingData?.contractorId === participant.userId;
         
         // Fetch appropriate profile
         if (isParticipantClient) {
           const clientProfile = await getClientProfile(participant.userId);
           setUserProfile(clientProfile);
+        } else if (isParticipantContractor) {
+          const contractorProfile = await getContractorProfile(participant.userId);
+          setUserProfile(contractorProfile);
         } else {
+          // Fallback: assume contractor if not found as client
           const contractorProfile = await getContractorProfile(participant.userId);
           setUserProfile(contractorProfile);
         }
@@ -174,31 +179,44 @@ export function UserProfileModal({ isOpen, onClose, participant, bookingId, curr
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md md:max-w-lg lg:max-w-xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>User Profile</DialogTitle>
+      <DialogContent className="sm:max-w-md md:max-w-lg lg:max-w-xl max-h-[90vh] overflow-y-auto bg-white">
+        <DialogHeader className="pb-4">
+          <DialogTitle className="text-xl font-semibold text-gray-900">Profile</DialogTitle>
         </DialogHeader>
         
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-8">
-            <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary"></div>
-            <p className="mt-4 text-sm text-muted-foreground">Loading profile information...</p>
+          <div className="flex flex-col items-center justify-center py-12">
+            <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4"></div>
+            <p className="text-sm text-gray-600">Loading profile information...</p>
           </div>
         ) : error ? (
-          <div className="py-8 text-center text-destructive">
-            <p>{error}</p>
+          <div className="py-12 text-center">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="w-8 h-8 text-red-600" />
+            </div>
+            <p className="text-red-600 font-medium">{error}</p>
           </div>
         ) : (
           <div className="space-y-6">
             {/* User Header */}
-            <div className="flex items-center space-x-4">
-              <Avatar className="h-16 w-16 border">
-                <AvatarImage src={participant.avatarUrl || ''} alt={participant.displayName} />
-                <AvatarFallback>{getInitials(participant.displayName)}</AvatarFallback>
+            <div className="flex items-center space-x-4 p-6 bg-gradient-to-r from-blue-50 to-purple-50 rounded-2xl">
+              <Avatar className="h-20 w-20 ring-4 ring-white shadow-lg">
+                <AvatarImage src={participant.avatarUrl || ''} alt={participant.displayName} className="object-cover" />
+                <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-xl font-semibold">
+                  {getInitials(participant.displayName)}
+                </AvatarFallback>
               </Avatar>
               <div>
-                <h3 className="text-lg font-semibold">{participant.displayName}</h3>
-                <p className="text-sm text-muted-foreground">{isClient ? 'Client' : 'Contractor'}</p>
+                <h3 className="text-xl font-bold text-gray-900">{participant.displayName}</h3>
+                <div className="flex items-center space-x-2 mt-1">
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    isClient 
+                      ? 'bg-green-100 text-green-800' 
+                      : 'bg-blue-100 text-blue-800'
+                  }`}>
+                    {isClient ? 'Client' : 'Contractor'}
+                  </span>
+                </div>
               </div>
             </div>
             
@@ -228,16 +246,23 @@ export function UserProfileModal({ isOpen, onClose, participant, bookingId, curr
                             <span>{userProfile.phone}</span>
                           </div>
                         )}
-                        {userProfile.address && (
+                        {(userProfile.city || userProfile.state || userProfile.address) && (
                           <div className="flex items-center space-x-2">
                             <MapPin className="h-4 w-4 text-muted-foreground" />
                             <span>
-                              {[
-                                userProfile.address,
-                                userProfile.city,
-                                userProfile.state,
-                                userProfile.postalCode
-                              ].filter(Boolean).join(', ')}
+                              {/* Show only city and state for contractors when viewed by clients for privacy */}
+                              {!isClient && participant.userId !== currentUserId ? (
+                                // Contractor viewed by client - show only city and state
+                                [userProfile.city, userProfile.state].filter(Boolean).join(', ')
+                              ) : (
+                                // Client profile or contractor viewing their own profile - show full address
+                                [
+                                  userProfile.address,
+                                  userProfile.city,
+                                  userProfile.state,
+                                  userProfile.postalCode
+                                ].filter(Boolean).join(', ')
+                              )}
                             </span>
                           </div>
                         )}

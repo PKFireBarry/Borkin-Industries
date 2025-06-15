@@ -577,7 +577,7 @@ export default function ContractorPaymentsPage() {
                     <span className="text-red-600">-${detailGig?.platformFee?.toFixed(2) ?? ((detailGig?.amount || 0) * 0.05).toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between items-center text-sm mb-1">
-                    <span className="text-muted-foreground">Stripe Fee</span>
+                    <span className="text-muted-foreground">Processing Fee</span>
                     <span className="text-red-600">-${detailGig?.stripeFee?.toFixed(2) ?? (((detailGig?.amount || 0) * 0.029 + 0.3).toFixed(2))}</span>
                   </div>
                   <div className="flex justify-between items-center border-t pt-3">

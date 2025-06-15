@@ -146,30 +146,38 @@ export default async function ChatPage({ params }: ChatPageProps) {
   const otherParticipant = currentUserId === chat.client.userId ? chat.contractor : chat.client;
 
   return (
-    <div className="container mx-auto h-[calc(100vh-var(--header-height,80px))] flex flex-col py-4">
-      <PageTitle title={`Chat with ${otherParticipant.displayName}`} />
-      
-      {messagesError && (
-         <Alert variant="default" className="mb-4">
-          <Terminal className="h-4 w-4" />
-          <AlertTitle>Error Loading Messages</AlertTitle>
-          <AlertDescription>
-            {messagesError} 
-            {messagesErrorCode && ` (Code: ${messagesErrorCode})`}
-            <br />Some messages may not be displayed.
-          </AlertDescription>
-        </Alert>
-      )}
-      
-      <Suspense fallback={<ChatViewSkeleton />}>
-        <ChatView 
-            chat={chat} 
-            initialMessages={initialMessages} 
-            currentUserId={currentUserId}
-            canSendMessage={canSendMessage}
-            bookingStatus={bookingStatus}
-        />
-      </Suspense>
+    <div className="h-[calc(100vh-var(--header-height,80px))] bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      <div className="h-full max-w-4xl mx-auto">
+        {messagesError && (
+          <div className="p-4">
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+              <div className="flex items-center space-x-2">
+                <Terminal className="h-5 w-5 text-amber-600 flex-shrink-0" />
+                <div>
+                  <h4 className="font-medium text-amber-800">Error Loading Messages</h4>
+                  <p className="text-sm text-amber-700 mt-1">
+                    {messagesError}
+                    {messagesErrorCode && ` (Code: ${messagesErrorCode})`}
+                    <br />Some messages may not be displayed.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        <div className="h-full bg-white shadow-xl rounded-t-2xl overflow-hidden">
+          <Suspense fallback={<ChatViewSkeleton />}>
+            <ChatView 
+                chat={chat} 
+                initialMessages={initialMessages} 
+                currentUserId={currentUserId}
+                canSendMessage={canSendMessage}
+                bookingStatus={bookingStatus}
+            />
+          </Suspense>
+        </div>
+      </div>
     </div>
   );
 } 

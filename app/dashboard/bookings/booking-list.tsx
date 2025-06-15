@@ -190,6 +190,7 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
   const [detailBooking, setDetailBooking] = useState<ExtendedBooking | null>(null)
   const [petNames, setPetNames] = useState<string[]>([])
   const [reviewModal, setReviewModal] = useState<{ open: boolean; booking: ExtendedBooking | null }>({ open: false, booking: null })
+  const [paymentConfirmModal, setPaymentConfirmModal] = useState<{ open: boolean; booking: ExtendedBooking | null }>({ open: false, booking: null })
   const [defaultMethod, setDefaultMethod] = useState<LocalPaymentMethod | null>(null)
   const [activeTab, setActiveTab] = useState('all')
   const [editServicesModal, setEditServicesModal] = useState<{ open: boolean; booking: ExtendedBooking | null }>({ open: false, booking: null })
@@ -433,27 +434,38 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
   }
 
   async function handleClientComplete(bookingId: string) {
+    const booking = bookings.find(b => b.id === bookingId)
+    if (!booking) return
+    
+    // Show payment confirmation modal instead of directly processing
+    setPaymentConfirmModal({ open: true, booking })
+  }
+
+  async function handleConfirmPaymentFromModal(booking: ExtendedBooking) {
+    setPaymentConfirmModal({ open: false, booking: null })
     setIsPending(true)
     setError(null)
     try {
-      await setClientCompleted(bookingId, true)
-      setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, clientCompleted: true } : b))
+      await setClientCompleted(booking.id, true)
+      setBookings(prev => prev.map(b => b.id === booking.id ? { ...b, clientCompleted: true } : b))
       // Check if contractor also completed to release payment
-      const currentBooking = bookings.find(b => b.id === bookingId)
-      if (currentBooking?.contractorCompleted) {
-        // Attempt to release payment
-        const releaseRes = await fetch('/api/stripe/release-payment', {
+      if (booking?.contractorCompleted) {
+        // Attempt to capture payment
+        const captureRes = await fetch('/api/stripe/capture-payment-intent', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ gigId: bookingId }),
+            body: JSON.stringify({ 
+                paymentIntentId: booking.paymentIntentId,
+                bookingId: booking.id 
+            }),
         });
-        if (!releaseRes.ok) {
-            const errData = await releaseRes.json();
-            setReleasePaymentError(errData.error || 'Failed to auto-release payment after client completion.');
-            toast.error(errData.error || 'Failed to auto-release payment.');
+        if (!captureRes.ok) {
+            const errData = await captureRes.json();
+            setReleasePaymentError(errData.error || 'Failed to auto-capture payment after client completion.');
+            toast.error(errData.error || 'Failed to auto-capture payment.');
         } else {
-            setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, paymentStatus: 'paid', status: 'completed' } : b));
-            toast.success('Booking completed and payment released!');
+            setBookings(prev => prev.map(b => b.id === booking.id ? { ...b, paymentStatus: 'paid', status: 'completed' } : b));
+            toast.success('Booking completed and payment captured!');
             setReleasePaymentError(null);
         }
       }
@@ -469,12 +481,26 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
 
   // Add a helper for status badge
   function StatusBadge({ status }: { status: string }) {
-    let color = 'bg-gray-200 text-gray-700'
-    if (status === 'pending') color = 'bg-yellow-100 text-yellow-800'
-    if (status === 'approved') color = 'bg-blue-100 text-blue-800'
-    if (status === 'completed') color = 'bg-green-100 text-green-800'
-    if (status === 'cancelled') color = 'bg-red-100 text-red-800'
-    return <span className={`px-2 py-0.5 rounded text-xs font-medium ${color}`}>{status.charAt(0).toUpperCase() + status.slice(1)}</span>
+    const getStatusStyles = (status: string) => {
+      switch (status) {
+        case 'completed':
+          return 'bg-green-100 text-green-800 border-green-200'
+        case 'pending':
+          return 'bg-yellow-100 text-yellow-800 border-yellow-200'
+        case 'approved':
+          return 'bg-blue-100 text-blue-800 border-blue-200'
+        case 'cancelled':
+          return 'bg-red-100 text-red-800 border-red-200'
+        default:
+          return 'bg-slate-100 text-slate-800 border-slate-200'
+      }
+    }
+
+    return (
+      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold border ${getStatusStyles(status)}`}>
+        {status?.charAt(0).toUpperCase() + status?.slice(1)}
+      </span>
+    )
   }
 
   // Helper to filter bookings by status
@@ -621,43 +647,140 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
 
   if (!bookings.length) {
     return (
-      <>
-        <div className="flex justify-end mb-4">
-          <Button onClick={() => setIsRequestOpen(true)}>New Booking</Button>
+      <div className="space-y-8">
+        {/* New Booking Button */}
+        <div className="flex justify-center">
+          <button
+            onClick={() => setIsRequestOpen(true)}
+            className="group relative inline-flex items-center justify-center px-8 py-4 text-lg font-semibold text-white transition-all duration-200 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl hover:from-blue-700 hover:to-indigo-700 hover:scale-105 hover:shadow-xl hover:shadow-blue-500/25 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 active:scale-95"
+          >
+            <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity duration-200 blur-xl"></div>
+            <span className="relative flex items-center space-x-2">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              <span>Create New Booking</span>
+            </span>
+          </button>
         </div>
-        <div className="text-muted-foreground">No bookings found.</div>
+
+        {/* Empty State */}
+        <div className="text-center py-16">
+          <div className="mx-auto w-24 h-24 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full flex items-center justify-center mb-6">
+            <svg className="w-12 h-12 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3a2 2 0 012-2h4a2 2 0 012 2v4m-6 0V6a2 2 0 012-2h4a2 2 0 012 2v1m-6 0h8m-8 0H6a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V9a2 2 0 00-2-2h-2" />
+            </svg>
+          </div>
+          <h3 className="text-2xl font-bold text-slate-900 mb-2">No bookings yet</h3>
+          <p className="text-slate-600 mb-8 max-w-md mx-auto">
+            Start by creating your first booking to connect with our professional pet care providers.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+            <button
+              onClick={() => setIsRequestOpen(true)}
+              className="inline-flex items-center px-6 py-3 text-base font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors duration-200 shadow-lg hover:shadow-xl"
+            >
+              Get Started
+            </button>
+            <a
+              href="/dashboard/contractors"
+              className="inline-flex items-center px-6 py-3 text-base font-medium text-slate-700 bg-white rounded-xl border border-slate-300 hover:bg-slate-50 transition-colors duration-200"
+            >
+              Browse Contractors
+            </a>
+          </div>
+        </div>
+
         <Dialog open={isRequestOpen} onOpenChange={setIsRequestOpen}>
-          <DialogContent>
+          <DialogContent className="sm:max-w-2xl">
             <DialogHeader>
-              <DialogTitle>New Booking Request</DialogTitle>
+              <DialogTitle className="text-2xl font-bold text-slate-900">Create New Booking</DialogTitle>
             </DialogHeader>
             <BookingRequestForm onSuccess={handleRequestSuccess} />
           </DialogContent>
         </Dialog>
-      </>
+      </div>
     )
   }
 
   return (
-    <section className="w-full px-2 sm:px-4 md:px-8 lg:px-16 xl:px-32 2xl:px-64">
-      <div className="flex justify-end mb-4">
-        <Button onClick={() => setIsRequestOpen(true)}>New Booking</Button>
+    <div className="space-y-8">
+      {/* Action Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex items-center space-x-4">
+          <h2 className="text-xl font-semibold text-slate-900">All Bookings</h2>
+          <div className="flex items-center space-x-2 text-sm text-slate-500">
+            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+            <span>{bookings.length} total</span>
       </div>
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full mb-4">
-        <TabsList className="w-full flex flex-wrap gap-2">
-          <TabsTrigger value="all">All</TabsTrigger>
-          <TabsTrigger value="pending">Pending</TabsTrigger>
-          <TabsTrigger value="approved">Approved</TabsTrigger>
-          <TabsTrigger value="completed">Completed</TabsTrigger>
-          <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
+        </div>
+        <button
+          onClick={() => setIsRequestOpen(true)}
+          className="inline-flex items-center px-6 py-3 text-base font-semibold text-white bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+        >
+          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          New Booking
+        </button>
+      </div>
+
+            {/* Modern Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-5 bg-slate-100/80 backdrop-blur-sm rounded-2xl p-1 h-12 sm:h-14">
+          <TabsTrigger 
+            value="all" 
+            className="rounded-lg sm:rounded-xl font-medium text-xs sm:text-sm transition-all duration-200 data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-slate-900 text-slate-600 hover:text-slate-900"
+          >
+            All
+          </TabsTrigger>
+          <TabsTrigger 
+            value="pending" 
+            className="rounded-lg sm:rounded-xl font-medium text-xs sm:text-sm transition-all duration-200 data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-slate-900 text-slate-600 hover:text-slate-900"
+          >
+            Pending
+          </TabsTrigger>
+          <TabsTrigger 
+            value="approved" 
+            className="rounded-lg sm:rounded-xl font-medium text-xs sm:text-sm transition-all duration-200 data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-slate-900 text-slate-600 hover:text-slate-900"
+          >
+            Approved
+          </TabsTrigger>
+          <TabsTrigger 
+            value="completed" 
+            className="rounded-lg sm:rounded-xl font-medium text-xs sm:text-sm transition-all duration-200 data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-slate-900 text-slate-600 hover:text-slate-900"
+          >
+            Completed
+          </TabsTrigger>
+          <TabsTrigger 
+            value="cancelled" 
+            className="rounded-lg sm:rounded-xl font-medium text-xs sm:text-sm transition-all duration-200 data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-slate-900 text-slate-600 hover:text-slate-900"
+          >
+            Cancelled
+          </TabsTrigger>
         </TabsList>
+
         {['all', 'pending', 'approved', 'completed', 'cancelled'].map(tab => (
-          <TabsContent key={tab} value={tab} className="w-full">
-            <div className="grid gap-4 w-full">
+          <TabsContent key={tab} value={tab} className="mt-8">
+            <div className="space-y-4">
               {filterBookings(tab).length === 0 ? (
-                <div className="text-muted-foreground p-8 text-center">No bookings found.</div>
+                <div className="text-center py-16">
+                  <div className="mx-auto w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
+                    <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-slate-900 mb-2">No {tab === 'all' ? '' : tab} bookings</h3>
+                  <p className="text-slate-600">
+                    {tab === 'all' 
+                      ? 'Create your first booking to get started.' 
+                      : `You don't have any ${tab} bookings at the moment.`
+                    }
+                  </p>
+                </div>
               ) : (
-                filterBookings(tab).map((b) => {
+                <div className="grid gap-6">
+                  {filterBookings(tab).map((b) => {
                   const today = new Date();
                   today.setHours(0, 0, 0, 0);
                   const bookingDate = new Date(b.startDate);
@@ -668,203 +791,339 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
                   return (
                     <Card
                       key={b.id}
-                      className="w-full bg-white rounded-lg shadow-md border border-gray-200 flex flex-col gap-0 p-0 sm:p-0 md:p-0 lg:p-0 xl:p-0"
-                    >
-                      <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 flex-wrap p-4 pb-2 border-b">
+                        className="group relative bg-white/80 backdrop-blur-sm border border-slate-200/60 rounded-2xl shadow-sm hover:shadow-xl hover:shadow-slate-200/60 transition-all duration-300 hover:border-slate-300/60 overflow-hidden"
+                      >
+                        {/* Status Indicator Bar */}
+                        <div className={`absolute top-0 left-0 right-0 h-1 ${
+                          b.status === 'completed' ? 'bg-gradient-to-r from-green-400 to-emerald-500' :
+                          b.status === 'pending' ? 'bg-gradient-to-r from-yellow-400 to-orange-500' :
+                          b.status === 'approved' ? 'bg-gradient-to-r from-blue-400 to-indigo-500' :
+                          'bg-gradient-to-r from-slate-300 to-slate-400'
+                        }`}></div>
+
+                        <CardHeader className="pb-4">
+                          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
                         <div className="flex-1 min-w-0">
-                          <CardTitle className="text-lg flex items-center gap-2 flex-wrap">
-                            {hasMultipleServices(b) ? (
-                              <Badge variant="outline" className="mr-2 bg-primary/10 text-primary">
+                              <div className="flex items-center gap-3 mb-3">
+                                {hasMultipleServices(b) && (
+                                  <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-200 font-medium px-3 py-1">
                                 <Package className="h-3 w-3 mr-1" />
                                 {b.services?.length} services
                               </Badge>
-                            ) : null}
-                            <span className="truncate max-w-xs md:max-w-md lg:max-w-lg xl:max-w-xl">{getServiceNames(b)}</span>
+                                )}
+                                <StatusBadge status={b.status} />
+                              </div>
+                              <CardTitle className="text-xl font-bold text-slate-900 mb-2 line-clamp-2">
+                                {getServiceNames(b)}
                           </CardTitle>
-                          <div className="text-sm text-gray-500 mt-1 flex flex-col sm:flex-row sm:items-center gap-1">
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-4 h-4 text-primary" />
-                              {getBookingDateTimeRange(b)}
-                            </span>
+                              <div className="flex items-center text-slate-600 mb-3">
+                                <Clock className="w-4 h-4 mr-2 text-blue-500" />
+                                <span className="font-medium">{getBookingDateTimeRange(b)}</span>
                           </div>
                         </div>
-                        <div className="flex flex-row sm:flex-col items-end gap-2 min-w-[120px] sm:min-w-[100px] mt-2 sm:mt-0">
-                          <StatusBadge status={b.status} />
-                          <span className={`capitalize text-xs${b.paymentStatus === 'cancelled' ? ' text-red-600' : ''}`}>{b.paymentStatus}</span>
+                            <div className="flex flex-col items-end gap-2 lg:min-w-[140px]">
+                              <div className="text-right">
+                                <div className="text-2xl font-bold text-slate-900">
+                                  ${formatAmount(b.paymentAmount || 0)}
+                                </div>
+                                <div className={`text-sm font-medium capitalize ${
+                                  b.paymentStatus === 'paid' ? 'text-green-600' :
+                                  b.paymentStatus === 'pending' ? 'text-yellow-600' :
+                                  b.paymentStatus === 'cancelled' ? 'text-red-600' :
+                                  'text-slate-500'
+                                }`}>
+                                  {b.paymentStatus}
+                                </div>
+                              </div>
+                            </div>
                         </div>
                       </CardHeader>
-                      <CardContent className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-4 pt-2">
-                        <div className="flex flex-col gap-1 flex-1 min-w-0">
-                          <span className="text-xs text-muted-foreground">Contractor: <span className="font-medium text-foreground">{contractorNameById(b.contractorId)}</span></span>
-                          <span className="text-xs text-muted-foreground">Pets: <span className="font-medium text-foreground">{b.petIds?.length ?? 0}</span></span>
+
+                        <CardContent className="pt-0">
+                          {/* Contractor & Pet Info */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 bg-slate-50/50 rounded-xl">
+                            <div>
+                              <div className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Contractor</div>
+                              <div className="font-semibold text-slate-900">{contractorNameById(b.contractorId)}</div>
+                            </div>
+                            <div>
+                              <div className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Pets</div>
+                              <div className="font-semibold text-slate-900">{b.petIds?.length ?? 0} pet{(b.petIds?.length ?? 0) !== 1 ? 's' : ''}</div>
+                            </div>
+                          </div>
+
+                                                     {/* Review Display */}
                           {b.review && (
-                            <span className="text-xs text-muted-foreground">Review: <span className="font-medium text-foreground">{b.review.rating}★</span> {b.review.comment}</span>
+                             <div className="mb-6 p-4 bg-yellow-50 rounded-xl border border-yellow-200">
+                               <div className="flex items-center gap-2 mb-2">
+                                 <div className="flex items-center">
+                                   {[...Array(5)].map((_, i) => (
+                                     <svg
+                                       key={i}
+                                       className={`w-4 h-4 ${i < (b.review?.rating || 0) ? 'text-yellow-400' : 'text-slate-300'}`}
+                                       fill="currentColor"
+                                       viewBox="0 0 20 20"
+                                     >
+                                       <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                     </svg>
+                                   ))}
+                                 </div>
+                                 <span className="text-sm font-medium text-slate-700">Your Review</span>
+                               </div>
+                               {b.review?.comment && (
+                                 <p className="text-sm text-slate-600 italic">"{b.review.comment}"</p>
                           )}
                         </div>
-                        <div className="flex flex-col sm:flex-row flex-wrap gap-2 justify-end items-center w-full sm:w-auto mt-2 sm:mt-0">
-                          <Button variant="outline" className="text-sm px-3 py-1 rounded-full shadow-sm w-full sm:w-auto" onClick={() => setDetailBooking(b)}>
-                            Details
+                           )}
+
+                          {/* Action Buttons */}
+                          <div className="flex flex-wrap gap-3">
+                            <Button 
+                              variant="outline" 
+                              onClick={() => setDetailBooking(b)}
+                              className="flex-1 sm:flex-none bg-white hover:bg-slate-50 border-slate-300 text-slate-700 font-medium rounded-xl px-6 py-2.5 transition-all duration-200 hover:shadow-md"
+                            >
+                              View Details
                           </Button>
+                            
                           {canMessage && (
                             <Link href={`/dashboard/messages/${b.id}`} passHref>
-                              <Button variant="outline" className="text-sm px-3 py-1 rounded-full shadow-sm w-full sm:w-auto">
+                                <Button 
+                                  variant="outline"
+                                  className="flex-1 sm:flex-none bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700 font-medium rounded-xl px-6 py-2.5 transition-all duration-200 hover:shadow-md"
+                                >
                                 <MessageSquare className="h-4 w-4 mr-2" />
-                                Message Contractor
+                                  Message
                               </Button>
                             </Link>
                           )}
+                            
                           {canEditServices && (
                             <Button
                               variant="outline"
-                              className="text-sm px-3 py-1 rounded-full shadow-sm w-full sm:w-auto"
                               onClick={() => setEditServicesModal({ open: true, booking: b })}
+                                className="flex-1 sm:flex-none bg-indigo-50 hover:bg-indigo-100 border-indigo-200 text-indigo-700 font-medium rounded-xl px-6 py-2.5 transition-all duration-200 hover:shadow-md"
                             >
                               Edit Services
                             </Button>
                           )}
+                            
+                            {(['pending', 'approved'].includes(b.status)) && (
                           <Button 
                             variant="destructive" 
-                            className="text-sm px-3 py-1 rounded-full shadow-sm w-full sm:w-auto" 
                             onClick={() => setCancelId(b.id)} 
-                            disabled={isPending || !(['pending', 'approved'].includes(b.status))}
+                                disabled={isPending}
+                                className="flex-1 sm:flex-none bg-red-50 hover:bg-red-100 border-red-200 text-red-700 font-medium rounded-xl px-6 py-2.5 transition-all duration-200 hover:shadow-md disabled:opacity-50"
                           >
                             Cancel
                           </Button>
+                            )}
+                            
                           {b.status === 'approved' && b.paymentStatus === 'pending' && !b.clientCompleted && (
                             <Button
-                              variant="default"
-                              className="text-sm px-3 py-1 rounded-full shadow-sm w-full sm:w-auto"
                               onClick={() => handleClientComplete(b.id)}
                               disabled={isPending}
+                                className="flex-1 sm:flex-none bg-green-600 hover:bg-green-700 text-white font-medium rounded-xl px-6 py-2.5 transition-all duration-200 hover:shadow-md disabled:opacity-50"
                             >
-                              {isPending ? 'Marking...' : 'Mark as Completed'}
+                                {isPending ? 'Marking...' : 'Mark Complete'}
                             </Button>
                           )}
+                            
                           {b.status === 'approved' && b.paymentStatus === 'pending' && b.clientCompleted && !b.contractorCompleted && (
-                            <span className="text-xs text-muted-foreground w-full sm:w-auto">Waiting for contractor...</span>
+                              <div className="flex-1 sm:flex-none px-6 py-2.5 bg-yellow-50 border border-yellow-200 rounded-xl">
+                                <span className="text-sm text-yellow-700 font-medium">Waiting for contractor...</span>
+                              </div>
                           )}
+                            
                           {b.status === 'approved' && b.paymentStatus === 'pending' && b.clientCompleted && b.contractorCompleted && (
                             <Button
-                              variant="default"
-                              className="text-sm px-3 py-1 rounded-full shadow-sm w-full sm:w-auto"
                               onClick={() => handleConfirmPayment(b, setIsPending, setError, setBookings)}
                               disabled={isPending}
+                                className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl px-6 py-2.5 transition-all duration-200 hover:shadow-md disabled:opacity-50"
                             >
-                              {isPending ? 'Confirming...' : 'Release Payment'}
+                              {isPending ? 'Confirming...' : 'Confirm Payment'}
                             </Button>
                           )}
+                            
                           {b.status === 'completed' && b.paymentStatus === 'paid' && !b.review && (
                             <Button
-                              variant="default"
-                              className="text-sm px-3 py-1 rounded-full shadow-sm w-full sm:w-auto"
                               onClick={() => setReviewModal({ open: true, booking: b })}
+                                className="flex-1 sm:flex-none bg-yellow-500 hover:bg-yellow-600 text-white font-medium rounded-xl px-6 py-2.5 transition-all duration-200 hover:shadow-md"
                             >
                               Leave Review
                             </Button>
                           )}
+                          </div>
+
                           {releasePaymentError && (
-                            <div className="text-xs text-red-600 w-full text-right">{releasePaymentError}</div>
-                          )}
+                            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-xl">
+                              <p className="text-sm text-red-600 font-medium">{releasePaymentError}</p>
                         </div>
+                          )}
                       </CardContent>
                     </Card>
                   )
-                })
+                  })}
+                </div>
               )}
             </div>
           </TabsContent>
         ))}
       </Tabs>
       <Dialog open={!!cancelId} onOpenChange={() => setCancelId(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="text-destructive">Emergency Booking Cancellation</DialogTitle>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader className="text-center pb-4">
+            <div className="mx-auto w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
+              <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+            </div>
+            <DialogTitle className="text-2xl font-bold text-slate-900">Cancel Booking</DialogTitle>
+            <p className="text-slate-600 mt-2">This action cannot be undone</p>
           </DialogHeader>
-          <div className="space-y-4">
-            <p className="text-sm">
-              You are about to cancel this booking. This action is <strong>irreversible</strong> and should only be used in case of:
+          <div className="space-y-6">
+            <div className="text-center">
+              <p className="text-slate-700 mb-4">
+                You are about to cancel this booking. This should only be done in case of:
             </p>
-            <ul className="list-disc pl-5 text-sm space-y-1">
-              <li>Emergencies that prevent you from fulfilling the booking</li>
-              <li>Serious misunderstandings about service requirements</li>
-              <li>Safety concerns</li>
-            </ul>
-            <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-sm">
-              <p className="font-medium text-amber-800">What happens when you cancel:</p>
-              <ul className="list-disc pl-5 text-amber-700 mt-1">
-                <li>Any pending payment will be canceled</li>
-                <li>The contractor will be notified</li>
-                <li>The booking will be permanently deleted</li>
-                <li>Frequent cancellations may affect your account standing</li>
+              <div className="grid grid-cols-1 gap-3 text-left">
+                <div className="flex items-center space-x-3 p-3 bg-slate-50 rounded-xl">
+                  <div className="w-2 h-2 bg-red-400 rounded-full"></div>
+                  <span className="text-sm text-slate-700">Emergencies that prevent you from fulfilling the booking</span>
+                </div>
+                <div className="flex items-center space-x-3 p-3 bg-slate-50 rounded-xl">
+                  <div className="w-2 h-2 bg-red-400 rounded-full"></div>
+                  <span className="text-sm text-slate-700">Serious misunderstandings about service requirements</span>
+                </div>
+                <div className="flex items-center space-x-3 p-3 bg-slate-50 rounded-xl">
+                  <div className="w-2 h-2 bg-red-400 rounded-full"></div>
+                  <span className="text-sm text-slate-700">Safety concerns</span>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-4">
+              <div className="flex items-start space-x-3">
+                <svg className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                  <p className="font-semibold text-amber-800 mb-2">What happens when you cancel:</p>
+                  <ul className="space-y-1 text-sm text-amber-700">
+                    <li>• Any pending payment will be canceled</li>
+                    <li>• The contractor will be notified immediately</li>
+                    <li>• The booking will be permanently deleted</li>
+                    <li>• Frequent cancellations may affect your account standing</li>
               </ul>
             </div>
-            {error && <div className="text-destructive text-sm mt-2">{error}</div>}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCancelId(null)} disabled={isPending}>
-              No, Keep Booking
+            </div>
+            
+            {error && (
+              <div className="p-4 bg-red-50 border border-red-200 rounded-xl">
+                <p className="text-sm text-red-600 font-medium">{error}</p>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="flex flex-col sm:flex-row gap-3 pt-6">
+            <Button 
+              variant="outline" 
+              onClick={() => setCancelId(null)} 
+              disabled={isPending}
+              className="flex-1 bg-white hover:bg-slate-50 border-slate-300 text-slate-700 font-medium rounded-xl px-6 py-3"
+            >
+              Keep Booking
             </Button>
-            <Button variant="destructive" onClick={handleCancel} disabled={isPending}>
-              {isPending ? 'Cancelling...' : 'Yes, Cancel Booking'}
+            <Button 
+              variant="destructive" 
+              onClick={handleCancel} 
+              disabled={isPending}
+              className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium rounded-xl px-6 py-3 disabled:opacity-50"
+            >
+              {isPending ? (
+                <div className="flex items-center space-x-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  <span>Cancelling...</span>
+                </div>
+              ) : (
+                'Yes, Cancel Booking'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
       <Dialog open={isRequestOpen} onOpenChange={setIsRequestOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>New Booking Request</DialogTitle>
+            <DialogTitle className="text-2xl font-bold text-slate-900">Create New Booking</DialogTitle>
           </DialogHeader>
           <BookingRequestForm onSuccess={handleRequestSuccess} />
         </DialogContent>
       </Dialog>
       <Dialog open={!!detailBooking} onOpenChange={() => setDetailBooking(null)}>
-        <DialogContent className="w-full max-w-xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Booking Details</DialogTitle>
+        <DialogContent className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="pb-6">
+            <DialogTitle className="text-2xl font-bold text-slate-900">Booking Details</DialogTitle>
+            <p className="text-slate-600 mt-1">Complete information about your booking</p>
           </DialogHeader>
           {detailBooking && (
-            <section className="space-y-6">
-              {/* Status & Dates */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 border-b pb-4">
-                <div className="flex flex-col gap-2">
-                  <span className="text-xs text-muted-foreground">Status</span>
-                  <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold shadow-sm
-                    ${detailBooking.status === 'completed' ? 'bg-green-100 text-green-800' :
-                      detailBooking.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                      detailBooking.status === 'approved' ? 'bg-blue-100 text-blue-800' :
-                      'bg-gray-200 text-gray-700'}`}
-                  >
-                    {detailBooking.status?.charAt(0).toUpperCase() + detailBooking.status?.slice(1)}
-                  </span>
+            <section className="space-y-8">
+              {/* Status Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-6 bg-gradient-to-r from-slate-50 to-blue-50 rounded-2xl border border-slate-200/60">
+                <div className="flex items-center space-x-4">
+                  <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm">
+                    <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
                 </div>
-                <div className="flex flex-col gap-2">
-                  <span className="text-xs text-muted-foreground">Payment Status</span>
-                  <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold bg-gray-100 text-gray-800 capitalize shadow-sm">
-                    {detailBooking.paymentStatus}
-                  </span>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900">{getServiceNames(detailBooking)}</h3>
+                    <p className="text-slate-600 text-sm">Booking #{detailBooking.id.slice(-8)}</p>
                 </div>
-                {/* Date, Time, and Duration (responsive) */}
-                <div className="col-span-1 sm:col-span-2 mt-2">
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6 bg-muted/50 rounded-md px-4 py-3 w-full">
-                    <div className="flex flex-col flex-1 min-w-0">
-                      <span className="text-xs text-muted-foreground">Date & Time</span>
-                      <span className="font-bold text-base flex items-center gap-2 break-words">
-                        <Clock className="w-4 h-4 text-primary shrink-0" />
-                        {getBookingDateTimeRange(detailBooking)}
+                </div>
+                <div className="flex flex-col sm:items-end gap-2">
+                  <StatusBadge status={detailBooking.status} />
+                  <span className={`text-sm font-medium capitalize ${
+                    detailBooking.paymentStatus === 'paid' ? 'text-green-600' :
+                    detailBooking.paymentStatus === 'pending' ? 'text-yellow-600' :
+                    detailBooking.paymentStatus === 'cancelled' ? 'text-red-600' :
+                    'text-slate-500'
+                  }`}>
+                    Payment: {detailBooking.paymentStatus}
                       </span>
                     </div>
-                    <div className="flex flex-col flex-none sm:border-l sm:border-border sm:pl-6">
-                      <span className="text-xs text-muted-foreground">Duration</span>
-                      <span className="font-semibold text-base">{detailBooking.numberOfDays} day{detailBooking.numberOfDays !== 1 ? 's' : ''}</span>
                     </div>
+
+              {/* Date & Time Section */}
+              <div className="p-6 bg-white rounded-2xl border border-slate-200/60 shadow-sm">
+                <div className="flex items-center space-x-3 mb-4">
+                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                    <Clock className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <h4 className="text-lg font-semibold text-slate-900">Schedule</h4>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <p className="text-sm font-medium text-slate-500 mb-2">Date & Time</p>
+                    <p className="text-base font-semibold text-slate-900">{getBookingDateTimeRange(detailBooking)}</p>
+              </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-500 mb-2">Duration</p>
+                    <p className="text-base font-semibold text-slate-900">{detailBooking.numberOfDays} day{detailBooking.numberOfDays !== 1 ? 's' : ''}</p>
                   </div>
                 </div>
               </div>
-              {/* Contractor Info (separate row) */}
-              <div className="border-b pb-4">
-                <span className="text-xs text-muted-foreground">Contractor</span>
-                <div className="flex flex-col sm:flex-row items-center gap-4 mt-2">
+              {/* Contractor Info */}
+              <div className="p-6 bg-white rounded-2xl border border-slate-200/60 shadow-sm">
+                <div className="flex items-center space-x-3 mb-4">
+                  <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                    <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                  </div>
+                  <h4 className="text-lg font-semibold text-slate-900">Contractor</h4>
+                </div>
+                <div className="flex flex-col sm:flex-row items-start gap-6">
                   {/* Contractor profile image */}
                   {(() => {
                     const contractor = contractors.find(c => c.id === detailBooking?.contractorId)
@@ -872,26 +1131,40 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
                       <img
                         src={contractor.profileImage}
                         alt={contractor.name}
-                        className="w-16 h-16 rounded-full border object-cover flex-shrink-0"
+                        className="w-20 h-20 rounded-2xl border-2 border-slate-200 object-cover flex-shrink-0 shadow-sm"
                       />
                     ) : (
-                      <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center text-2xl font-bold border flex-shrink-0">
+                      <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center text-2xl font-bold border-2 border-slate-200 flex-shrink-0 shadow-sm">
                         {contractor?.name?.charAt(0) ?? "?"}
                       </div>
                     )
                   })()}
                   <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-lg truncate">{detailBooking?.contractorName || contractorNameById(detailBooking?.contractorId)}</div>
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 mt-1">
+                    <h5 className="text-xl font-bold text-slate-900 mb-3">{detailBooking?.contractorName || contractorNameById(detailBooking?.contractorId)}</h5>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                          <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                          </svg>
+                        </div>
                       <div>
-                        <span className="text-xs text-muted-foreground block">Phone</span>
-                        <span className="font-medium text-base block break-all">
+                          <p className="text-sm font-medium text-slate-500">Phone</p>
+                          <p className="text-base font-semibold text-slate-900">
                           {detailBooking?.contractorPhone || (contractors.find(c => c.id === detailBooking?.contractorId)?.phone ?? 'N/A')}
-                        </span>
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                          <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
                       </div>
                       <div>
-                        <span className="text-xs text-muted-foreground block">Location</span>
-                        <span className="font-medium text-base block">
+                          <p className="text-sm font-medium text-slate-500">Location</p>
+                          <p className="text-base font-semibold text-slate-900">
                           {(() => {
                             const contractor = contractors.find(c => c.id === detailBooking?.contractorId)
                             if (contractor?.city || contractor?.state) {
@@ -899,80 +1172,135 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
                             }
                             return 'N/A'
                           })()}
-                        </span>
+                          </p>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
-              {/* Pets Info (separate row) */}
-              <div className="border-b pb-4">
-                <span className="text-xs text-muted-foreground">Pets</span>
-                <div className="flex flex-wrap gap-2 mt-1">
+              </div>
+              {/* Pets Info */}
+              <div className="p-6 bg-white rounded-2xl border border-slate-200/60 shadow-sm">
+                <div className="flex items-center space-x-3 mb-4">
+                  <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
+                    <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                    </svg>
+                  </div>
+                  <h4 className="text-lg font-semibold text-slate-900">Pets</h4>
+                </div>
+                <div className="flex flex-wrap gap-3">
                   {petNames.length > 0 ? petNames.map(name => (
-                    <span key={name} className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium shadow-sm">{name}</span>
-                  )) : <span className="text-muted-foreground text-sm">None</span>}
+                    <div key={name} className="flex items-center space-x-2 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 px-4 py-2 rounded-xl">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                      <span className="text-blue-800 font-semibold">{name}</span>
+                    </div>
+                  )) : (
+                    <p className="text-slate-500 italic">No pets specified</p>
+                  )}
                 </div>
               </div>
               {/* Services & Payment */}
-              <div className="border-b pb-4">
-                <h3 className="text-base font-bold mb-2 flex items-center gap-2">
-                  <Package className="w-5 h-5 text-primary"/>
-                  Services & Payment
-                </h3>
-                <div className="space-y-3">
+              <div className="p-6 bg-white rounded-2xl border border-slate-200/60 shadow-sm">
+                <div className="flex items-center space-x-3 mb-6">
+                  <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
+                    <Package className="w-5 h-5 text-emerald-600"/>
+                  </div>
+                  <h4 className="text-lg font-semibold text-slate-900">Services & Payment</h4>
+                </div>
+                <div className="space-y-4">
                   {detailBooking.services.map((service, idx) => {
                     const platformService = platformServices.find(ps => ps.id === service.serviceId);
                     return (
-                      <div key={idx} className="flex flex-col sm:flex-row sm:justify-between sm:items-center bg-muted/50 rounded-md px-3 py-2">
-                        <div className="flex flex-col">
-                          <span className="font-semibold text-base">{platformService?.name || service.name || service.serviceId}</span>
-                          <span className="text-xs text-muted-foreground">
+                      <div key={idx} className="flex flex-col sm:flex-row sm:justify-between sm:items-center p-4 bg-gradient-to-r from-slate-50 to-slate-100 rounded-xl border border-slate-200">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                            <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </div>
+                          <div>
+                            <p className="font-semibold text-slate-900">{platformService?.name || service.name || service.serviceId}</p>
+                            <p className="text-sm text-slate-500">
                             {service.paymentType === 'one_time' ? 'One-time payment' : 'Daily rate'}
-                          </span>
+                            </p>
                         </div>
-                        <div className="text-right mt-2 sm:mt-0">
-                          <span className="font-bold text-lg">{formatServicePrice(service, detailBooking.numberOfDays || 1)}</span>
+                        </div>
+                        <div className="text-right mt-3 sm:mt-0">
+                          <p className="text-lg font-bold text-slate-900">{formatServicePrice(service, detailBooking.numberOfDays || 1)}</p>
                         </div>
                       </div>
                     );
                   })}
-                  <div className="flex justify-between items-center border-t pt-3 mt-2">
-                    <span className="font-semibold text-base">Total Payment</span>
-                    <span className="font-bold text-primary text-xl">${formatAmount(detailBooking.paymentAmount || 0)}</span>
+                  <div className="flex justify-between items-center p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border-2 border-blue-200 mt-6">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                        </svg>
+                  </div>
+                      <span className="text-lg font-bold text-slate-900">Total Payment</span>
+                </div>
+                    <span className="text-2xl font-bold text-blue-600">${formatAmount(detailBooking.paymentAmount || 0)}</span>
+              </div>
+                </div>
+              </div>
+              {/* Payment Method & Actions */}
+              <div className="p-6 bg-white rounded-2xl border border-slate-200/60 shadow-sm">
+                <div className="flex items-center space-x-3 mb-4">
+                  <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
+                    <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                    </svg>
+                  </div>
+                  <h4 className="text-lg font-semibold text-slate-900">Payment & Actions</h4>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <p className="text-sm font-medium text-slate-500 mb-2">Payment Method</p>
+                    <div className="flex items-center space-x-3 p-3 bg-slate-50 rounded-xl">
+                      <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                        <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                        </svg>
+                </div>
+                      <span className="font-semibold text-slate-900">
+                        {defaultMethod ? `${defaultMethod.brand?.toUpperCase?.() ?? ''} •••• ${defaultMethod.last4 ?? ''}` : 'Not specified'}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-500 mb-2">Booking ID</p>
+                    <div className="p-3 bg-slate-50 rounded-xl">
+                      <code className="text-sm font-mono text-slate-700">#{detailBooking?.id.slice(-12) ?? ''}</code>
+                    </div>
                   </div>
                 </div>
-              </div>
-              {/* Duration & Payment Method */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div className="flex flex-col gap-2">
-                  <span className="text-xs text-muted-foreground">Payment Method</span>
-                  <span className="font-medium text-base">{defaultMethod ? `${defaultMethod.brand?.toUpperCase?.() ?? ''} •••• ${defaultMethod.last4 ?? ''}` : 'Not specified'}</span>
-                </div>
-              </div>
-              {/* Booking ID & Calendar */}
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-t pt-4 mt-2">
-                <div>
-                  <span className="text-xs text-muted-foreground">Booking ID</span>
-                  <div className="font-mono break-all text-xs mt-1">{detailBooking?.id ?? ''}</div>
-                </div>
-                <div className="flex justify-end mt-2 sm:mt-0">
+                <div className="mt-6 pt-6 border-t border-slate-200">
                   <a
                     href={getGoogleCalendarUrl(detailBooking, contractorNameById(detailBooking.contractorId), petNames)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-block"
+                    className="inline-flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl"
                   >
-                    <Button variant="outline" className="text-sm px-3 py-1 rounded-full shadow-sm">Add to Google Calendar</Button>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3a2 2 0 012-2h4a2 2 0 012 2v4m-6 0V6a2 2 0 012-2h4a2 2 0 012 2v1m-6 0h8m-8 0H6a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V9a2 2 0 00-2-2h-2" />
+                    </svg>
+                    <span>Add to Google Calendar</span>
                   </a>
                 </div>
               </div>
             </section>
           )}
-          <DialogFooter>
-            <div className="flex w-full justify-end gap-2">
-              <Button variant="outline" onClick={() => setDetailBooking(null)}>Close</Button>
-              {detailBooking?.status === 'pending' || detailBooking?.status === 'approved' ? (
+          <DialogFooter className="flex flex-col sm:flex-row gap-3 pt-6 border-t border-slate-200">
+            <Button 
+              variant="outline" 
+              onClick={() => setDetailBooking(null)}
+              className="flex-1 bg-white hover:bg-slate-50 border-slate-300 text-slate-700 font-medium rounded-xl px-6 py-3"
+            >
+              Close
+            </Button>
+            {(detailBooking?.status === 'pending' || detailBooking?.status === 'approved') && (
                 <Button 
                   variant="destructive" 
                   onClick={() => { 
@@ -980,11 +1308,11 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
                     setDetailBooking(null); 
                   }} 
                   disabled={isPending}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium rounded-xl px-6 py-3 disabled:opacity-50"
                 >
                   Cancel Booking
                 </Button>
-              ) : null}
-            </div>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1136,7 +1464,111 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
           )}
         </DialogContent>
       </Dialog>
-    </section>
+      
+      {/* Payment Confirmation Modal */}
+      <Dialog open={paymentConfirmModal.open} onOpenChange={open => setPaymentConfirmModal({ open, booking: open ? paymentConfirmModal.booking : null })}>
+        <DialogContent className="w-full max-w-md mx-auto">
+          <DialogHeader>
+            <DialogTitle className="text-center">Confirm Payment</DialogTitle>
+          </DialogHeader>
+          {paymentConfirmModal.booking && (
+            <div className="space-y-6">
+              {/* Payment Summary */}
+              <div className="text-center space-y-2">
+                <div className="text-2xl font-bold text-primary">
+                  ${formatAmount(paymentConfirmModal.booking.paymentAmount || 0)}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  You're about to complete this booking and authorize payment
+                </p>
+              </div>
+
+              {/* Booking Details */}
+              <div className="space-y-4 border-t border-b py-4">
+                {/* Date */}
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Service Date</span>
+                  <span className="text-sm text-right">
+                    {getBookingDateTimeRange(paymentConfirmModal.booking)}
+                  </span>
+                </div>
+
+                {/* Contractor */}
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Contractor</span>
+                  <span className="text-sm text-right">
+                    {paymentConfirmModal.booking.contractorName || contractorNameById(paymentConfirmModal.booking.contractorId)}
+                  </span>
+                </div>
+
+                {/* Services */}
+                <div className="flex justify-between items-start">
+                  <span className="text-sm font-medium">Services</span>
+                  <div className="text-sm text-right max-w-[60%]">
+                    {paymentConfirmModal.booking.services?.map((service, idx) => {
+                      const platformService = platformServices.find(ps => ps.id === service.serviceId);
+                      return (
+                        <div key={idx} className="mb-1">
+                          <div className="font-medium">
+                            {platformService?.name || service.name || service.serviceId}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {formatServicePrice(service, paymentConfirmModal.booking?.numberOfDays || 1)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Payment Method */}
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Payment Method</span>
+                  <span className="text-sm text-right">
+                    {defaultMethod ? `${defaultMethod.brand?.toUpperCase?.()} •••• ${defaultMethod.last4}` : 'Default card'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Payment Breakdown */}
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span>Subtotal</span>
+                  <span>${formatAmount((paymentConfirmModal.booking.paymentAmount || 0) - (paymentConfirmModal.booking.platformFee || 0))}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Platform Fee</span>
+                  <span>${formatAmount(paymentConfirmModal.booking.platformFee || 0)}</span>
+                </div>
+                <div className="flex justify-between font-semibold border-t pt-2">
+                  <span>Total</span>
+                  <span>${formatAmount(paymentConfirmModal.booking.paymentAmount || 0)}</span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                <Button 
+                  variant="outline" 
+                  className="flex-1"
+                  onClick={() => setPaymentConfirmModal({ open: false, booking: null })}
+                  disabled={isPending}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  className="flex-1"
+                  onClick={() => handleConfirmPaymentFromModal(paymentConfirmModal.booking!)}
+                  disabled={isPending}
+                >
+                  {isPending ? 'Processing...' : 'Confirm Payment'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
   )
 }
 
@@ -1178,4 +1610,4 @@ function ReviewForm({ booking, onClose, onSaved }: { booking: ExtendedBooking, o
       </DialogFooter>
     </form>
   )
-} 
+}

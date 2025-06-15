@@ -250,6 +250,31 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
         }
       });
 
+      // Get client's default payment method
+      let paymentMethodId: string | undefined = undefined;
+      try {
+        const pmRes = await fetch('/api/stripe/list-payment-methods', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customerId: profile.stripeCustomerId }),
+        });
+        if (pmRes.ok) {
+          const { paymentMethods } = await pmRes.json();
+          const defaultCard = paymentMethods.find((pm: any) => pm.isDefault) || paymentMethods[0];
+          if (defaultCard) {
+            paymentMethodId = defaultCard.id;
+          }
+        }
+      } catch (err) {
+        console.warn('Could not fetch payment methods:', err);
+      }
+
+      if (!paymentMethodId) {
+        setError('No payment method found. Please add a payment method in your dashboard.');
+        setIsPending(false);
+        return;
+      }
+
       // Data for addBooking
       const selectedContractor = allContractors.find(c => c.id === selectedContractorId);
       const bookingPayload = {
@@ -263,6 +288,7 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
         endDate: new Date(`${endDate}T${endTime}:00`).toISOString(),
         stripeCustomerId: profile.stripeCustomerId,
         totalAmount: totalPaymentAmount,
+        paymentMethodId: paymentMethodId, // Include payment method ID
         time: {
           startTime,
           endTime
@@ -483,7 +509,7 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
             <span>${calculatedTotalPrice?.toFixed(2) || '--'}</span>
           </div>
           <p className="text-xs text-muted-foreground mt-2">
-            A 5% platform fee will be added at checkout.
+            A 5% platform fee (including processing fees) will be added at checkout.
           </p>
         </div>
       )}

@@ -85,7 +85,10 @@ function FeedbackForm({ review, contractorId, onFeedbackSaved }: {
           <MessageSquare className="h-4 w-4 text-blue-600" />
           <span className="text-sm font-medium text-blue-800">Your Response</span>
           <span className="text-xs text-blue-600">
-            {new Date(review.contractorFeedback.date).toLocaleDateString()}
+            {review.contractorFeedback.date && !isNaN(new Date(review.contractorFeedback.date).getTime())
+              ? new Date(review.contractorFeedback.date).toLocaleDateString()
+              : 'Date not available'
+            }
           </span>
         </div>
         <p className="text-sm text-blue-700 italic">"{review.contractorFeedback.comment}"</p>
@@ -327,7 +330,10 @@ export default function ContractorReviewsPage() {
               </CardContent>
               <CardContent className="pt-3 pb-4 border-t bg-muted/50">
                 <div className="text-xs text-muted-foreground">
-                  <p>Reviewed on: {new Date(review.date).toLocaleDateString()}</p>
+                  <p>Reviewed on: {review.date && !isNaN(new Date(review.date).getTime())
+                    ? new Date(review.date).toLocaleDateString()
+                    : 'Date not available'
+                  }</p>
                   <p className="mt-0.5">Booking ID: <span className="font-mono text-xs">{review.bookingId}</span></p>
                 </div>
               </CardContent>

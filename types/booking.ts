@@ -28,6 +28,8 @@ export interface Booking {
   // Payment related fields
   paymentAmount: number // Total amount in currency (e.g., USD, not cents here for display type)
   platformFee: number // Platform fee in currency
+  stripeFee?: number // Actual Stripe fee for the transaction
+  netPayout?: number // Actual net payout to contractor
   paymentIntentId: string
   paymentClientSecret?: string // Optional as client doesn't always need it after creation
   paymentMethodId?: string

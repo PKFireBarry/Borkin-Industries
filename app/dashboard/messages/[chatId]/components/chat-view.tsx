@@ -136,47 +136,100 @@ export function ChatView({
   };
 
   return (
-    <div className="flex flex-col h-full bg-background">
-      <ScrollArea className="flex-grow p-4" ref={scrollAreaRef}>
-        <div className="space-y-4">
-          {messages.map((msg) => {
+    <div className="flex flex-col h-full bg-white">
+      {/* Chat Header */}
+      <div className="flex items-center justify-between p-4 border-b bg-white/80 backdrop-blur-sm sticky top-0 z-10">
+        <div className="flex items-center space-x-3">
+          <Avatar 
+            className="h-10 w-10 ring-2 ring-white shadow-sm cursor-pointer hover:ring-blue-200 transition-all" 
+            onClick={() => handleAvatarClick(otherParticipant)}
+          >
+            <AvatarImage src={otherParticipant.avatarUrl} className="object-cover" />
+            <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white font-semibold">
+              {getInitials(otherParticipant.displayName)}
+            </AvatarFallback>
+          </Avatar>
+          <div>
+            <h2 className="font-semibold text-gray-900">{otherParticipant.displayName}</h2>
+            <p className="text-sm text-gray-500">
+              {canSendMessage ? 'Active conversation' : `Booking ${bookingStatus}`}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Messages Area */}
+      <ScrollArea className="flex-1 px-4 py-2" ref={scrollAreaRef}>
+        <div className="space-y-4 pb-4">
+          {messages.map((msg, index) => {
             const isCurrentUser = msg.senderId === currentUserId;
             const participant = isCurrentUser
               ? (currentUserId === chat.client.userId ? chat.client : chat.contractor)
               : otherParticipant;
+            
+            const showAvatar = !isCurrentUser && (
+              index === 0 || 
+              messages[index - 1]?.senderId !== msg.senderId ||
+              (new Date(msg.timestamp).getTime() - new Date(messages[index - 1]?.timestamp || 0).getTime()) > 300000 // 5 minutes
+            );
 
             return (
               <div
                 key={msg.id}
-                className={`flex items-end space-x-2 ${isCurrentUser ? 'justify-end' : ''}`}
+                className={`flex items-end space-x-2 ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
               >
+                {/* Avatar for other user */}
                 {!isCurrentUser && (
-                  <Avatar 
-                    className="h-8 w-8 cursor-pointer" 
-                    onClick={() => handleAvatarClick(participant)}
-                  >
-                    <AvatarImage src={participant.avatarUrl} />
-                    <AvatarFallback>{getInitials(participant.displayName)}</AvatarFallback>
-                  </Avatar>
+                  <div className="w-8 h-8 flex-shrink-0">
+                    {showAvatar ? (
+                      <Avatar 
+                        className="h-8 w-8 cursor-pointer hover:ring-2 hover:ring-blue-200 transition-all" 
+                        onClick={() => handleAvatarClick(participant)}
+                      >
+                        <AvatarImage src={participant.avatarUrl} className="object-cover" />
+                        <AvatarFallback className="bg-gradient-to-br from-gray-400 to-gray-600 text-white text-xs">
+                          {getInitials(participant.displayName)}
+                        </AvatarFallback>
+                      </Avatar>
+                    ) : null}
+                  </div>
                 )}
-                <div
-                  className={`max-w-[70%] p-3 rounded-lg ${isCurrentUser
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted'}`}
-                >
-                  <p className="text-sm">{msg.text}</p>
-                  <p className={`text-xs mt-1 ${isCurrentUser ? 'text-primary-foreground/80 text-right' : 'text-muted-foreground/80'}`}>
-                    {formatDistanceToNowStrict(new Date(msg.timestamp), { addSuffix: true })}
-                  </p>
-                </div>
-                {isCurrentUser && (
-                  <Avatar 
-                    className="h-8 w-8 cursor-pointer" 
-                    onClick={() => handleAvatarClick(participant)}
+
+                {/* Message Bubble */}
+                <div className={`group relative max-w-[75%] ${isCurrentUser ? 'order-1' : ''}`}>
+                  <div
+                    className={`px-4 py-2.5 rounded-2xl shadow-sm ${
+                      isCurrentUser
+                        ? 'bg-blue-600 text-white rounded-br-md'
+                        : 'bg-gray-100 text-gray-900 rounded-bl-md'
+                    }`}
                   >
-                    <AvatarImage src={participant.avatarUrl} />
-                    <AvatarFallback>{getInitials(participant.displayName)}</AvatarFallback>
-                  </Avatar>
+                    <p className="text-sm leading-relaxed break-words">{msg.text}</p>
+                  </div>
+                  
+                  {/* Timestamp */}
+                  <div className={`mt-1 px-1 ${isCurrentUser ? 'text-right' : 'text-left'}`}>
+                    <p className="text-xs text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {formatDistanceToNowStrict(new Date(msg.timestamp), { addSuffix: true })}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Avatar for current user */}
+                {isCurrentUser && (
+                  <div className="w-8 h-8 flex-shrink-0">
+                    {showAvatar || index === messages.length - 1 ? (
+                      <Avatar 
+                        className="h-8 w-8 cursor-pointer hover:ring-2 hover:ring-blue-200 transition-all" 
+                        onClick={() => handleAvatarClick(participant)}
+                      >
+                        <AvatarImage src={participant.avatarUrl} className="object-cover" />
+                        <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-xs">
+                          {getInitials(participant.displayName)}
+                        </AvatarFallback>
+                      </Avatar>
+                    ) : null}
+                  </div>
                 )}
               </div>
             );
@@ -184,42 +237,73 @@ export function ChatView({
         </div>
       </ScrollArea>
       
+      {/* Status Messages */}
       {!canSendMessage && (
-        <Alert variant="default" className="m-4 rounded-md">
-          <Info className="h-4 w-4" />
-          <AlertTitle>Messaging Disabled</AlertTitle>
-          <AlertDescription>
-            You can only send messages for active bookings. This booking is currently <strong>{bookingStatus}</strong>.
-          </AlertDescription>
-        </Alert>
+        <div className="mx-4 mb-4">
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+            <div className="flex items-center space-x-2">
+              <Info className="h-5 w-5 text-amber-600 flex-shrink-0" />
+              <div>
+                <h4 className="font-medium text-amber-800">Messaging Disabled</h4>
+                <p className="text-sm text-amber-700 mt-1">
+                  You can only send messages for active bookings. This booking is currently <strong>{bookingStatus}</strong>.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {sendMessageState.error && (
-        <Alert variant="destructive" className="m-4 rounded-md">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Send Error</AlertTitle>
-            <AlertDescription>{sendMessageState.error}</AlertDescription>
-        </Alert>
+        <div className="mx-4 mb-4">
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+            <div className="flex items-center space-x-2">
+              <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0" />
+              <div>
+                <h4 className="font-medium text-red-800">Send Error</h4>
+                <p className="text-sm text-red-700 mt-1">{sendMessageState.error}</p>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
+      {/* Message Input */}
       {canSendMessage && (
-        <form action={handleSendMessageAction} className="p-4 border-t bg-background">
-          <div className="flex items-center space-x-2">
-            <Input
-              name="text"
-              value={newMessageText}
-              onChange={(e) => setNewMessageText(e.target.value)}
-              placeholder="Type your message..."
-              autoComplete="off"
-              className="flex-grow"
-              disabled={isSendMessagePending}
-            />
-            <Button type="submit" disabled={isSendMessagePending || !newMessageText.trim() }>
-              <Send className="h-4 w-4 mr-2" />
-              {isSendMessagePending ? 'Sending...' : 'Send'}
+        <div className="p-4 border-t bg-white">
+          <form action={handleSendMessageAction} className="flex items-end space-x-3">
+            <div className="flex-1 relative">
+              <Input
+                name="text"
+                value={newMessageText}
+                onChange={(e) => setNewMessageText(e.target.value)}
+                placeholder="Type your message..."
+                autoComplete="off"
+                disabled={isSendMessagePending}
+                className="min-h-[44px] py-3 px-4 pr-12 rounded-full border-gray-200 focus:border-blue-500 focus:ring-blue-500 resize-none"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (newMessageText.trim() && !isSendMessagePending) {
+                      const form = e.currentTarget.form;
+                      if (form) {
+                        const formData = new FormData(form);
+                        handleSendMessageAction(formData);
+                      }
+                    }
+                  }
+                }}
+              />
+            </div>
+            <Button 
+              type="submit" 
+              disabled={isSendMessagePending || !newMessageText.trim()}
+              className="h-11 w-11 rounded-full bg-blue-600 hover:bg-blue-700 p-0 flex items-center justify-center shadow-lg hover:shadow-xl transition-all"
+            >
+              <Send className="h-5 w-5" />
             </Button>
-          </div>
-        </form>
+          </form>
+        </div>
       )}
       
       {selectedParticipant && (

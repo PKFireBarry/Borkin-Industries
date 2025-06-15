@@ -4,6 +4,7 @@ import type { Booking } from '@/types/booking'
 import type { ContractorServiceOffering } from '@/types/service'
 import { getAllPlatformServices } from './services'
 import { addGigDatesToContractorCalendar, removeGigDatesFromContractorCalendar } from './contractors'
+import { calculatePlatformFee, calculateStripeFee } from '@/lib/utils'
 
 // Helper function to calculate the number of days
 function calculateNumberOfDays(startDateISO: string, endDateISO: string): number {
@@ -185,7 +186,8 @@ export async function addBooking(data: AddBookingDataInput): Promise<string> {
     throw new Error("Calculated payment amount is invalid.");
   }
 
-  const platformFeeInCents = Math.round(paymentAmountInCents * 0.05);
+  const platformFeeInCents = calculatePlatformFee(paymentAmountInCents);
+  const estimatedStripeFeeInCents = calculateStripeFee(paymentAmountInCents);
 
   // Fetch contractor stripe account ID
   let contractorStripeAccountId: string | undefined = undefined;
@@ -227,7 +229,7 @@ export async function addBooking(data: AddBookingDataInput): Promise<string> {
     customerId: data.stripeCustomerId,
     contractorId: data.contractorId,
     metadata: stripeMetadata,
-    // The API route /api/stripe/create-payment-intent calculates application_fee_amount
+    // The API route /api/stripe/create-payment-intent handles fee calculations and transfers
   };
   if (paymentMethodId) {
     stripePayload.paymentMethodId = paymentMethodId;
@@ -263,6 +265,7 @@ export async function addBooking(data: AddBookingDataInput): Promise<string> {
     numberOfDays,
     paymentAmount: paymentAmountInCents / 100,
     platformFee: platformFeeInCents / 100,
+    stripeFee: estimatedStripeFeeInCents / 100, // Store estimated Stripe fee
     paymentIntentId,
     paymentClientSecret: piClientSecret,
     status: 'pending',
@@ -393,8 +396,9 @@ export async function saveBookingReview(
 
   const contractorRef = doc(db, 'contractors', contractorId);
   const reviewToSaveOnContractor = {
-    ...reviewToSaveOnBooking,
+    ...reviewData,
     bookingId,
+    date: new Date().toISOString(), // Use 'date' field as expected by Rating interface
     // clientId, // if you pass clientId to this function
     // userId: clientId // or a generic userId if that's how you identify reviewers
   };
@@ -499,7 +503,8 @@ export async function updateBookingServices({ bookingId, newServices, userId, ne
     }
   })
   if (newTotal <= 0) throw new Error('Total must be greater than zero')
-  const newPlatformFee = Math.round(newTotal * 0.05)
+  const newPlatformFee = calculatePlatformFee(newTotal)
+  const newEstimatedStripeFee = calculateStripeFee(newTotal)
 
   // Get contractor's Stripe account ID
   const contractorRef = doc(db, 'contractors', booking.contractorId)
@@ -577,6 +582,7 @@ export async function updateBookingServices({ bookingId, newServices, userId, ne
     services: servicesToSave,
     paymentAmount: newTotal / 100,
     platformFee: newPlatformFee / 100,
+    stripeFee: newEstimatedStripeFee / 100, // Store estimated Stripe fee
     startDate,
     endDate,
     numberOfDays,

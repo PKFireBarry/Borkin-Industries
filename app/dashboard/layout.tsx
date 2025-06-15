@@ -188,7 +188,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       </Dialog>
 
       {/* Main Content */}
-      <main className="flex-1 p-6 md:p-10">
+      <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-x-hidden">
         {children}
       </main>
     </div>

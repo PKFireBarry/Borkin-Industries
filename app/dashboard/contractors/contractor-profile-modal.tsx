@@ -11,6 +11,8 @@ import { getContractorServiceOfferings } from "@/lib/firebase/contractors";
 import { getAllPlatformServices } from "@/lib/firebase/services";
 import type { ContractorServiceOffering, PlatformService } from "@/types/service";
 import { CompactAvailabilityCalendar } from '../components/compact-availability-calendar';
+import { Badge } from '@/components/ui/badge'
+import { MapPin, Star, Calendar, Mail, DollarSign, Clock, Award } from 'lucide-react'
 
 interface ContractorProfileModalProps {
   contractor: Contractor | null
@@ -46,7 +48,7 @@ export function ContractorProfileModal({ contractor, open, onClose, onBookNow, c
       async function fetchData() {
         try {
           const [offerings, services] = await Promise.all([
-            getContractorServiceOfferings(contractor.id),
+            getContractorServiceOfferings(contractor!.id),
             getAllPlatformServices()
           ]);
           setServiceOfferings(offerings);
@@ -94,149 +96,301 @@ export function ContractorProfileModal({ contractor, open, onClose, onBookNow, c
 
   // For availability section
   const unavailableDates = validContractor.availability?.unavailableDates || [];
-  const hasUnavailableDates = unavailableDates.length > 0;
 
   // For ratings section
   const contractorRatings = validContractor.ratings || [];
   const hasRatings = contractorRatings.length > 0;
+  
+  // Calculate average rating
+  const averageRating = hasRatings 
+    ? contractorRatings.reduce((sum, rating) => sum + rating.rating, 0) / contractorRatings.length 
+    : 0;
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent 
-        className="max-w-3xl w-[95vw] md:w-full rounded-lg shadow-xl"
+        className="max-w-4xl w-[95vw] md:w-full rounded-2xl shadow-2xl border-0"
         aria-labelledby="contractorProfileTitle"
       >
-        <div className="p-6 space-y-6 bg-card text-card-foreground overflow-y-auto max-h-[calc(100vh_-_5rem)]">
-          <div className="flex flex-col md:flex-row items-center md:items-start gap-6 pb-6 border-b">
-            <Avatar className="w-28 h-28 md:w-36 md:h-36 border-4 border-primary shadow-lg">
-              <AvatarImage src={contractorProfileImage} alt={contractorName} className="object-cover"/>
-              <AvatarFallback className="text-4xl bg-primary/10">{contractorInitial}</AvatarFallback>
-            </Avatar>
-            <DialogHeader className="text-center md:text-left w-full">
-              <DialogTitle id="contractorProfileTitle" className="text-3xl font-bold mb-1">{contractorName}</DialogTitle>
-              <p className="text-sm text-muted-foreground mb-0.5">{contractorEmail}</p>
-              <p className="text-xs text-muted-foreground">
-                {contractorLocation}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">Driving Range: {contractorDrivingRange}</p>
-            </DialogHeader>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-x-8 gap-y-6">
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-lg font-semibold mb-2 text-primary">About Me</h3>
-                <DialogDescription id="contractorProfileBio" className="text-sm text-muted-foreground whitespace-pre-wrap">
-                  {contractorBio}
-                </DialogDescription>
-              </div>
-
-              <div>
-                <h3 className="text-lg font-semibold mb-2 text-primary">Services Offered</h3>
-                {isLoadingServices ? (
-                  <p className="text-sm text-muted-foreground">Loading services...</p>
-                ) : serviceOfferings.length > 0 ? (
-                  <ul className="space-y-1.5 text-sm">
-                    {serviceOfferings.map(offering => (
-                      <li key={offering.serviceId} className="flex justify-between items-center py-1 border-b border-border/50 last:border-b-0">
-                        <span>{getServiceName(offering.serviceId)}</span>
-                        <span className="font-medium text-primary flex items-center gap-2">
-                          ${ (offering.price / 100).toFixed(2) }
-                          <span className="ml-1 px-2 py-0.5 rounded bg-muted text-xs text-muted-foreground">
-                            {offering.paymentType === 'daily' ? '/day' : 'one-time fee'}
-                          </span>
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-sm text-muted-foreground">No specific services listed.</p>
+        <div className="overflow-y-auto max-h-[calc(100vh_-_5rem)]">
+          {/* Hero Section */}
+          <div className="relative bg-gradient-to-br from-primary/5 via-primary/10 to-primary/5 p-8 -m-6 mb-0 rounded-t-2xl">
+            <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
+              <div className="relative">
+                <Avatar className="w-32 h-32 md:w-40 md:h-40 border-4 border-white shadow-xl">
+                  <AvatarImage src={contractorProfileImage} alt={contractorName} className="object-cover"/>
+                  <AvatarFallback className="text-5xl bg-primary/10 text-primary font-bold">{contractorInitial}</AvatarFallback>
+                </Avatar>
+                {averageRating > 0 && (
+                  <div className="absolute -bottom-2 -right-2 bg-white rounded-full p-2 shadow-lg border-2 border-primary/20">
+                    <div className="flex items-center gap-1">
+                      <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                      <span className="text-sm font-bold text-slate-700">{averageRating.toFixed(1)}</span>
+                    </div>
+                  </div>
                 )}
               </div>
+              
+              <div className="text-center md:text-left flex-1">
+                <DialogHeader>
+                  <DialogTitle id="contractorProfileTitle" className="text-3xl md:text-4xl font-bold text-slate-900 mb-2">
+                    {contractorName}
+                  </DialogTitle>
+                </DialogHeader>
+                
+                <div className="space-y-2 mb-4">
+                  {contractorEmail && (
+                    <div className="flex items-center justify-center md:justify-start gap-2 text-slate-600">
+                      <Mail className="w-4 h-4" />
+                      <span className="text-sm">{contractorEmail}</span>
+                    </div>
+                  )}
+                  
+                  {contractorLocation && (
+                    <div className="flex items-center justify-center md:justify-start gap-2 text-slate-600">
+                      <MapPin className="w-4 h-4" />
+                      <span className="text-sm">{contractorLocation}</span>
+                    </div>
+                  )}
+                  
+                  <div className="flex items-center justify-center md:justify-start gap-2 text-slate-600">
+                    <Award className="w-4 h-4" />
+                    <span className="text-sm">Service Range: {contractorDrivingRange}</span>
+                  </div>
+                </div>
 
-              <div>
-                <h3 className="text-lg font-semibold mb-2 text-primary">Availability</h3>
-                <CompactAvailabilityCalendar unavailableDates={unavailableDates} />
-                <p className="text-xs text-muted-foreground mt-2 text-center">
-                  Dates marked in red are unavailable. All other dates are generally considered available.
-                </p>
-                 <p className="text-xs text-muted-foreground mt-1 text-center">
-                    Please confirm specific times when booking.
-                </p>
+                {hasRatings && (
+                  <div className="flex items-center justify-center md:justify-start gap-2 mb-4">
+                    <div className="flex items-center gap-1">
+                      {[...Array(5)].map((_, i) => (
+                        <Star 
+                          key={i} 
+                          className={`w-4 h-4 ${i < Math.round(averageRating) ? 'fill-yellow-400 text-yellow-400' : 'text-slate-300'}`} 
+                        />
+                      ))}
+                    </div>
+                    <span className="text-sm text-slate-600">
+                      {contractorRatings.length} review{contractorRatings.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                )}
+
+                {/* Skills Preview */}
+                {validContractor.veterinarySkills && validContractor.veterinarySkills.length > 0 && (
+                  <div className="flex flex-wrap gap-2 justify-center md:justify-start">
+                    {validContractor.veterinarySkills.slice(0, 4).map((skill, index) => (
+                      <Badge 
+                        key={index} 
+                        variant="secondary" 
+                        className="bg-white/80 text-primary border border-primary/20 rounded-full px-3 py-1"
+                      >
+                        {skill}
+                      </Badge>
+                    ))}
+                    {validContractor.veterinarySkills.length > 4 && (
+                      <Badge 
+                        variant="secondary" 
+                        className="bg-white/80 text-slate-600 border border-slate-200 rounded-full px-3 py-1"
+                      >
+                        +{validContractor.veterinarySkills.length - 4} more
+                      </Badge>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
+          </div>
 
-            <div className="space-y-6">
-              {validContractor.locationLat && validContractor.locationLng ? (
-                <div> 
-                    <h3 className="text-lg font-semibold mb-2 text-primary">Service Area</h3>
-                    <div className="w-full h-72 md:h-80 rounded-md overflow-hidden border shadow-sm">
-                    <ContractorMap
+          {/* Content Sections */}
+          <div className="p-6 space-y-8">
+            <div className="grid md:grid-cols-2 gap-8">
+              {/* Left Column */}
+              <div className="space-y-6">
+                {/* About Section */}
+                <div className="bg-slate-50 rounded-xl p-6">
+                  <h3 className="text-xl font-bold text-slate-900 mb-3 flex items-center gap-2">
+                    <div className="w-2 h-6 bg-primary rounded-full"></div>
+                    About Me
+                  </h3>
+                  <DialogDescription className="text-slate-700 leading-relaxed whitespace-pre-wrap">
+                    {contractorBio}
+                  </DialogDescription>
+                </div>
+
+                {/* Services Section */}
+                <div className="bg-slate-50 rounded-xl p-6">
+                  <h3 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+                    <div className="w-2 h-6 bg-primary rounded-full"></div>
+                    Services & Pricing
+                  </h3>
+                  {isLoadingServices ? (
+                    <div className="flex items-center gap-2 text-slate-600">
+                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                      <span>Loading services...</span>
+                    </div>
+                  ) : serviceOfferings.length > 0 ? (
+                    <div className="space-y-3">
+                      {serviceOfferings.map(offering => (
+                        <div key={offering.serviceId} className="bg-white rounded-lg p-4 border border-slate-200">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h4 className="font-semibold text-slate-900">{getServiceName(offering.serviceId)}</h4>
+                            </div>
+                            <div className="text-right">
+                              <div className="flex items-center gap-1 text-primary font-bold text-lg">
+                                <DollarSign className="w-4 h-4" />
+                                {(offering.price / 100).toFixed(2)}
+                              </div>
+                              <Badge variant="outline" className="text-xs mt-1">
+                                {offering.paymentType === 'daily' ? 'per day' : 'one-time'}
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-slate-600">No specific services listed. Contact for custom pricing.</p>
+                  )}
+                </div>
+
+                {/* Availability Section */}
+                <div className="bg-slate-50 rounded-xl p-6">
+                  <h3 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+                    <div className="w-2 h-6 bg-primary rounded-full"></div>
+                    <Calendar className="w-5 h-5" />
+                    Availability
+                  </h3>
+                  <CompactAvailabilityCalendar unavailableDates={unavailableDates} />
+                  <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <p className="text-xs text-blue-700 text-center font-medium">
+                      📅 Dates in red are unavailable. All other dates are generally open for booking.
+                    </p>
+                    <p className="text-xs text-blue-600 text-center mt-1">
+                      Specific times will be confirmed during the booking process.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column */}
+              <div className="space-y-6">
+                {/* Service Area Map */}
+                {validContractor.locationLat && validContractor.locationLng ? (
+                  <div className="bg-slate-50 rounded-xl p-6">
+                    <h3 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+                      <div className="w-2 h-6 bg-primary rounded-full"></div>
+                      <MapPin className="w-5 h-5" />
+                      Service Area
+                    </h3>
+                    <div className="w-full h-80 rounded-xl overflow-hidden border-2 border-white shadow-lg">
+                      <ContractorMap
                         lat={validContractor.locationLat}
                         lng={validContractor.locationLng}
                         miles={drivingRangeMiles}
                         clientLat={clientLatLng?.lat}
                         clientLng={clientLatLng?.lng}
-                    />
+                      />
                     </div>
-                </div>
-              ) : (
-                 <div>
-                    <h3 className="text-lg font-semibold mb-2 text-primary">Service Area</h3>
-                    <p className="text-sm text-muted-foreground">Location not set for map display.</p>
-                 </div>
-              )}
-
-              <div>
-                <h3 className="text-lg font-semibold mb-2 text-primary">Ratings & Reviews</h3>
-                {hasRatings ? (
-                  <div className="space-y-3 max-h-80 overflow-y-auto pr-2">
-                    {contractorRatings.slice(0, 5).map((review, idx) => ( // Show latest 5 or so
-                      <div key={idx} className="p-3 bg-secondary/50 rounded-md shadow-sm text-sm">
-                        <div className="flex items-center mb-1">
-                          {[...Array(5)].map((_, i) => (
-                            <svg key={i} className={`w-4 h-4 ${i < review.rating ? 'text-yellow-400' : 'text-gray-300'}`} fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
-                          ))}
-                        </div>
-                        {review.comment && <p className="text-muted-foreground mb-1">{review.comment}</p>}
-                        {review.contractorFeedback && (
-                          <div className="mt-2 pt-2 border-t border-border/30 bg-blue-50/50 rounded p-2">
-                            <div className="flex items-center gap-1 mb-1">
-                              <span className="text-xs font-medium text-blue-700">Contractor Response:</span>
-                              <span className="text-xs text-blue-600">
-                                {new Date(review.contractorFeedback.date).toLocaleDateString()}
-                              </span>
-                            </div>
-                            <p className="text-xs text-blue-700 italic">"{review.contractorFeedback.comment}"</p>
-                          </div>
-                        )}
-                        <p className="text-xs text-muted-foreground/80 mt-1">{new Date(review.date).toLocaleDateString()}</p>
-                      </div>
-                    ))}
+                    <p className="text-xs text-slate-600 mt-2 text-center">
+                      Service area covers approximately {contractorDrivingRange} from base location
+                    </p>
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground">No reviews yet.</p>
+                  <div className="bg-slate-50 rounded-xl p-6">
+                    <h3 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+                      <div className="w-2 h-6 bg-primary rounded-full"></div>
+                      <MapPin className="w-5 h-5" />
+                      Service Area
+                    </h3>
+                    <div className="bg-white rounded-lg p-8 text-center border border-slate-200">
+                      <MapPin className="w-12 h-12 text-slate-400 mx-auto mb-2" />
+                      <p className="text-slate-600">Location not set for map display</p>
+                      <p className="text-sm text-slate-500 mt-1">Contact for service area details</p>
+                    </div>
+                  </div>
                 )}
+
+                {/* Reviews Section */}
+                <div className="bg-slate-50 rounded-xl p-6">
+                  <h3 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+                    <div className="w-2 h-6 bg-primary rounded-full"></div>
+                    <Star className="w-5 h-5" />
+                    Reviews & Ratings
+                  </h3>
+                  {hasRatings ? (
+                    <div className="space-y-4 max-h-80 overflow-y-auto">
+                      {contractorRatings.slice(0, 5).map((review, idx) => (
+                        <div key={idx} className="bg-white rounded-lg p-4 border border-slate-200 shadow-sm">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-1">
+                              {[...Array(5)].map((_, i) => (
+                                <Star 
+                                  key={i} 
+                                  className={`w-4 h-4 ${i < review.rating ? 'fill-yellow-400 text-yellow-400' : 'text-slate-300'}`} 
+                                />
+                              ))}
+                            </div>
+                            <span className="text-xs text-slate-500">
+                              {review.date && !isNaN(new Date(review.date).getTime()) 
+                                ? new Date(review.date).toLocaleDateString()
+                                : 'Date not available'
+                              }
+                            </span>
+                          </div>
+                          {review.comment && (
+                            <p className="text-slate-700 text-sm leading-relaxed mb-2">"{review.comment}"</p>
+                          )}
+                          {review.contractorFeedback && (
+                            <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Badge variant="outline" className="text-xs bg-blue-100 text-blue-700 border-blue-300">
+                                  Contractor Response
+                                </Badge>
+                                <span className="text-xs text-blue-600">
+                                  {review.contractorFeedback.date && !isNaN(new Date(review.contractorFeedback.date).getTime())
+                                    ? new Date(review.contractorFeedback.date).toLocaleDateString()
+                                    : ''
+                                  }
+                                </span>
+                              </div>
+                              <p className="text-sm text-blue-700 italic">"{review.contractorFeedback.comment}"</p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="bg-white rounded-lg p-8 text-center border border-slate-200">
+                      <Star className="w-12 h-12 text-slate-400 mx-auto mb-2" />
+                      <p className="text-slate-600 font-medium">No reviews yet</p>
+                      <p className="text-sm text-slate-500 mt-1">Be the first to book and leave a review!</p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
           
-          <div className="w-full pt-6 border-t flex flex-col sm:flex-row gap-3">
-            <Button 
-              className="flex-1 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-sm"
-              onClick={() => onBookNow(validContractor.id)} 
-              type="button"
-            >
-              Request Booking
-            </Button>
-            <Button 
-              variant="outline" 
-              className="flex-1 py-3 shadow-sm"
-              onClick={onClose} 
-              type="button"
-            >
-              Close
-            </Button>
+          {/* Action Buttons */}
+          <div className="sticky bottom-0 bg-white border-t border-slate-200 p-6 -m-6 mt-0 rounded-b-2xl">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Button 
+                className="flex-1 py-4 text-lg font-semibold bg-primary hover:bg-primary/90 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-200"
+                onClick={() => onBookNow(validContractor.id)} 
+                type="button"
+              >
+                Request Booking
+              </Button>
+              <Button 
+                variant="outline" 
+                className="flex-1 py-4 text-lg font-semibold rounded-xl border-2 hover:bg-slate-50 transition-all duration-200"
+                onClick={onClose} 
+                type="button"
+              >
+                Close
+              </Button>
+            </div>
           </div>
         </div>
       </DialogContent>
