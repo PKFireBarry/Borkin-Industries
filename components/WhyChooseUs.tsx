@@ -1,19 +1,22 @@
 "use client"
 
 import { type ReactNode, useEffect, forwardRef } from "react"
-import { Check, Clock, Calendar, Heart, Users } from "lucide-react"
+import { Check, Clock, Calendar, Heart, Users, Star, Shield, Zap } from "lucide-react"
 import { motion, useAnimation, type Variants, useTransform, useScroll } from "framer-motion"
 import { useInView } from "react-intersection-observer"
 
 interface StatCardProps {
   number: string
   label: string
+  icon: ReactNode
+  color: string
 }
 
 interface FeatureCardProps {
   icon: ReactNode
   title: string
   description: string
+  color: string
 }
 
 interface SchedulingFeatureProps {
@@ -22,10 +25,10 @@ interface SchedulingFeatureProps {
   description: string
 }
 
-const customEasing = [0.25, 0.1, 0.25, 1]
+const customEasing = [0.22, 1, 0.36, 1]
 
 const fadeInUp: Variants = {
-  hidden: { opacity: 0, y: 50 },
+  hidden: { opacity: 0, y: 40 },
   visible: {
     opacity: 1,
     y: 0,
@@ -33,12 +36,12 @@ const fadeInUp: Variants = {
   },
 }
 
-const subtleScale: Variants = {
-  hidden: { scale: 0.95, opacity: 0 },
+const scaleIn: Variants = {
+  hidden: { scale: 0.8, opacity: 0 },
   visible: {
     scale: 1,
     opacity: 1,
-    transition: { duration: 0.8, ease: customEasing },
+    transition: { duration: 0.6, ease: customEasing },
   },
 }
 
@@ -50,7 +53,7 @@ const WhyChooseUs = () => {
   })
 
   const { scrollYProgress } = useScroll()
-  const y = useTransform(scrollYProgress, [0, 1], [0, -50])
+  const y = useTransform(scrollYProgress, [0, 1], [0, -30])
 
   useEffect(() => {
     controls.start("visible")
@@ -59,21 +62,40 @@ const WhyChooseUs = () => {
   return (
     <motion.section
       id="why-choose-us"
-      className="w-full bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-800 shadow-xl overflow-hidden"
+      className="relative w-full bg-gradient-to-br from-white via-slate-50 to-indigo-50 overflow-hidden"
       style={{ y }}
       initial="visible"
       animate={controls}
     >
-      <div className="container mx-auto px-4 py-12 md:py-24 lg:py-32">
-        <motion.h2
+      {/* Background Elements */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_40%,_rgba(120,119,198,0.08),_transparent_70%)] pointer-events-none" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_60%,_rgba(236,72,153,0.08),_transparent_70%)] pointer-events-none" />
+      
+      <div className="relative container mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24 lg:py-32">
+        <motion.div
           initial="visible"
           animate={controls}
           variants={fadeInUp}
-          className="text-3xl font-bold tracking-tighter sm:text-5xl text-center mb-10 md:mb-12 text-purple-600 dark:text-purple-300"
+          className="text-center mb-16"
         >
-          Why Choose Our Pet Care Service?
-        </motion.h2>
+          <motion.div
+            className="inline-flex items-center gap-2 px-4 py-2 mb-6 text-sm font-semibold tracking-wide rounded-full bg-gradient-to-r from-indigo-100 to-purple-100 text-indigo-700 border border-indigo-200"
+            variants={fadeInUp}
+          >
+            <Star className="w-4 h-4" />
+            <span>Why Choose Us</span>
+          </motion.div>
+          <h2 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight mb-6">
+            <span className="bg-gradient-to-r from-slate-900 via-indigo-900 to-purple-900 bg-clip-text text-transparent">
+              Why Choose Our Pet Care Service?
+            </span>
+          </h2>
+          <p className="text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed">
+            Experience the difference of professional, certified veterinary care
+          </p>
+        </motion.div>
 
+        {/* Stats Cards */}
         <motion.div
           ref={ref}
           initial="visible"
@@ -86,13 +108,29 @@ const WhyChooseUs = () => {
               },
             },
           }}
-          className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 mb-12 md:mb-16 text-center"
+          className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 mb-16"
         >
-          <MotionStatCard number="11+" label="Trusted Clients" />
-          <MotionStatCard number="4+" label="Years in Veterinary Medicine" />
-          <MotionStatCard number="5000+" label="Hours as a Certified Vet Nurse" />
+          <MotionStatCard 
+            number="11+" 
+            label="Trusted Clients" 
+            icon={<Users className="w-6 h-6" />}
+            color="from-blue-500 to-indigo-600"
+          />
+          <MotionStatCard 
+            number="4+" 
+            label="Years in Veterinary Medicine" 
+            icon={<Shield className="w-6 h-6" />}
+            color="from-green-500 to-emerald-600"
+          />
+          <MotionStatCard 
+            number="5000+" 
+            label="Hours as a Certified Vet Nurse" 
+            icon={<Heart className="w-6 h-6" />}
+            color="from-pink-500 to-rose-600"
+          />
         </motion.div>
 
+        {/* Feature Cards */}
         <motion.div
           ref={ref}
           initial="visible"
@@ -105,20 +143,23 @@ const WhyChooseUs = () => {
               },
             },
           }}
-          className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12 md:mb-16"
+          className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-16"
         >
           <MotionFeatureCard
-            icon={<Users className="w-10 h-10 md:w-12 md:h-12 text-purple-600 dark:text-purple-300" />}
+            icon={<Users className="w-8 h-8" />}
             title="Meet Your Sitter Before Scheduling"
             description="We offer an in-home consultation before your first service for a small fee. This allows you and your pet to get comfortable with your sitter, ensuring it's the perfect fit for your furry family member's needs."
+            color="from-blue-500 to-indigo-600"
           />
           <MotionFeatureCard
-            icon={<Heart className="w-10 h-10 md:w-12 md:h-12 text-purple-600 dark:text-purple-300" />}
+            icon={<Heart className="w-8 h-8" />}
             title="Consistent Care from a Trusted Sitter"
             description="We provide care for both small and large animals with a focus on consistent communication and daily updates. Our goal is to give you peace of mind, knowing that your furry family members are being properly cared for with the love and attention they deserve."
+            color="from-pink-500 to-rose-600"
           />
         </motion.div>
 
+        {/* Scheduling Features */}
         <motion.div
           ref={ref}
           initial="visible"
@@ -128,47 +169,67 @@ const WhyChooseUs = () => {
               transition: { staggerChildren: 0.15, delayChildren: 0.8 },
             },
           }}
-          className="bg-white dark:bg-gray-700 p-8 md:p-10 rounded-lg shadow-md"
+          className="relative"
         >
-          <motion.h3
-            variants={fadeInUp}
-            className="text-2xl font-semibold mb-6 md:mb-8 text-center text-gray-700 dark:text-gray-300"
-          >
-            Consistent Availability, Flexible Scheduling
-          </motion.h3>
+          <div className="absolute inset-0 bg-gradient-to-br from-white to-slate-50 rounded-3xl shadow-2xl border border-slate-200" />
+          <div className="relative bg-white/80 backdrop-blur-sm rounded-3xl p-8 md:p-12 shadow-xl border border-white">
+            <motion.div
+              variants={fadeInUp}
+              className="text-center mb-12"
+            >
+              <div className="inline-flex items-center gap-2 px-4 py-2 mb-4 text-sm font-semibold tracking-wide rounded-full bg-gradient-to-r from-emerald-100 to-green-100 text-emerald-700 border border-emerald-200">
+                <Zap className="w-4 h-4" />
+                <span>Flexible Service</span>
+              </div>
+              <h3 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">
+                Consistent Availability, Flexible Scheduling
+              </h3>
+              <p className="text-lg text-slate-600 max-w-2xl mx-auto">
+                We understand that life happens. That's why we offer flexible scheduling options to meet your needs.
+              </p>
+            </motion.div>
 
-          <motion.div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
-            <MotionSchedulingFeature
-              icon={<Clock className="w-6 h-6 text-purple-600 dark:text-purple-300" />}
-              title="Last-minute Requests"
-              description="Kaitlyn is available for unexpected needs, if notified within the first 24 hours."
-            />
-            <MotionSchedulingFeature
-              icon={<Calendar className="w-6 h-6 text-purple-600 dark:text-purple-300" />}
-              title="Schedule Changes"
-              description="Easily extend your service if your plans change."
-            />
-            <MotionSchedulingFeature
-              icon={<Check className="w-6 h-6 text-purple-600 dark:text-purple-300" />}
-              title="Flexible Cancellations"
-              description="Our cancellation policies are designed with you in mind."
-            />
-          </motion.div>
+            <motion.div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              <MotionSchedulingFeature
+                icon={<Clock className="w-6 h-6 text-orange-600" />}
+                title="Last-minute Requests"
+                description="Kaitlyn is available for unexpected needs, if notified within the first 24 hours."
+              />
+              <MotionSchedulingFeature
+                icon={<Calendar className="w-6 h-6 text-blue-600" />}
+                title="Schedule Changes"
+                description="Easily extend your service if your plans change."
+              />
+              <MotionSchedulingFeature
+                icon={<Check className="w-6 h-6 text-green-600" />}
+                title="Flexible Cancellations"
+                description="Our cancellation policies are designed with you in mind."
+              />
+            </motion.div>
+          </div>
         </motion.div>
       </div>
     </motion.section>
   )
 }
 
-const StatCard = forwardRef<HTMLDivElement, StatCardProps>(({ number, label }, ref) => {
+const StatCard = forwardRef<HTMLDivElement, StatCardProps>(({ number, label, icon, color }, ref) => {
   return (
     <motion.div
       ref={ref}
-      variants={subtleScale}
-      className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md transform hover:scale-105 transition-transform duration-300"
+      variants={scaleIn}
+      className="group relative bg-white rounded-2xl p-8 shadow-lg border border-slate-100 hover:shadow-xl transition-all duration-300 hover:-translate-y-2"
+      whileHover={{ scale: 1.02 }}
+      transition={{ type: "spring", stiffness: 300 }}
     >
-      <p className="text-4xl font-bold text-purple-600 dark:text-purple-300 mb-2">{number}</p>
-      <p className="text-base text-gray-600 dark:text-gray-400">{label}</p>
+      <div className={`absolute inset-0 bg-gradient-to-br ${color} rounded-2xl opacity-0 group-hover:opacity-5 transition-opacity duration-300`} />
+      <div className="relative text-center">
+        <div className={`w-16 h-16 bg-gradient-to-br ${color} rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg text-white`}>
+          {icon}
+        </div>
+        <p className="text-4xl font-bold text-slate-900 mb-2">{number}</p>
+        <p className="text-base font-medium text-slate-600">{label}</p>
+      </div>
     </motion.div>
   )
 })
@@ -176,18 +237,23 @@ StatCard.displayName = "StatCard"
 
 const MotionStatCard = motion(StatCard)
 
-const FeatureCard = forwardRef<HTMLDivElement, FeatureCardProps>(({ icon, title, description }, ref) => {
+const FeatureCard = forwardRef<HTMLDivElement, FeatureCardProps>(({ icon, title, description, color }, ref) => {
   return (
     <motion.div
       ref={ref}
       variants={fadeInUp}
-      className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md transform hover:scale-105 transition-transform duration-300"
+      className="group relative bg-white rounded-2xl p-8 shadow-lg border border-slate-100 hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
+      whileHover={{ scale: 1.01 }}
+      transition={{ type: "spring", stiffness: 300 }}
     >
-      <div className="flex flex-col items-center mb-4">
-        {icon}
-        <h3 className="text-xl font-semibold mt-4 text-center text-gray-700 dark:text-gray-300">{title}</h3>
+      <div className={`absolute inset-0 bg-gradient-to-br ${color} rounded-2xl opacity-0 group-hover:opacity-5 transition-opacity duration-300`} />
+      <div className="relative">
+        <div className={`w-16 h-16 bg-gradient-to-br ${color} rounded-2xl flex items-center justify-center mb-6 shadow-lg text-white`}>
+          {icon}
+        </div>
+        <h3 className="text-2xl font-bold text-slate-900 mb-4">{title}</h3>
+        <p className="text-slate-600 leading-relaxed">{description}</p>
       </div>
-      <p className="text-sm text-gray-600 dark:text-gray-400 text-center leading-relaxed">{description}</p>
     </motion.div>
   )
 })
@@ -197,12 +263,18 @@ const MotionFeatureCard = motion(FeatureCard)
 
 const SchedulingFeature = forwardRef<HTMLDivElement, SchedulingFeatureProps>(({ icon, title, description }, ref) => {
   return (
-    <motion.div ref={ref} variants={fadeInUp} className="flex items-start text-left w-full md:w-auto">
-      <div className="bg-purple-100 dark:bg-purple-800/50 p-3 rounded-full mr-4 flex-shrink-0">{icon}</div>
-      <div>
-        <h4 className="text-lg font-semibold mb-1 text-gray-700 dark:text-gray-300">{title}</h4>
-        <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{description}</p>
+    <motion.div 
+      ref={ref} 
+      variants={fadeInUp} 
+      className="group text-center"
+      whileHover={{ y: -4 }}
+      transition={{ type: "spring", stiffness: 300 }}
+    >
+      <div className="w-16 h-16 bg-gradient-to-br from-slate-100 to-slate-200 group-hover:from-slate-200 group-hover:to-slate-300 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg transition-all duration-300">
+        {icon}
       </div>
+      <h4 className="text-xl font-bold text-slate-900 mb-3">{title}</h4>
+      <p className="text-slate-600 leading-relaxed">{description}</p>
     </motion.div>
   )
 })
