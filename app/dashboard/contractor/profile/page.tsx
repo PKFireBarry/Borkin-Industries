@@ -7,6 +7,9 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Label } from "@/components/ui/label"
+import { Textarea } from '@/components/ui/textarea'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
 import { getContractorProfile, updateContractorProfile, getContractorServiceOfferings } from '@/lib/firebase/contractors'
 import dynamic from 'next/dynamic'
 import type { ContractorServiceOffering, PlatformService } from '@/types/service';
@@ -14,6 +17,7 @@ import type { Contractor, ContractorApplication, Availability, PaymentInfo, Work
 import { ContractorProfileServiceManager } from './components/contractor-profile-service-manager';
 import { getAllPlatformServices } from '@/lib/firebase/services'
 import { PhotoUpload } from '@/components/PhotoUpload'
+import { MapPin, Phone, Mail, Edit3, Save, X, Star, Award, Calendar, Clock } from 'lucide-react'
 
 
 const VETERINARY_SKILLS = [
@@ -256,8 +260,40 @@ export default function ContractorProfilePage() {
     return match ? parseFloat(match[1]) : 10
   }
 
-  if (!isLoaded || !isAuthorized ) return <div className="p-8 text-center text-muted-foreground">Authorizing...</div>
-  if (loading) return <div className="p-8 text-center text-muted-foreground">Loading profile...</div>
+  if (!isLoaded || !isAuthorized) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-slate-600 font-medium">Loading your profile...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="animate-pulse space-y-8">
+            <div className="h-8 bg-slate-200 rounded w-1/3 mx-auto"></div>
+            <div className="bg-white rounded-2xl p-8 shadow-sm border border-slate-200/60">
+              <div className="flex flex-col items-center space-y-4">
+                <div className="h-32 w-32 bg-slate-200 rounded-full"></div>
+                <div className="h-6 bg-slate-200 rounded w-48"></div>
+                <div className="h-4 bg-slate-200 rounded w-32"></div>
+              </div>
+              <div className="mt-8 space-y-4">
+                <div className="h-4 bg-slate-200 rounded w-full"></div>
+                <div className="h-4 bg-slate-200 rounded w-3/4"></div>
+                <div className="h-4 bg-slate-200 rounded w-1/2"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   const renderServiceManager = () => {
     if (!user) return null;
@@ -273,179 +309,388 @@ export default function ContractorProfilePage() {
 
   if (!editing) {
     return (
-      <section className="max-w-2xl mx-auto py-12 px-4 pb-28">
-        <h1 className="text-3xl font-bold mb-8 text-center">Contractor Profile</h1>
-        <Card className="shadow-lg">
-          <CardHeader className="text-center">
-            <div className="flex flex-col items-center mb-4">
-                <Avatar className="h-32 w-32 mb-4 border-2 border-primary">
-                    {form.profileImage ? (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
+        {/* Header */}
+        <div className="bg-white/80 backdrop-blur-sm border-b border-slate-200/60 sticky top-0 z-10">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="py-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
+                    Your Profile
+                  </h1>
+                  <p className="text-slate-600 mt-1">
+                    Manage your professional information and services
+                  </p>
+                </div>
+                <Button 
+                  onClick={() => setEditing(true)}
+                  className="bg-primary hover:bg-primary/90 text-white rounded-xl px-6 py-2 font-semibold shadow-sm hover:shadow-md transition-all duration-200"
+                >
+                  <Edit3 className="w-4 h-4 mr-2" />
+                  Edit Profile
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+          {/* Profile Hero Card */}
+          <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm rounded-2xl overflow-hidden">
+            <div className="relative bg-gradient-to-br from-primary/5 via-primary/10 to-primary/5 p-8">
+              <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
+                <div className="relative">
+                  <Avatar className="w-32 h-32 md:w-40 md:h-40 border-4 border-white shadow-xl">
                     <AvatarImage src={form.profileImage} alt={form.name} className="object-cover"/>
-                    ) : (
-                    <AvatarFallback className="text-4xl">{form.name ? form.name.charAt(0).toUpperCase() : 'U'}</AvatarFallback>
+                    <AvatarFallback className="text-5xl bg-primary/10 text-primary font-bold">
+                      {form.name ? form.name.charAt(0).toUpperCase() : 'U'}
+                    </AvatarFallback>
+                  </Avatar>
+                  {/* Rating Badge */}
+                  {form.ratings && form.ratings.length > 0 && (
+                    <div className="absolute -bottom-2 -right-2 bg-white rounded-full p-2 shadow-lg border-2 border-primary/20">
+                      <div className="flex items-center gap-1">
+                        <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                        <span className="text-sm font-bold text-slate-700">
+                          {(form.ratings.reduce((sum, r) => sum + r.rating, 0) / form.ratings.length).toFixed(1)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="text-center md:text-left flex-1">
+                  <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-2">
+                    {form.name || 'Your Name'}
+                  </h2>
+                  
+                  <div className="space-y-2 mb-4">
+                    <div className="flex items-center justify-center md:justify-start gap-2 text-slate-600">
+                      <Mail className="w-4 h-4" />
+                      <span className="text-sm">{form.email}</span>
+                    </div>
+                    
+                    {form.phone && (
+                      <div className="flex items-center justify-center md:justify-start gap-2 text-slate-600">
+                        <Phone className="w-4 h-4" />
+                        <span className="text-sm">{form.phone}</span>
+                      </div>
                     )}
-                </Avatar>
-                <CardTitle className="text-2xl">{form.name}</CardTitle>
-                <p className="text-muted-foreground">{form.email}</p>
+                    
+                    {(form.city || form.state) && (
+                      <div className="flex items-center justify-center md:justify-start gap-2 text-slate-600">
+                        <MapPin className="w-4 h-4" />
+                        <span className="text-sm">
+                          {[form.city, form.state].filter(Boolean).join(', ')}
+                        </span>
+                      </div>
+                    )}
+                    
+                    {form.drivingRange && (
+                      <div className="flex items-center justify-center md:justify-start gap-2 text-slate-600">
+                        <Award className="w-4 h-4" />
+                        <span className="text-sm">Service Range: {form.drivingRange}</span>
             </div>
-          </CardHeader>
-          <CardContent className="space-y-6 divide-y divide-gray-200">
-            <div className="pt-6">
-                <h3 className="text-lg font-semibold mb-2 text-primary">About Me</h3>
-                <p className="text-muted-foreground whitespace-pre-wrap">{form.bio || 'No bio provided.'}</p>
+                    )}
             </div>
-            <div className="pt-6">
-                <h3 className="text-lg font-semibold mb-2 text-primary">Location & Contact</h3>
-                <p><strong>Address:</strong> {`${form.address}, ${form.city}, ${form.state} ${form.postalCode}`}</p>
-                <p><strong>Phone:</strong> {form.phone}</p>
-                <p><strong>Driving Range:</strong> {form.drivingRange || 'N/A'}</p>
-                {form.locationLat && form.locationLng && (
-                    <div className="w-full h-64 mt-4 rounded-md overflow-hidden relative z-0">
-                        <MapWithCircle lat={form.locationLat} lng={form.locationLng} miles={getDrivingRangeMiles()} />
+
+                  {/* Skills/Experience Badges */}
+                  {form.veterinarySkills && form.veterinarySkills.length > 0 && (
+                    <div className="flex flex-wrap gap-2 justify-center md:justify-start">
+                      {form.veterinarySkills.slice(0, 4).map((skill) => (
+                        <Badge key={skill} variant="secondary" className="bg-primary/10 text-primary border-primary/20 rounded-full px-3 py-1">
+                          {skill}
+                        </Badge>
+                      ))}
+                      {form.veterinarySkills.length > 4 && (
+                        <Badge variant="outline" className="rounded-full px-3 py-1">
+                          +{form.veterinarySkills.length - 4} more
+                        </Badge>
+                      )}
                     </div>
                 )}
+                </div>
+              </div>
             </div>
+          </Card>
+
+          {/* About Section */}
+          <Card className="border-0 shadow-sm bg-white rounded-2xl">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-xl font-semibold text-slate-900 flex items-center gap-2">
+                <div className="w-2 h-6 bg-primary rounded-full"></div>
+                About Me
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-slate-600 leading-relaxed whitespace-pre-wrap">
+                {form.bio || 'No bio provided yet. Click "Edit Profile" to add information about your experience and approach to pet care.'}
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Location & Contact */}
+          <Card className="border-0 shadow-sm bg-white rounded-2xl">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-xl font-semibold text-slate-900 flex items-center gap-2">
+                <div className="w-2 h-6 bg-primary rounded-full"></div>
+                <MapPin className="w-5 h-5" />
+                Location & Service Area
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {form.address && (
+                <div className="bg-slate-50 rounded-xl p-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <Label className="text-slate-500 text-xs uppercase tracking-wide">Address</Label>
+                      <p className="text-slate-900 font-medium">
+                        {`${form.address}, ${form.city}, ${form.state} ${form.postalCode}`}
+                      </p>
+                    </div>
+                    <div>
+                      <Label className="text-slate-500 text-xs uppercase tracking-wide">Service Range</Label>
+                      <p className="text-slate-900 font-medium">{form.drivingRange || 'Not specified'}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {form.locationLat && form.locationLng && (
+                <div className="w-full h-80 rounded-xl overflow-hidden border-2 border-slate-200/60 shadow-sm">
+                  <MapWithCircle lat={form.locationLat} lng={form.locationLng} miles={getDrivingRangeMiles()} />
+                </div>
+              )}
           </CardContent>
         </Card>
         
-        {renderServiceManager()}
 
-        {/* Sticky action bar */}
-        <div className="fixed bottom-0 left-0 w-full bg-background border-t border-gray-200 shadow-lg z-50 flex justify-center py-4 px-4">
-          <Button type="button" className="w-full max-w-2xl text-lg" onClick={() => setEditing(true)}>
-            Edit Profile
-          </Button>
+
+          {/* Service Manager */}
+        {renderServiceManager()}
         </div>
-      </section>
+      </div>
     )
   }
-  return (
-    <section className="max-w-4xl mx-auto py-12 px-4 pb-32">
-      <h1 className="text-3xl font-bold mb-8 text-center">Contractor Profile</h1>
-      {editing ? (
-        <>
-          <form id="contractorProfileForm" onSubmit={handleSubmit} className="space-y-6 mb-8" aria-label="Update main contractor profile">
-             <Card>
-                  <CardHeader><CardTitle>Edit Basic Information</CardTitle></CardHeader>
-                  <CardContent className="space-y-4">
-                       <div className="flex flex-col items-center mb-6 space-y-4">
-                         <Avatar className="h-24 w-24">
-                           {form.profileImage ? (
-                             <AvatarImage src={form.profileImage} alt={form.name} />
-                           ) : (
-                             <AvatarFallback>{form.name?.charAt(0) || 'U'}</AvatarFallback>
-                           )}
-                         </Avatar>
-                         <div className="w-full">
-                           <PhotoUpload
-                             label="Profile Picture"
-                             storagePath={`contractor-avatars/${user?.id || 'unknown'}`}
-                             initialUrl={form.profileImage}
-                             onUpload={url => setForm(prev => ({ ...prev, profileImage: url }))}
-                             disabled={saving}
-                           />
-                         </div>
-                       </div>
-                       <div><Label>Name</Label><Input name="name" value={form.name} onChange={handleChange} /></div>
-                       <div><Label>Phone</Label><Input name="phone" value={form.phone} onChange={handleChange} /></div>
-                       <div><Label>Bio</Label><textarea name="bio" value={form.bio || ''} onChange={handleChange} rows={4} className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary focus:border-primary" placeholder="Tell clients a bit about yourself and your experience."></textarea></div>
-                  </CardContent>
-              </Card>
-             <Card>
-                  <CardHeader><CardTitle>Edit Location</CardTitle></CardHeader>
-                  <CardContent className="space-y-4">
-                       <div><Label>Address</Label><Input name="address" value={form.address} onChange={handleChange} /></div>
-                       <div><Label>City</Label><Input name="city" value={form.city} onChange={handleChange} /></div>
-                       <div><Label>State</Label><Input name="state" value={form.state} onChange={handleChange} /></div>
-                       <div><Label>Postal Code</Label><Input name="postalCode" value={form.postalCode} onChange={handleChange} /></div>
-                       <div><Label>Driving Range</Label><Input name="drivingRange" value={form.drivingRange} onChange={handleChange} /></div>
-                  </CardContent>
-              </Card>
-          </form>
 
-          {/* Sticky action bar for edit mode */}
-          <div className="fixed bottom-0 left-0 w-full bg-background border-t border-gray-200 shadow-lg z-50 flex justify-center py-4 px-4">
-            <div className="flex gap-2 w-full max-w-4xl">
+  // Edit Mode
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
+      {/* Header */}
+      <div className="bg-white/80 backdrop-blur-sm border-b border-slate-200/60 sticky top-0 z-10">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="py-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
+                  Edit Profile
+                </h1>
+                <p className="text-slate-600 mt-1">
+                  Update your professional information
+                </p>
+                         </div>
+              <div className="flex gap-2">
               <Button 
                 type="button" 
                 variant="outline" 
-                className="flex-1"
                 onClick={() => { 
                   setForm(originalForm); 
                   setEditing(false); 
                   setError(null); 
                   setSuccess(false); 
                 }}
+                  className="rounded-xl px-4 py-2 border-2 hover:bg-slate-50 transition-all duration-200"
               >
-                Cancel Profile Edit
+                  <X className="w-4 h-4 mr-2" />
+                  Cancel
               </Button>
-              <div className="relative flex-1">
                 <Button 
                   type="submit" 
                   form="contractorProfileForm"
                   disabled={saving || !formValid}
-                  title={!formValid ? "Please complete required fields" : saving ? "Saving in progress" : "Save your profile changes"}
-                  className="w-full relative"
+                  className="bg-primary hover:bg-primary/90 text-white rounded-xl px-6 py-2 font-semibold shadow-sm hover:shadow-md transition-all duration-200"
                 >
-                  {saving ? 'Saving Profile...' : 'Save Profile Changes'}
+                  {saving ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4 mr-2" />
+                      Save Changes
+                    </>
+                  )}
                 </Button>
-                {!formValid && (
-                  <p className="absolute -bottom-6 right-0 text-xs text-red-500 whitespace-nowrap">
-                    Please fill required fields
-                  </p>
-                )}
+              </div>
+            </div>
               </div>
             </div>
           </div>
 
-          {error && <p className="text-red-500 text-sm mt-2">Error: {error}</p>}
-          {success && <p className="text-green-500 text-sm mt-2">Profile updated successfully!</p>}
-
-          {renderServiceManager()}
-        </>
-      ) : (
-         <div>
-             <Card className="shadow-lg mb-6">
-                 <CardHeader className="text-center">
-                     <div className="flex flex-col items-center mb-4">
-                         <Avatar className="h-32 w-32 mb-4 border-2 border-primary">
-                             {form.profileImage ? (
+      {/* Main Content */}
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <form id="contractorProfileForm" onSubmit={handleSubmit} className="space-y-8">
+          {/* Basic Information */}
+          <Card className="border-0 shadow-sm bg-white rounded-2xl">
+            <CardHeader className="pb-6">
+              <CardTitle className="text-xl font-semibold text-slate-900">Basic Information</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Profile Picture */}
+              <div className="flex flex-col items-center space-y-4">
+                <Avatar className="w-32 h-32 border-4 border-slate-200 shadow-lg">
                              <AvatarImage src={form.profileImage} alt={form.name} className="object-cover"/>
-                             ) : (
-                             <AvatarFallback className="text-4xl">{form.name ? form.name.charAt(0).toUpperCase() : 'U'}</AvatarFallback>
-                             )}
+                  <AvatarFallback className="text-4xl bg-slate-100 text-slate-600">
+                    {form.name?.charAt(0) || 'U'}
+                  </AvatarFallback>
                          </Avatar>
-                         <CardTitle className="text-2xl">{form.name}</CardTitle>
-                         <p className="text-muted-foreground">{form.email}</p>
+                <div className="w-full max-w-sm">
+                  <PhotoUpload
+                    label="Profile Picture"
+                    storagePath={`contractor-avatars/${user?.id || 'unknown'}`}
+                    initialUrl={form.profileImage}
+                    onUpload={url => setForm(prev => ({ ...prev, profileImage: url }))}
+                    disabled={saving}
+                  />
+                </div>
+              </div>
+
+              {/* Form Fields */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="name" className="text-sm font-semibold text-slate-700">Full Name *</Label>
+                  <Input 
+                    id="name"
+                    name="name" 
+                    value={form.name} 
+                    onChange={handleChange}
+                    className="border-2 border-slate-200 rounded-xl focus:border-primary focus:ring-0"
+                    placeholder="Enter your full name"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="phone" className="text-sm font-semibold text-slate-700">Phone Number</Label>
+                  <Input 
+                    id="phone"
+                    name="phone" 
+                    value={form.phone} 
+                    onChange={handleChange}
+                    className="border-2 border-slate-200 rounded-xl focus:border-primary focus:ring-0"
+                    placeholder="(555) 123-4567"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="bio" className="text-sm font-semibold text-slate-700">Professional Bio</Label>
+                <Textarea
+                  id="bio"
+                  name="bio" 
+                  value={form.bio || ''} 
+                  onChange={handleChange} 
+                  rows={4} 
+                  className="border-2 border-slate-200 rounded-xl focus:border-primary focus:ring-0 resize-none"
+                  placeholder="Tell clients about your experience, approach to pet care, and what makes you special..."
+                />
                      </div>
+            </CardContent>
+          </Card>
+
+          {/* Location Information */}
+          <Card className="border-0 shadow-sm bg-white rounded-2xl">
+            <CardHeader className="pb-6">
+              <CardTitle className="text-xl font-semibold text-slate-900">Location & Service Area</CardTitle>
                  </CardHeader>
-                 <CardContent className="space-y-6 divide-y divide-gray-200">
-                     <div className="pt-6">
-                         <h3 className="text-lg font-semibold mb-2 text-primary">About Me</h3>
-                         <p className="text-muted-foreground whitespace-pre-wrap">{form.bio || 'No bio provided.'}</p>
+            <CardContent className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="address" className="text-sm font-semibold text-slate-700">Street Address</Label>
+                <Input 
+                  id="address"
+                  name="address" 
+                  value={form.address} 
+                  onChange={handleChange}
+                  className="border-2 border-slate-200 rounded-xl focus:border-primary focus:ring-0"
+                  placeholder="123 Main Street"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="city" className="text-sm font-semibold text-slate-700">City</Label>
+                  <Input 
+                    id="city"
+                    name="city" 
+                    value={form.city} 
+                    onChange={handleChange}
+                    className="border-2 border-slate-200 rounded-xl focus:border-primary focus:ring-0"
+                    placeholder="Miami"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="state" className="text-sm font-semibold text-slate-700">State</Label>
+                  <Input 
+                    id="state"
+                    name="state" 
+                    value={form.state} 
+                    onChange={handleChange}
+                    className="border-2 border-slate-200 rounded-xl focus:border-primary focus:ring-0"
+                    placeholder="FL"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="postalCode" className="text-sm font-semibold text-slate-700">ZIP Code</Label>
+                  <Input 
+                    id="postalCode"
+                    name="postalCode" 
+                    value={form.postalCode} 
+                    onChange={handleChange}
+                    className="border-2 border-slate-200 rounded-xl focus:border-primary focus:ring-0"
+                    placeholder="33101"
+                  />
                      </div>
-                     <div className="pt-6">
-                         <h3 className="text-lg font-semibold mb-2 text-primary">Location & Contact</h3>
-                         <p><strong>Address:</strong> {`${form.address}, ${form.city}, ${form.state} ${form.postalCode}`}</p>
-                         <p><strong>Phone:</strong> {form.phone}</p>
-                         <p><strong>Driving Range:</strong> {form.drivingRange || 'N/A'}</p>
-                         {form.locationLat && form.locationLng && (
-                             <div className="w-full h-64 mt-4 rounded-md overflow-hidden relative z-0">
-                                 <MapWithCircle lat={form.locationLat} lng={form.locationLng} miles={getDrivingRangeMiles()} />
                              </div>
-                         )}
+
+              <div className="space-y-2">
+                <Label htmlFor="drivingRange" className="text-sm font-semibold text-slate-700">Service Range</Label>
+                <Input 
+                  id="drivingRange"
+                  name="drivingRange" 
+                  value={form.drivingRange} 
+                  onChange={handleChange}
+                  className="border-2 border-slate-200 rounded-xl focus:border-primary focus:ring-0"
+                  placeholder="e.g., 15 miles, 30 minutes drive"
+                />
                      </div>
                  </CardContent>
              </Card>
              
-             {renderServiceManager()}
 
-             {/* Sticky action bar for view mode */}
-             <div className="fixed bottom-0 left-0 w-full bg-background border-t border-gray-200 shadow-lg z-50 flex justify-center py-4 px-4">
-               <Button onClick={() => setEditing(true)} className="w-full max-w-4xl text-lg">Edit Profile</Button>
+
+          {/* Status Messages */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+              <p className="text-red-800 text-sm font-medium">Error: {error}</p>
+            </div>
+          )}
+          {success && (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+              <p className="text-green-800 text-sm font-medium">Profile updated successfully!</p>
+            </div>
+          )}
+        </form>
+
+        {/* Service Manager */}
+        <div className="mt-8">
+             {renderServiceManager()}
+        </div>
+
+        {/* Bottom Spacing */}
+        <div className="h-8"></div>
              </div>
          </div>
-      )}
-    </section>
   )
 } 

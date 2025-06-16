@@ -71,24 +71,24 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <div className="min-h-screen flex bg-muted">
-      {/* Mobile Hamburger */}
-      <div className="md:hidden fixed top-4 left-4 z-40">
+      {/* Mobile/Tablet Hamburger */}
+      <div className="lg:hidden fixed top-4 left-4 z-40">
         <Button variant="outline" aria-label="Open navigation" onClick={() => setIsDrawerOpen(true)}>
           <Menu className="h-6 w-6" />
         </Button>
       </div>
       
-      {/* User Profile Button (Mobile) */}
-      <div className="md:hidden fixed top-4 right-4 z-40">
+      {/* User Profile Button (Mobile/Tablet) */}
+      <div className="lg:hidden fixed top-4 right-4 z-40">
         <UserButton afterSignOutUrl="/" />
       </div>
 
-      {/* Sidebar (Desktop) */}
+      {/* Sidebar (Desktop Only) */}
       {navItems.length > 0 && (
         <aside
           aria-label="Dashboard navigation"
           className={cn(
-            "hidden md:flex flex-col border-r border-border bg-background py-8 px-2 transition-all duration-200 relative",
+            "hidden lg:flex flex-col border-r border-border bg-background py-8 px-2 transition-all duration-200 relative",
             isSidebarCollapsed ? 'w-20' : 'w-56'
           )}
         >
@@ -139,10 +139,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         </aside>
       )}
 
-      {/* Drawer (Mobile) */}
+      {/* Drawer (Mobile/Tablet) */}
       <Dialog open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
         <DialogContent 
-          className="p-0 w-64 h-screen max-w-full left-0 top-0 translate-x-0 translate-y-0 fixed rounded-none flex flex-col bg-background z-50 shadow-lg border-r overflow-y-auto"
+          className="p-0 w-64 md:w-80 h-screen max-w-full left-0 top-0 translate-x-0 translate-y-0 fixed rounded-none flex flex-col bg-background z-50 shadow-lg border-r overflow-y-auto"
           style={{ transform: 'none' }}
         >
           <div className="flex items-center justify-between px-4 py-3 border-b">
@@ -188,7 +188,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       </Dialog>
 
       {/* Main Content */}
-      <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-x-hidden">
+      <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-x-hidden pt-16 md:pt-6 lg:pt-8">
         {children}
       </main>
     </div>

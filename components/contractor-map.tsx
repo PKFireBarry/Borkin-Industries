@@ -1,4 +1,4 @@
-import { MapContainer, TileLayer, Marker, Circle } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Circle, Popup } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 
@@ -10,8 +10,9 @@ interface ContractorMapProps {
   clientLng?: number
 }
 
-const markerIcon = new L.Icon({
-  iconUrl: 'https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon.png',
+// Contractor marker (green to represent service provider)
+const contractorIcon = new L.Icon({
+  iconUrl: 'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-icon-green.png',
   iconSize: [25, 41],
   iconAnchor: [12, 41],
   popupAnchor: [1, -34],
@@ -19,6 +20,7 @@ const markerIcon = new L.Icon({
   shadowSize: [41, 41],
 })
 
+// Client marker (blue to represent customer)
 const clientIcon = new L.Icon({
   iconUrl: 'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-icon-blue.png',
   iconSize: [25, 41],
@@ -49,11 +51,27 @@ export default function ContractorMap({ lat, lng, miles, clientLat, clientLng }:
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         attribution="&copy; OpenStreetMap contributors"
       />
-      <Marker position={[lat, lng]} icon={markerIcon} />
+      <Marker position={[lat, lng]} icon={contractorIcon}>
+        <Popup>
+          <div className="text-center">
+            <strong>Contractor Location</strong>
+            <br />
+            <span className="text-sm text-gray-600">Service area: {miles} miles</span>
+          </div>
+        </Popup>
+      </Marker>
       {clientLat && clientLng && (
-        <Marker position={[clientLat, clientLng]} icon={clientIcon} />
+        <Marker position={[clientLat, clientLng]} icon={clientIcon}>
+          <Popup>
+            <div className="text-center">
+              <strong>Client Location</strong>
+              <br />
+              <span className="text-sm text-gray-600">Gig location</span>
+            </div>
+          </Popup>
+        </Marker>
       )}
-      <Circle center={[lat, lng]} radius={radius} pathOptions={{ color: '#f59e42', fillColor: '#fbbf24', fillOpacity: 0.2 }} />
+      <Circle center={[lat, lng]} radius={radius} pathOptions={{ color: '#22c55e', fillColor: '#22c55e', fillOpacity: 0.15, weight: 2 }} />
     </MapContainer>
   )
 } 
