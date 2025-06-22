@@ -266,108 +266,99 @@ export default function ContactComponent() {
             
             {/* Main card */}
             <div className="relative bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/60 p-8 md:p-12">
-              <div className="grid lg:grid-cols-2 gap-12 lg:gap-16">
+              <div className="grid lg:grid-cols-5 gap-8 lg:gap-12">
                 
-                {/* Left Column - Contact Info */}
+                {/* Left Column - Image (takes up 2 columns) */}
                 <motion.div 
-                  className="space-y-8" 
-                  variants={fadeInUp}
+                  className="lg:col-span-2 flex items-center justify-center"
+                  variants={scaleIn}
                 >
-                  <div className="space-y-6">
-                    <div>
-                      <h3 className="text-3xl font-bold text-slate-900 mb-4">{title}</h3>
-                      <p className="text-lg text-slate-700 leading-relaxed">
-                        {description}
-                      </p>
-                    </div>
-
-                    {/* Contact Methods */}
-                    <div className="space-y-4">
-                      <h4 className="text-xl font-bold text-slate-900 mb-4">Get in Touch</h4>
-                      
-                      <motion.a
-                        href="mailto:borkingindutsries@gmail.com"
-                        className="group flex items-center p-4 bg-gradient-to-br from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 border border-blue-200 rounded-2xl transition-all duration-300 hover:shadow-lg hover:-translate-y-1"
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                      >
-                        <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center mr-4 shadow-lg group-hover:shadow-xl transition-shadow duration-300">
-                          <Mail className="w-6 h-6 text-white" />
-                        </div>
-                        <div>
-                          <div className="font-semibold text-slate-900 group-hover:text-indigo-700 transition-colors">Email Us</div>
-                          <div className="text-slate-600 group-hover:text-indigo-600 transition-colors">borkingindutsries@gmail.com</div>
-                        </div>
-                      </motion.a>
-                      
-                      <motion.a
-                        href="tel:+18135377897"
-                        className="group flex items-center p-4 bg-gradient-to-br from-green-50 to-emerald-50 hover:from-green-100 hover:to-emerald-100 border border-green-200 rounded-2xl transition-all duration-300 hover:shadow-lg hover:-translate-y-1"
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                      >
-                        <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center mr-4 shadow-lg group-hover:shadow-xl transition-shadow duration-300">
-                          <Phone className="w-6 h-6 text-white" />
-                        </div>
-                        <div>
-                          <div className="font-semibold text-slate-900 group-hover:text-green-700 transition-colors">Call Us</div>
-                          <div className="text-slate-600 group-hover:text-green-600 transition-colors">(813) 537-7897</div>
-                        </div>
-                      </motion.a>
-                    </div>
-
-                    {/* Response Time */}
-                    <div className="bg-gradient-to-br from-purple-50 to-pink-50 border border-purple-200 rounded-2xl p-6">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center">
-                          <Clock className="w-5 h-5 text-white" />
-                        </div>
-                        <h4 className="text-lg font-bold text-slate-900">Quick Response</h4>
-                      </div>
-                      <p className="text-slate-700">We typically respond within 24 hours during business days.</p>
+                  <div className="relative w-full flex items-center justify-center">
+                    {/* Main image container - Portrait aspect ratio, larger to fill space */}
+                    <div className="relative w-full max-w-md aspect-[3/4] rounded-2xl overflow-hidden shadow-2xl bg-white border-4 border-white">
+                      <Image
+                        src={cat}
+                        alt="A friendly cat inviting contact"
+                        fill
+                        className="object-cover hover:scale-105 transition-transform duration-500"
+                        sizes="(max-width: 768px) 100vw, (max-width: 1024px) 40vw, 450px"
+                      />
+                      {/* Overlay gradient */}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/10 via-transparent to-transparent" />
                     </div>
                   </div>
-
-                  {/* Image */}
-                  <motion.div 
-                    variants={scaleIn} 
-                    className="relative"
-                  >
-                    <div className="relative w-full max-w-lg mx-auto">
-                      {/* Background decoration */}
-                      <div className="absolute -inset-4 bg-gradient-to-br from-orange-100 to-pink-100 rounded-3xl blur-xl opacity-60" />
-                      <div className="absolute -inset-2 bg-gradient-to-br from-orange-200 to-pink-200 rounded-2xl opacity-40" />
-                      
-                      {/* Main image container - Natural aspect ratio */}
-                      <div className="relative rounded-2xl overflow-hidden shadow-2xl bg-white border-4 border-white">
-                        <Image
-                          src={cat}
-                          alt="A friendly cat inviting contact"
-                          width={500}
-                          height={281}
-                          className="w-full h-auto hover:scale-105 transition-transform duration-500"
-                          sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 500px"
-                        />
-                        {/* Overlay gradient */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/10 via-transparent to-transparent" />
-                      </div>
-                    </div>
-                  </motion.div>
                 </motion.div>
                 
-                {/* Right Column - Contact Form */}
+                {/* Right Column - Contact Info and Form (takes up 3 columns) */}
                 <motion.div 
-                  className="space-y-6" 
+                  className="lg:col-span-3 space-y-8" 
                   variants={fadeInUp}
                 >
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-                      <Send className="w-6 h-6 text-white" />
-                    </div>
-                    <h3 className="text-2xl font-bold text-slate-900">Send Us a Message</h3>
+                  {/* Contact Info Header */}
+                  <div className="space-y-4">
+                    <h3 className="text-3xl font-bold text-slate-900">{title}</h3>
+                    <p className="text-lg text-slate-700 leading-relaxed">
+                      {description}
+                    </p>
                   </div>
-                  
-                  <ContactForm />
+
+                  {/* Contact Methods - Compact Layout */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <motion.a
+                      href="mailto:borkingindutsries@gmail.com"
+                      className="group flex items-center p-3 bg-gradient-to-br from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 border border-blue-200 rounded-xl transition-all duration-300 hover:shadow-lg hover:-translate-y-1"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center mr-3 shadow-lg group-hover:shadow-xl transition-shadow duration-300">
+                        <Mail className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-semibold text-slate-900 group-hover:text-indigo-700 transition-colors text-sm">Email Us</div>
+                        <div className="text-slate-600 group-hover:text-indigo-600 transition-colors text-xs truncate">borkingindutsries@gmail.com</div>
+                      </div>
+                    </motion.a>
+                    
+                    <motion.a
+                      href="tel:+13523403659"
+                      className="group flex items-center p-3 bg-gradient-to-br from-green-50 to-emerald-50 hover:from-green-100 hover:to-emerald-100 border border-green-200 rounded-xl transition-all duration-300 hover:shadow-lg hover:-translate-y-1"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg flex items-center justify-center mr-3 shadow-lg group-hover:shadow-xl transition-shadow duration-300">
+                        <Phone className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-semibold text-slate-900 group-hover:text-green-700 transition-colors text-sm">Call Us</div>
+                        <div className="text-slate-600 group-hover:text-green-600 transition-colors text-xs">352-340-3659</div>
+                      </div>
+                    </motion.a>
+                  </div>
+
+                  {/* Response Time - Compact */}
+                  <div className="bg-gradient-to-br from-purple-50 to-pink-50 border border-purple-200 rounded-xl p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Clock className="w-4 h-4 text-white" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-900">Quick Response</h4>
+                        <p className="text-xs text-slate-700">We typically respond within 24 hours during business days.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Contact Form */}
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg">
+                        <Send className="w-5 h-5 text-white" />
+                      </div>
+                      <h3 className="text-xl font-bold text-slate-900">Send Us a Message</h3>
+                    </div>
+                    
+                    <ContactForm />
+                  </div>
                 </motion.div>
               </div>
             </div>

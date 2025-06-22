@@ -3,6 +3,8 @@
 ##TODO
  - add cert image to application 
  - add phone number to application filters on admin side of app
+ - [x] Update phone number across all email notifications and website pages to 352-340-3659
+ - [x] Simplify email notifications to only include homepage link instead of specific dashboard routes
  - implement tier-based payment structure (entry, vet assistant, CVT) for pricing page on admin side
  - add pricing page to admin dashboard
  - add coupons to admin dashboard in the pricing page

@@ -278,6 +278,25 @@ export async function addBooking(data: AddBookingDataInput): Promise<string> {
   };
 
   await setDoc(newBookingDocRef, bookingToSave);
+  
+  // Send email notifications via API route (to avoid client-side Node.js module issues)
+  try {
+    const response = await fetch('/api/notifications/booking-created', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bookingId: newBookingDocRef.id }),
+    })
+    
+    if (!response.ok) {
+      console.warn('Failed to send booking creation notification:', await response.text())
+    } else {
+      console.log('Booking creation notification sent successfully')
+    }
+  } catch (error) {
+    console.error('Failed to send booking creation email notifications:', error)
+    // Don't throw error - we don't want email failures to break the booking process
+  }
+  
   return newBookingDocRef.id;
 }
 

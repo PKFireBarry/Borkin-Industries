@@ -406,16 +406,112 @@ export default function ContractorGigsPage() {
 
   const handleAccept = async (gigId: string) => {
     setActionLoading(gigId)
+    try {
+      // Update booking status to approved
     await updateBookingStatus(gigId, 'approved')
+      
+      // Get the booking data to send notification
+      const approvedGig = gigs.find(g => g.id === gigId)
+      if (approvedGig) {
+        // Trigger email notification for booking approved
+        try {
+          const response = await fetch('/api/notifications/booking-approved', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              booking: {
+                id: approvedGig.id,
+                clientId: approvedGig.clientId,
+                contractorId: user?.id,
+                services: approvedGig.services,
+                startDate: approvedGig.startDate,
+                endDate: approvedGig.endDate,
+                paymentAmount: approvedGig.paymentAmount || 0,
+                status: 'approved',
+                paymentStatus: approvedGig.paymentStatus,
+                petIds: approvedGig.petIds,
+                numberOfDays: approvedGig.numberOfDays,
+                platformFee: approvedGig.platformFee,
+                stripeFee: approvedGig.stripeFee,
+                netPayout: approvedGig.netPayout,
+                paymentIntentId: approvedGig.paymentIntentId
+              }
+            })
+          })
+          
+          if (!response.ok) {
+            console.error('Failed to send booking approved notification')
+          } else {
+            console.log('Booking approved notification sent successfully')
+          }
+        } catch (emailError) {
+          console.error('Error sending booking approved notification:', emailError)
+          // Don't throw - we don't want email failures to break the approval process
+        }
+      }
+      
     await fetchGigs()
+    } catch (error) {
+      console.error('Error accepting gig:', error)
+      setError('Failed to accept gig')
+    } finally {
     setActionLoading(null)
+    }
   }
 
   const handleDecline = async (gigId: string) => {
     setActionLoading(gigId)
+    try {
+      // Update booking status to cancelled (declined)
     await updateBookingStatus(gigId, 'cancelled')
+      
+      // Get the booking data to send notification
+      const declinedGig = gigs.find(g => g.id === gigId)
+      if (declinedGig) {
+        // Trigger email notification for booking declined
+        try {
+          const response = await fetch('/api/notifications/booking-declined', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              booking: {
+                id: declinedGig.id,
+                clientId: declinedGig.clientId,
+                contractorId: user?.id,
+                services: declinedGig.services,
+                startDate: declinedGig.startDate,
+                endDate: declinedGig.endDate,
+                paymentAmount: declinedGig.paymentAmount || 0,
+                status: 'cancelled',
+                paymentStatus: declinedGig.paymentStatus,
+                petIds: declinedGig.petIds,
+                numberOfDays: declinedGig.numberOfDays,
+                platformFee: declinedGig.platformFee,
+                stripeFee: declinedGig.stripeFee,
+                netPayout: declinedGig.netPayout,
+                paymentIntentId: declinedGig.paymentIntentId
+              }
+            })
+          })
+          
+          if (!response.ok) {
+            console.error('Failed to send booking declined notification')
+          } else {
+            console.log('Booking declined notification sent successfully')
+          }
+        } catch (emailError) {
+          console.error('Error sending booking declined notification:', emailError)
+          // Don't throw - we don't want email failures to break the decline process
+        }
+      }
+      
     await fetchGigs()
+    } catch (error) {
+      console.error('Error declining gig:', error)
+      setError('Failed to decline gig')
+    } finally {
     setActionLoading(null)
+    }
   }
 
   const handleMarkCompleted = async (gigId: string) => {
@@ -458,6 +554,45 @@ export default function ContractorGigsPage() {
       
       // Update booking status to cancelled
       await updateBookingStatus(cancelGigId, 'cancelled')
+      
+      // Send cancellation email notification to client
+      if (gigToCancel) {
+        try {
+          const response = await fetch('/api/notifications/booking-cancelled', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              booking: {
+                id: gigToCancel.id,
+                clientId: gigToCancel.clientId,
+                contractorId: user?.id,
+                services: gigToCancel.services,
+                startDate: gigToCancel.startDate,
+                endDate: gigToCancel.endDate,
+                paymentAmount: gigToCancel.paymentAmount || 0,
+                status: 'cancelled',
+                paymentStatus: gigToCancel.paymentStatus,
+                petIds: gigToCancel.petIds,
+                numberOfDays: gigToCancel.numberOfDays,
+                platformFee: gigToCancel.platformFee,
+                stripeFee: gigToCancel.stripeFee,
+                netPayout: gigToCancel.netPayout,
+                paymentIntentId: gigToCancel.paymentIntentId
+              }
+            })
+          })
+          
+          if (!response.ok) {
+            console.error('Failed to send booking cancellation notification')
+          } else {
+            console.log('Booking cancellation notification sent successfully')
+          }
+        } catch (emailError) {
+          console.error('Error sending booking cancellation notification:', emailError)
+          // Don't throw - we don't want email failures to break the cancellation process
+        }
+      }
+      
       setCancelGigId(null)
       await fetchGigs()
     } catch (err: any) {
@@ -872,7 +1007,7 @@ export default function ContractorGigsPage() {
                             {actionLoading === gig.id ? (
                               <div className="flex items-center gap-2">
                                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                Marking...
+                                Mark Complete
                               </div>
                             ) : (
                               'Mark Complete'

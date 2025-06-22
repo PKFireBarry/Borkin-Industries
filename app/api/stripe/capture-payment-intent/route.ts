@@ -70,6 +70,34 @@ export async function POST(req: NextRequest) {
       netPayout
     })
     
+    // Send booking completion email notification
+    try {
+      const updatedBooking = {
+        ...booking,
+        id: bookingId,
+        paymentStatus: 'paid',
+        status: 'completed',
+        stripeFee,
+        netPayout,
+        platformFee
+      }
+      
+      const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/notifications/booking-completed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ booking: updatedBooking })
+      })
+      
+      if (!response.ok) {
+        console.error('Failed to send booking completion notification')
+      } else {
+        console.log('Booking completion notification sent successfully')
+      }
+    } catch (emailError) {
+      console.error('Error sending booking completion notification:', emailError)
+      // Don't throw - we don't want email failures to break the payment capture
+    }
+    
     return NextResponse.json({ 
       ok: true, 
       paymentIntent,

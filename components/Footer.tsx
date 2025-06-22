@@ -122,7 +122,7 @@ export default function Footer() {
                 </a>
                 
                 <a
-                  href="tel:+18135377897"
+                  href="tel:+13523403659"
                   className="group flex items-center gap-3 text-slate-300 hover:text-white transition-all duration-200"
                 >
                   <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-shadow duration-200">
@@ -130,7 +130,7 @@ export default function Footer() {
                   </div>
                   <div>
                     <div className="text-sm font-medium">Phone</div>
-                    <div className="text-xs text-slate-400 group-hover:text-slate-300">(813) 537-7897</div>
+                    <div className="text-xs text-slate-400 group-hover:text-slate-300">352-340-3659</div>
                   </div>
                 </a>
 

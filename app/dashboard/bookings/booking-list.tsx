@@ -360,6 +360,49 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
         }
       }
       
+      // Send contractor notification for approved/completed bookings
+      if (booking.status === 'approved' || booking.status === 'completed') {
+        try {
+          const response = await fetch('/api/notifications/client-cancelled-booking', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              booking: {
+                id: booking.id,
+                clientId: booking.clientId,
+                contractorId: booking.contractorId,
+                services: booking.services,
+                startDate: booking.startDate,
+                endDate: booking.endDate,
+                paymentAmount: booking.paymentAmount || 0,
+                status: 'cancelled',
+                paymentStatus: booking.paymentStatus,
+                petIds: booking.petIds,
+                numberOfDays: booking.numberOfDays,
+                platformFee: booking.platformFee,
+                stripeFee: booking.stripeFee,
+                netPayout: booking.netPayout,
+                paymentIntentId: booking.paymentIntentId,
+                createdAt: booking.createdAt,
+                updatedAt: new Date().toISOString(),
+                contractorName: booking.contractorName,
+                contractorPhone: booking.contractorPhone,
+                time: booking.time
+              }
+            })
+          })
+          
+          if (response.ok) {
+            console.log('Contractor notification sent successfully for client cancellation')
+          } else {
+            console.error('Failed to send contractor notification for client cancellation')
+          }
+        } catch (emailError) {
+          console.error('Error sending contractor notification for client cancellation:', emailError)
+          // Don't throw - we don't want email failures to break the cancellation process
+        }
+      }
+      
       await removeBooking(cancelId)
       setBookings((prev) => prev.filter((b) => b.id !== cancelId))
       setCancelId(null)

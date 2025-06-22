@@ -104,7 +104,7 @@ export async function sendContactEmail(data: ContactEmailData) {
             </div>
             
             <p style="color: #374151; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
-              In the meantime, feel free to explore our services or call us directly at <strong>(813) 537-7897</strong> if you have any urgent questions.
+              In the meantime, feel free to explore our services or call us directly at <strong>352-340-3659</strong> if you have any urgent questions.
             </p>
             
             <div style="text-align: center; margin: 30px 0;">
@@ -129,7 +129,7 @@ export async function sendContactEmail(data: ContactEmailData) {
         
         Your Message: "${subject}"
         
-        In the meantime, feel free to explore our services or call us directly at (813) 537-7897 if you have any urgent questions.
+        In the meantime, feel free to explore our services or call us directly at 352-340-3659 if you have any urgent questions.
         
         Best regards,
         The Boorkin Industries Team
