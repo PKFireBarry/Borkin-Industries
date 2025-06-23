@@ -61,6 +61,10 @@ export async function POST(req: NextRequest) {
       payment_method: paymentMethodId || undefined,
       capture_method: 'manual',
       transfer_data: transferData,
+      automatic_payment_methods: {
+        enabled: true,
+        allow_redirects: 'never' // Prevent redirect-based payment methods
+      },
       metadata: { 
         app: 'boorkin', 
         contractorId,

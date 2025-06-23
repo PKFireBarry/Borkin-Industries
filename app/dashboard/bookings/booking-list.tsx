@@ -486,8 +486,19 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
     const booking = bookings.find(b => b.id === bookingId)
     if (!booking) return
     
-    // Show payment confirmation modal instead of directly processing
-    setPaymentConfirmModal({ open: true, booking })
+    setIsPending(true)
+    setError(null)
+    try {
+      await setClientCompleted(booking.id, true)
+      setBookings(prev => prev.map(b => b.id === booking.id ? { ...b, clientCompleted: true } : b))
+      toast.success('Marked as completed! Waiting for contractor confirmation.')
+    } catch (_err: any) {
+      const message = _err.message || 'Failed to mark booking as completed.'
+      setError(message)
+      toast.error(message)
+    } finally {
+      setIsPending(false)
+    }
   }
 
   async function handleConfirmPaymentFromModal(booking: ExtendedBooking) {
@@ -495,32 +506,35 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
     setIsPending(true)
     setError(null)
     try {
-      await setClientCompleted(booking.id, true)
-      setBookings(prev => prev.map(b => b.id === booking.id ? { ...b, clientCompleted: true } : b))
-      // Check if contractor also completed to release payment
-      if (booking?.contractorCompleted) {
-        // Attempt to capture payment
-        const captureRes = await fetch('/api/stripe/capture-payment-intent', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                paymentIntentId: booking.paymentIntentId,
-                bookingId: booking.id 
-            }),
-        });
-        if (!captureRes.ok) {
-            const errData = await captureRes.json();
-            setReleasePaymentError(errData.error || 'Failed to auto-capture payment after client completion.');
-            toast.error(errData.error || 'Failed to auto-capture payment.');
-        } else {
-            setBookings(prev => prev.map(b => b.id === booking.id ? { ...b, paymentStatus: 'paid', status: 'completed' } : b));
-            toast.success('Booking completed and payment captured!');
-            setReleasePaymentError(null);
-        }
+      // Capture payment - this will confirm and capture if needed
+      const captureRes = await fetch('/api/stripe/capture-payment-intent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+              paymentIntentId: booking.paymentIntentId,
+              bookingId: booking.id 
+          }),
+      });
+      
+      if (!captureRes.ok) {
+          const errData = await captureRes.json();
+          
+          if (errData.needsReauth) {
+            // Payment method needs re-authorization
+            setReleasePaymentError('Payment method requires re-authorization. Please update your payment method in the booking details and try again.');
+            toast.error('Payment method requires re-authorization. Please update your payment method and try again.');
+          } else {
+            setReleasePaymentError(errData.error || 'Failed to capture payment.');
+            toast.error(errData.error || 'Failed to process payment.');
+          }
+      } else {
+          setBookings(prev => prev.map(b => b.id === booking.id ? { ...b, paymentStatus: 'paid', status: 'completed' } : b));
+          toast.success('Payment released and booking completed!');
+          setReleasePaymentError(null);
       }
 
     } catch (_err: any) {
-      const message = _err.message || 'Failed to mark booking as completed.'
+      const message = _err.message || 'Failed to process payment.'
       setError(message)
       toast.error(message)
     } finally {
@@ -1033,11 +1047,11 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
                             
                           {b.status === 'approved' && b.paymentStatus === 'pending' && b.clientCompleted && b.contractorCompleted && (
                             <Button
-                              onClick={() => handleConfirmPayment(b, setIsPending, setError, setBookings)}
+                              onClick={() => setPaymentConfirmModal({ open: true, booking: b })}
                               disabled={isPending}
                                 className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl px-6 py-2.5 transition-all duration-200 hover:shadow-md disabled:opacity-50"
                             >
-                              {isPending ? 'Confirming...' : 'Confirm Payment'}
+                              Release Payment
                             </Button>
                           )}
                             
@@ -1725,7 +1739,7 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
       <Dialog open={paymentConfirmModal.open} onOpenChange={open => setPaymentConfirmModal({ open, booking: open ? paymentConfirmModal.booking : null })}>
         <DialogContent className="w-full max-w-md mx-auto">
           <DialogHeader>
-            <DialogTitle className="text-center">Confirm Payment</DialogTitle>
+            <DialogTitle className="text-center">Release Payment</DialogTitle>
           </DialogHeader>
           {paymentConfirmModal.booking && (
             <div className="space-y-6">
@@ -1735,7 +1749,7 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
                   ${formatAmount(paymentConfirmModal.booking.paymentAmount || 0)}
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  You're about to complete this booking and authorize payment
+                  You're about to release payment to the contractor
                 </p>
               </div>
 
@@ -1817,7 +1831,7 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
                   onClick={() => handleConfirmPaymentFromModal(paymentConfirmModal.booking!)}
                   disabled={isPending}
                 >
-                  {isPending ? 'Processing...' : 'Confirm Payment'}
+                  {isPending ? 'Processing...' : 'Release Payment'}
                 </Button>
               </div>
             </div>

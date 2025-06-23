@@ -409,6 +409,24 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
   - Displays total amount, service date, contractor name, services breakdown, payment method, and fee breakdown
   - Provides clear confirmation before payment is captured
   - Improves user experience by showing exactly what they're paying for
+- [x] Fix "RangeError: Invalid time value" in contractor dashboard
+  - Added safe date formatting function to prevent crashes when invalid dates are encountered
+  - Updated contractor dashboard to use proper date validation for booking dates and review dates
+  - Enhanced error handling to gracefully display fallback text instead of throwing RangeError
+  - Ensures contractor dashboard loads properly on all devices and environments
+- [x] Fix payment flow and PaymentIntent status issues
+  - Fixed payment confirmation modal showing at wrong time (was showing when client marked complete, now only shows when both parties complete)
+  - Updated payment capture API to handle both 'requires_confirmation' and 'requires_capture' statuses
+  - Separated "Mark Complete" action from payment release - clients now simply mark completion without payment modal
+  - Payment confirmation modal now only appears when both client and contractor have marked gig complete
+  - Updated modal title and messaging to reflect "Release Payment" instead of "Confirm Payment"
+  - Enhanced error handling for PaymentIntent confirmation and capture flow
+  - Fixed PaymentIntent confirmation requiring return_url by adding proper return URL and preventing redirect-based payment methods
+  - Updated all PaymentIntent creation endpoints to use automatic_payment_methods with allow_redirects: 'never'
+  - Added support for 'requires_payment_method' status to handle declined cards after verification
+  - Enhanced error messages to guide users when payment method re-authorization is needed
+  - Fixed PaymentIntent missing payment method issue by automatically attaching customer's default payment method
+  - Improved payment method recovery flow when original payment method becomes detached after decline
 
 ---
 

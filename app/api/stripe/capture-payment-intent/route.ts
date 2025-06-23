@@ -14,14 +14,107 @@ export async function POST(req: NextRequest) {
   try {
     // Fetch the PaymentIntent first
     const pi = await stripe.paymentIntents.retrieve(paymentIntentId)
-    if (pi.status !== 'requires_capture') {
+    
+    let paymentIntent: Stripe.PaymentIntent;
+    
+    if (pi.status === 'requires_payment_method') {
+      // Payment method was declined or needs re-authorization
+      console.log(`[capture-payment-intent] PaymentIntent ${paymentIntentId} requires payment method, attempting to re-confirm...`)
+      
+      // Check if PaymentIntent has a payment method attached
+      if (!pi.payment_method) {
+        console.log(`[capture-payment-intent] PaymentIntent ${paymentIntentId} has no payment method attached`)
+        
+        // Try to get customer's default payment method
+        try {
+          const customer = await stripe.customers.retrieve(pi.customer as string)
+          if (customer.deleted) {
+            throw new Error('Customer not found')
+          }
+          
+          const paymentMethods = await stripe.paymentMethods.list({
+            customer: pi.customer as string,
+            type: 'card',
+            limit: 1
+          })
+          
+          if (paymentMethods.data.length === 0) {
+            return NextResponse.json({
+              error: `No payment method available. Please add a payment method and try again.`,
+              needsReauth: true,
+              clientSecret: pi.client_secret
+            }, { status: 400 })
+          }
+          
+          // Update PaymentIntent with the customer's payment method
+          const defaultPaymentMethod = paymentMethods.data[0]
+          console.log(`[capture-payment-intent] Updating PaymentIntent ${paymentIntentId} with payment method ${defaultPaymentMethod.id}`)
+          
+          paymentIntent = await stripe.paymentIntents.update(paymentIntentId, {
+            payment_method: defaultPaymentMethod.id
+          })
+        } catch (error: any) {
+          console.log(`[capture-payment-intent] Failed to retrieve/attach payment method:`, error.message)
+          return NextResponse.json({
+            error: `Payment method unavailable. Please update your payment method and try again.`,
+            needsReauth: true,
+            clientSecret: pi.client_secret
+          }, { status: 400 })
+        }
+      }
+      
+      // Try to confirm with the payment method
+      try {
+        paymentIntent = await stripe.paymentIntents.confirm(paymentIntentId, {
+          return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/bookings?payment_status=completed`,
+          use_stripe_sdk: false
+        })
+        
+        if (paymentIntent.status === 'requires_capture') {
+          console.log(`[capture-payment-intent] PaymentIntent ${paymentIntentId} re-confirmed successfully, capturing now...`)
+          paymentIntent = await stripe.paymentIntents.capture(paymentIntentId)
+        } else {
+          return NextResponse.json({
+            error: `Payment method requires client-side re-authorization. Please update your payment method and try again.`,
+            needsReauth: true,
+            clientSecret: paymentIntent.client_secret
+          }, { status: 400 })
+        }
+      } catch (confirmError: any) {
+        console.log(`[capture-payment-intent] Re-confirmation failed:`, confirmError.message)
+        return NextResponse.json({
+          error: `Payment method requires client-side re-authorization. Please update your payment method and try again.`,
+          needsReauth: true,
+          clientSecret: pi.client_secret
+        }, { status: 400 })
+      }
+    } else if (pi.status === 'requires_confirmation') {
+      // If payment needs confirmation, confirm it first with return URL
+      console.log(`[capture-payment-intent] PaymentIntent ${paymentIntentId} requires confirmation, confirming now...`)
+      paymentIntent = await stripe.paymentIntents.confirm(paymentIntentId, {
+        return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/bookings?payment_status=completed`,
+        use_stripe_sdk: false // This ensures server-side confirmation
+      })
+      
+      // After confirmation, check if it's ready for capture
+      if (paymentIntent.status !== 'requires_capture') {
+        return NextResponse.json({
+          error: `PaymentIntent could not be confirmed for capture. Status after confirmation: ${paymentIntent.status}. Please check payment method or authorization.`
+        }, { status: 400 })
+      }
+      
+      // Now capture it
+      console.log(`[capture-payment-intent] PaymentIntent ${paymentIntentId} confirmed, capturing now...`)
+      paymentIntent = await stripe.paymentIntents.capture(paymentIntentId)
+    } else if (pi.status === 'requires_capture') {
+      // If already authorized, capture directly
+      console.log(`[capture-payment-intent] PaymentIntent ${paymentIntentId} ready for capture, capturing now...`)
+      paymentIntent = await stripe.paymentIntents.capture(paymentIntentId)
+    } else {
       return NextResponse.json({
-        error: `PaymentIntent is not ready to be captured. Current status: ${pi.status}. Please ensure payment is authorized before releasing funds.`
+        error: `PaymentIntent is not ready to be captured. Current status: ${pi.status}. Expected 'requires_capture', 'requires_confirmation', or 'requires_payment_method'.`
       }, { status: 400 })
     }
-    
-    // Capture the PaymentIntent
-    const paymentIntent = await stripe.paymentIntents.capture(paymentIntentId)
     
     // Get the actual Stripe fee from the charge
     let actualStripeFee = null
