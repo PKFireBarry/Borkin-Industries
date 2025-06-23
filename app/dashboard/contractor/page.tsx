@@ -238,6 +238,19 @@ export default function ContractorDashboardHome() {
     }).format(amount)
   }
 
+  // Safe date formatting function to prevent RangeError
+  const formatSafeDate = (dateString: string | undefined | null, fallback: string = 'Date not available') => {
+    if (!dateString) return fallback
+    try {
+      const date = new Date(dateString)
+      if (isNaN(date.getTime())) return fallback
+      return format(date, 'MMM d, yyyy')
+    } catch (error) {
+      console.warn('Invalid date format:', dateString, error)
+      return fallback
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
       <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
@@ -412,7 +425,7 @@ export default function ContractorDashboardHome() {
                           {review.comment || 'No comment provided'}
                         </p>
                         <p className="text-xs text-slate-500 mt-1">
-                          {format(new Date(review.date), 'MMM d, yyyy')}
+                          {formatSafeDate(review.date)}
                         </p>
                       </div>
                     </div>
@@ -483,7 +496,7 @@ export default function ContractorDashboardHome() {
                       <div className="flex items-center gap-2">
                         <Calendar className="w-4 h-4 text-slate-500" />
                         <span className="text-slate-600">
-                          {booking.startDate ? format(new Date(booking.startDate), 'MMM d, yyyy') : 'Date TBD'}
+                          {formatSafeDate(booking.startDate, 'Date TBD')}
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
