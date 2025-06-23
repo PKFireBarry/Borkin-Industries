@@ -15,18 +15,29 @@ export async function POST(req: NextRequest) {
       currency,
       customerId,
       contractorId,
-      paymentMethodId // optional, for immediate confirmation
+      paymentMethodId, // optional, for immediate confirmation
+      baseServiceAmount // new field for updated fee structure
     } = await req.json()
     if (!paymentIntentId || !newAmount || !currency || !customerId || !contractorId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
     
-    // Calculate fees that will be deducted from contractor's payment
-    const platformFeeAmount = calculatePlatformFee(newAmount) // 5% platform fee
-    const estimatedStripeFee = calculateStripeFee(newAmount) // 2.9% + $0.30 Stripe fee
+    // New fee structure: client pays fees, contractor receives full service amount
+    let transferAmount: number;
+    let platformFeeAmount: number;
+    let estimatedStripeFee: number;
     
-    // Calculate the amount to transfer to contractor (total - platform fee - stripe fee)
-    const transferAmount = newAmount - platformFeeAmount - estimatedStripeFee
+    if (baseServiceAmount) {
+      // New fee structure: contractor receives the full base service amount
+      transferAmount = baseServiceAmount;
+      platformFeeAmount = calculatePlatformFee(baseServiceAmount);
+      estimatedStripeFee = calculateStripeFee(baseServiceAmount);
+    } else {
+      // Legacy fee structure: deduct fees from total amount
+      platformFeeAmount = calculatePlatformFee(newAmount);
+      estimatedStripeFee = calculateStripeFee(newAmount);
+      transferAmount = newAmount - platformFeeAmount - estimatedStripeFee;
+    }
     
     // Ensure transfer amount is positive
     if (transferAmount <= 0) {
@@ -54,8 +65,10 @@ export async function POST(req: NextRequest) {
       })
       return NextResponse.json({ success: true, paymentIntentId, updatedIntent, clientSecret: updatedIntent.client_secret, status: updatedIntent.status })
     } else {
-      // Cancel the old PaymentIntent
-      await stripe.paymentIntents.cancel(paymentIntentId)
+      // Cancel the old PaymentIntent if it's not already canceled
+      if (paymentIntent.status !== 'canceled' && paymentIntent.status !== 'succeeded') {
+        await stripe.paymentIntents.cancel(paymentIntentId)
+      }
       // Fetch contractor's Stripe account ID
       const contractorRef = doc(db, 'contractors', contractorId)
       const contractorSnap = await getDoc(contractorRef)
@@ -70,43 +83,23 @@ export async function POST(req: NextRequest) {
         destination: contractor.stripeAccountId,
         amount: transferAmount
       }
-      // Create a new PaymentIntent
-      let newIntent
-      if (paymentMethodId) {
-        newIntent = await stripe.paymentIntents.create({
-          amount: newAmount,
-          currency,
-          customer: customerId,
-          payment_method: paymentMethodId,
-          off_session: true,
-          confirm: true,
-          capture_method: 'manual',
-          transfer_data: transferData,
-          metadata: { 
-            app: 'boorkin', 
-            contractorId,
-            platformFee: platformFeeAmount.toString(),
-            estimatedStripeFee: estimatedStripeFee.toString(),
-            transferAmount: transferAmount.toString()
-          },
-        })
-      } else {
-        newIntent = await stripe.paymentIntents.create({
-          amount: newAmount,
-          currency,
-          customer: customerId,
-          capture_method: 'manual',
-          transfer_data: transferData,
-          metadata: { 
-            app: 'boorkin', 
-            contractorId,
-            platformFee: platformFeeAmount.toString(),
-            estimatedStripeFee: estimatedStripeFee.toString(),
-            transferAmount: transferAmount.toString()
-          },
-        })
-      }
-      return NextResponse.json({ success: true, paymentIntentId: newIntent.id, newIntent, clientSecret: newIntent.client_secret, status: newIntent.status })
+      // Create a new PaymentIntent (don't confirm immediately for booking edits)
+      const newIntent = await stripe.paymentIntents.create({
+        amount: newAmount,
+        currency,
+        customer: customerId,
+        ...(paymentMethodId ? { payment_method: paymentMethodId } : {}),
+        capture_method: 'manual',
+        transfer_data: transferData,
+        metadata: { 
+          app: 'boorkin', 
+          contractorId,
+          platformFee: platformFeeAmount.toString(),
+          estimatedStripeFee: estimatedStripeFee.toString(),
+          transferAmount: transferAmount.toString()
+        },
+      })
+      return NextResponse.json({ success: true, paymentIntentId: newIntent.id, newIntent, clientSecret: newIntent.client_secret, status: newIntent.status, replaced: true })
     }
   } catch (err) {
     console.error('Failed to update PaymentIntent:', err)

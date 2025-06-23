@@ -60,7 +60,16 @@ export async function POST(req: NextRequest) {
     const totalAmount = booking.paymentAmount || 0
     const platformFee = booking.platformFee || (totalAmount * 0.05)
     const stripeFee = actualStripeFee || calculateStripeFeeInDollars(totalAmount) // Use actual fee or fallback to estimate
-    netPayout = totalAmount - platformFee - stripeFee
+    
+    // New fee structure: contractor receives full base service amount
+    // Check if booking has baseServiceAmount (new structure) or use legacy calculation
+    if (booking.baseServiceAmount) {
+      // New fee structure: contractor gets the full base service amount
+      netPayout = booking.baseServiceAmount
+    } else {
+      // Legacy fee structure: deduct fees from total amount
+      netPayout = totalAmount - platformFee - stripeFee
+    }
     
     // Update Firestore booking status with actual fees
     await updateDoc(bookingRef, { 

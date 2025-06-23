@@ -98,3 +98,48 @@ export function calculateStripeFeeInDollars(amountInDollars: number): number {
 export function calculateNetPayout(totalAmount: number, platformFee: number, stripeFee: number): number {
   return totalAmount - platformFee - stripeFee;
 }
+
+/**
+ * Calculate total amount including platform fee and Stripe fee that client will pay
+ * @param baseAmount - The base service amount in cents
+ * @returns Total amount client will pay in cents
+ */
+export function calculateClientTotal(baseAmount: number): number {
+  const platformFee = calculatePlatformFee(baseAmount);
+  const stripeFee = calculateStripeFee(baseAmount);
+  return baseAmount + platformFee + stripeFee;
+}
+
+/**
+ * Calculate total amount including platform fee and Stripe fee that client will pay (in dollars)
+ * @param baseAmount - The base service amount in dollars
+ * @returns Total amount client will pay in dollars
+ */
+export function calculateClientTotalInDollars(baseAmount: number): number {
+  const platformFee = baseAmount * 0.05;
+  const stripeFee = calculateStripeFeeInDollars(baseAmount);
+  return baseAmount + platformFee + stripeFee;
+}
+
+/**
+ * Calculate fee breakdown for client display
+ * @param baseAmount - The base service amount in dollars
+ * @returns Object with breakdown of fees
+ */
+export function calculateClientFeeBreakdown(baseAmount: number): {
+  baseAmount: number;
+  platformFee: number;
+  stripeFee: number;
+  totalAmount: number;
+} {
+  const platformFee = baseAmount * 0.05;
+  const stripeFee = calculateStripeFeeInDollars(baseAmount);
+  const totalAmount = baseAmount + platformFee + stripeFee;
+  
+  return {
+    baseAmount,
+    platformFee,
+    stripeFee,
+    totalAmount
+  };
+}

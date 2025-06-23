@@ -29,7 +29,7 @@ export function createClientCancelledBookingEmail(
     </p>
     
     <p style="color: #374151; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
-      Your booking with ${contractor.name} has been successfully cancelled. We've processed your refund and ${contractor.name} has been notified.
+      Your booking with ${contractor.name} has been successfully cancelled. ${contractor.name} has been notified.
     </p>
     
     <div style="background: #fef3c7; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #f59e0b;">
@@ -40,13 +40,7 @@ export function createClientCancelledBookingEmail(
         Contractor: ${contractor.name}<br>
         Date & Time: ${dateRange}<br>
         Services: ${serviceDetails.map(s => s.name).join(', ')}<br>
-        Amount: ${totalAmount}
-      </div>
-      
-      <div style="background: #fef3c7; padding: 15px; border-radius: 6px; margin: 15px 0;">
-        <p style="color: #92400e; margin: 0; font-weight: 500;">
-          <strong>Refund Status:</strong> Your refund has been processed and should appear in your account within 3-5 business days.
-        </p>
+        Estimated Amount: ${totalAmount}
       </div>
     </div>
     
@@ -72,7 +66,7 @@ export function createClientCancelledBookingEmail(
     </div>
     
     <p style="color: #6b7280; font-size: 14px; line-height: 1.6; margin-top: 20px;">
-      If you have any questions about your refund or need assistance with a new booking, please contact us at 
+      If you have any questions about this cancellation or need assistance with a new booking, please contact us at 
       <a href="mailto:${process.env.SMTP_FROM}" style="color: #667eea;">${process.env.SMTP_FROM}</a> 
       or call us at 352-340-3659.
     </p>
@@ -81,16 +75,14 @@ export function createClientCancelledBookingEmail(
   const textContent = `
 Hi ${client.name},
 
-Your booking with ${contractor.name} has been successfully cancelled. We've processed your refund and ${contractor.name} has been notified.
+Your booking with ${contractor.name} has been successfully cancelled. ${contractor.name} has been notified.
 
 BOOKING CANCELLED:
 Cancelled Booking:
 Contractor: ${contractor.name}
 Date & Time: ${dateRange}
 Services: ${serviceDetails.map(s => s.name).join(', ')}
-Amount: ${totalAmount}
-
-Refund Status: Your refund has been processed and should appear in your account within 3-5 business days.
+Estimated Amount: ${totalAmount}
 
 NEED TO BOOK AGAIN? We have many other qualified contractors available to help with your pet care needs.
 
@@ -102,14 +94,14 @@ Call us now at 352-340-3659 and mention this cancellation. Our team will:
 • Find you a similar contractor with availability
 • Assist with any special requirements or preferences
 
-If you have any questions about your refund or need assistance with a new booking, please contact us at ${process.env.SMTP_FROM} or call us at 352-340-3659.
+If you have any questions about this cancellation or need assistance with a new booking, please contact us at ${process.env.SMTP_FROM} or call us at 352-340-3659.
 
 Best regards,
 The Boorkin Industries Team
   `
 
   return {
-    subject: `Booking Cancelled - Refund Processed`,
+    subject: `Booking Cancelled - ${contractor.name}`,
     html: createEmailTemplate(content, 'Booking Cancelled'),
     text: textContent
   }
@@ -133,7 +125,12 @@ export function createGigCancelledContractorEmail(
 
   const totalAmount = `$${booking.paymentAmount.toFixed(2)}`
   const dateRange = formatBookingDateRange(booking.startDate, booking.endDate)
-  const potentialEarnings = `$${((booking.paymentAmount * 0.9) - (booking.paymentAmount * 0.029)).toFixed(2)}`
+  // Calculate contractor earnings (base service amount)
+  const baseServiceAmount = booking.baseServiceAmount || booking.services?.reduce((total, service) => total + service.price, 0) || 0
+  // baseServiceAmount is already in dollars if it exists, but service prices are in cents
+  const potentialEarnings = booking.baseServiceAmount 
+    ? `$${baseServiceAmount.toFixed(2)}` 
+    : `$${(baseServiceAmount / 100).toFixed(2)}`
 
   const content = `
     <p style="color: #374151; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
@@ -141,7 +138,7 @@ export function createGigCancelledContractorEmail(
     </p>
     
     <p style="color: #374151; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
-      Unfortunately, the gig with ${client.name} has been cancelled. The client has been refunded and you won't need to provide the scheduled services.
+      Unfortunately, the gig with ${client.name} has been cancelled. You won't need to provide the scheduled services.
     </p>
     
     <div style="background: #fef2f2; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ef4444;">
@@ -152,7 +149,7 @@ export function createGigCancelledContractorEmail(
         Client: ${client.name}<br>
         Date & Time: ${dateRange}<br>
         Services: ${serviceDetails.map(s => s.name).join(', ')}<br>
-        Potential Earnings: ${potentialEarnings}
+        Your Potential Earnings: ${potentialEarnings}
       </div>
     </div>
     
@@ -191,14 +188,14 @@ export function createGigCancelledContractorEmail(
   const textContent = `
 Hi ${contractor.name},
 
-Unfortunately, the gig with ${client.name} has been cancelled. The client has been refunded and you won't need to provide the scheduled services.
+Unfortunately, the gig with ${client.name} has been cancelled. You won't need to provide the scheduled services.
 
 GIG CANCELLED:
 Cancelled Gig:
 Client: ${client.name}
 Date & Time: ${dateRange}
 Services: ${serviceDetails.map(s => s.name).join(', ')}
-Potential Earnings: ${potentialEarnings}
+Your Potential Earnings: ${potentialEarnings}
 
 DON'T WORRY! This cancellation won't affect your ratings or standing on the platform. Cancellations happen and are part of the business.
 

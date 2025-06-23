@@ -22,8 +22,23 @@ export function createEmailTemplate(content: string, title: string): string {
 
 // Helper function to format date range
 export function formatBookingDateRange(startDate: string, endDate: string): string {
+  // Handle different date formats consistently
+  // startDate might be ISO timestamp: '2025-06-23T13:00:00.000Z'
+  // endDate might be date-only: '2025-06-24'
+  
   const start = new Date(startDate)
-  const end = new Date(endDate)
+  
+  // For endDate, if it's just a date (no time), parse it carefully to avoid timezone issues
+  let end: Date
+  if (endDate.includes('T') || endDate.includes('Z')) {
+    // Has time component, parse normally
+    end = new Date(endDate)
+  } else {
+    // Date-only string, parse as local date to avoid timezone conversion
+    const [year, month, day] = endDate.split('-').map(Number)
+    end = new Date(year, month - 1, day) // month is 0-indexed
+  }
+  
   
   const formatOptions: Intl.DateTimeFormatOptions = {
     weekday: 'long',
@@ -52,8 +67,16 @@ export function formatBookingDateRange(startDate: string, endDate: string): stri
       hour12: true
     })}`
   } else {
-    // Multiple days
-    return `${start.toLocaleDateString('en-US', formatOptions)} to ${end.toLocaleDateString('en-US', formatOptions)}`
+    // Multiple days - for end date, if it's date-only, don't show time
+    const endHasTime = endDate.includes('T') || endDate.includes('Z')
+    const endFormatOptions: Intl.DateTimeFormatOptions = endHasTime ? formatOptions : {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    }
+    
+    return `${start.toLocaleDateString('en-US', formatOptions)} to ${end.toLocaleDateString('en-US', endFormatOptions)}`
   }
 }
 

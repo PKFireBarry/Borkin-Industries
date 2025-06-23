@@ -29,7 +29,7 @@ export function createBookingApprovedClientEmail(
     </p>
     
     <p style="color: #374151; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
-      Great news! Your booking request has been <strong>approved</strong> by ${contractor.name}. Your payment method has been charged and your booking is now confirmed.
+      Great news! Your booking request has been <strong>approved</strong> by ${contractor.name}. Your payment method has been authorized and your booking is now confirmed.
     </p>
     
     <div style="background: #f0fdf4; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #10b981;">
@@ -54,8 +54,8 @@ export function createBookingApprovedClientEmail(
       </div>
       
       <div style="margin-bottom: 15px;">
-        <strong style="color: #065f46;">Total Charged:</strong> ${totalAmount}
-        <br><small style="color: #6b7280;">*Payment has been processed successfully</small>
+        <strong style="color: #065f46;">Total Amount:</strong> ${totalAmount}
+        <br><small style="color: #6b7280;">*Payment authorized - will be charged upon service completion</small>
       </div>
     </div>
     
@@ -67,7 +67,7 @@ export function createBookingApprovedClientEmail(
       <li>Your contractor will arrive at the scheduled time</li>
       <li>You can message your contractor directly through the platform</li>
       <li>After service completion, you'll be asked to leave a review</li>
-      <li>Payment will be released to the contractor once service is marked complete</li>
+      <li>Payment will be charged and released to the contractor once service is marked complete</li>
     </ul>
     
     <div style="text-align: center; margin: 30px 0;">
@@ -87,7 +87,7 @@ export function createBookingApprovedClientEmail(
   const textContent = `
 Hi ${client.name},
 
-Great news! Your booking request has been APPROVED by ${contractor.name}. Your payment method has been charged and your booking is now confirmed.
+Great news! Your booking request has been APPROVED by ${contractor.name}. Your payment method has been authorized and your booking is now confirmed.
 
 BOOKING CONFIRMED:
 Contractor: ${contractor.name}
@@ -99,14 +99,14 @@ Date & Time: ${dateRange}
 Services:
 ${serviceDetails.map(s => `- ${s.name} - $${(s.price / 100).toFixed(2)}${s.paymentType === 'daily' ? '/day' : ''}`).join('\n')}
 
-Total Charged: ${totalAmount}
-*Payment has been processed successfully
+Total Amount: ${totalAmount}
+*Payment authorized - will be charged upon service completion
 
 WHAT HAPPENS NEXT:
 - Your contractor will arrive at the scheduled time
 - You can message your contractor directly through the platform
 - After service completion, you'll be asked to leave a review
-- Payment will be released to the contractor once service is marked complete
+- Payment will be charged and released to the contractor once service is marked complete
 
 Login to your account: ${process.env.NEXT_PUBLIC_APP_URL}
 

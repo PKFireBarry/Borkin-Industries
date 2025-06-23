@@ -163,8 +163,17 @@ export default function ContractorPaymentsPage() {
       .finally(() => setLoading(false))
   }, [user])
 
-  // Payment summary calculations
-  const totalNetPayout = gigs.reduce((acc, gig) => acc + (gig.netPayout ?? (gig.amount - (gig.platformFee ?? gig.amount * 0.05) - (gig.stripeFee ?? (gig.amount * 0.029 + 0.3)))), 0)
+  // Payment summary calculations with new fee structure
+  const totalNetPayout = gigs.reduce((acc, gig) => {
+    // New fee structure: contractor receives full base service amount
+    // Legacy: contractor receives amount minus fees
+    if (gig.netPayout !== undefined) {
+      return acc + gig.netPayout;
+    } else {
+      // Legacy calculation for backward compatibility
+      return acc + (gig.amount - (gig.platformFee ?? gig.amount * 0.05) - (gig.stripeFee ?? (gig.amount * 0.029 + 0.3)));
+    }
+  }, 0);
   const totalGrossAmount = gigs.reduce((acc, gig) => acc + gig.amount, 0)
   const totalPlatformFees = gigs.reduce((acc, gig) => acc + (gig.platformFee ?? gig.amount * 0.05), 0)
   const totalStripeFees = gigs.reduce((acc, gig) => acc + (gig.stripeFee ?? (gig.amount * 0.029 + 0.3)), 0)
@@ -191,7 +200,9 @@ export default function ContractorPaymentsPage() {
         }
         
         monthlyData[monthYear].total += gig.amount
-        monthlyData[monthYear].net += (gig.netPayout ?? (gig.amount - (gig.platformFee ?? gig.amount * 0.05) - (gig.stripeFee ?? (gig.amount * 0.029 + 0.3))))
+        // Use actual netPayout if available, otherwise calculate legacy way
+        const netAmount = gig.netPayout !== undefined ? gig.netPayout : (gig.amount - (gig.platformFee ?? gig.amount * 0.05) - (gig.stripeFee ?? (gig.amount * 0.029 + 0.3)));
+        monthlyData[monthYear].net += netAmount
         monthlyData[monthYear].count += 1
       } catch (e) {
         // Skip invalid dates
@@ -479,9 +490,9 @@ export default function ContractorPaymentsPage() {
                     <div className="font-medium">{gig.petNames || 'None'}</div>
                   </div>
                   <div>
-                    <div className="text-xs text-muted-foreground">Payment</div>
+                    <div className="text-xs text-muted-foreground">Your Earnings</div>
                     <div className="font-medium text-green-600">${(gig.netPayout ?? (gig.amount - (gig.platformFee ?? gig.amount * 0.05) - (gig.stripeFee ?? (gig.amount * 0.029 + 0.3)))).toFixed(2)}</div>
-                    <div className="text-xs text-muted-foreground">(Gross: ${gig.amount.toFixed(2)})</div>
+                    <div className="text-xs text-muted-foreground">(Client paid: ${gig.amount.toFixed(2)})</div>
                   </div>
                 </div>
                 
@@ -569,20 +580,25 @@ export default function ContractorPaymentsPage() {
                 </h3>
                 <div className="space-y-3">
                   <div className="flex justify-between items-center border-t pt-3 mt-2">
-                    <span className="font-semibold text-base">Total Payment</span>
+                    <span className="font-semibold text-base">Client Total Payment</span>
                     <span className="font-bold text-primary text-xl">${(detailGig.amount || 0).toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between items-center border-t border-dashed pt-3 text-sm">
-                    <span className="text-muted-foreground">Platform Fee (5%)</span>
-                    <span className="text-red-600">-${detailGig?.platformFee?.toFixed(2) ?? ((detailGig?.amount || 0) * 0.05).toFixed(2)}</span>
+                    <span className="text-muted-foreground">Platform Fee (paid by client)</span>
+                    <span className="text-blue-600">${detailGig?.platformFee?.toFixed(2) ?? ((detailGig?.amount || 0) * 0.05).toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between items-center text-sm mb-1">
-                    <span className="text-muted-foreground">Processing Fee</span>
-                    <span className="text-red-600">-${detailGig?.stripeFee?.toFixed(2) ?? (((detailGig?.amount || 0) * 0.029 + 0.3).toFixed(2))}</span>
+                    <span className="text-muted-foreground">Processing Fee (paid by client)</span>
+                    <span className="text-blue-600">${detailGig?.stripeFee?.toFixed(2) ?? (((detailGig?.amount || 0) * 0.029 + 0.3).toFixed(2))}</span>
                   </div>
                   <div className="flex justify-between items-center border-t pt-3">
-                    <span className="font-semibold">Net to Contractor</span>
+                    <span className="font-semibold">Your Earnings</span>
                     <span className="font-semibold text-green-600 text-lg">${detailGig?.netPayout?.toFixed(2) ?? (((detailGig?.amount || 0) - (detailGig?.platformFee || (detailGig?.amount || 0) * 0.05) - ((detailGig?.amount || 0) * 0.029 + 0.3)).toFixed(2))}</span>
+                  </div>
+                  <div className="mt-2 p-3 bg-green-50 rounded-md border border-green-200">
+                    <p className="text-sm text-green-800">
+                      💡 With our new fee structure, you receive the full service amount. Platform and processing fees are now paid by the client.
+                    </p>
                   </div>
                 </div>
               </div>

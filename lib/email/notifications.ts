@@ -4,11 +4,12 @@ import {
   createNewGigRequestContractorEmail,
   createBookingApprovedClientEmail,
   createBookingDeclinedClientEmail,
-  createBookingCancelledClientEmail,
-  createClientCancelledBookingContractorEmail,
-  createBookingCompletedReceiptEmail,
+  createClientCancelledBookingEmail,
+  createGigCancelledContractorEmail,
+  createBookingCompletedClientEmail,
   createPaymentFailureEmail,
-  createNewMessageEmail
+  createNewMessageEmail,
+  createServicesUpdatedContractorEmail
 } from './templates'
 import type { Booking } from '@/types/booking'
 import type { Client } from '@/types/client'
@@ -123,7 +124,7 @@ export async function sendBookingCompletedReceipt(
   const transporter = createTransporter()
 
   try {
-    const email = createBookingCompletedReceiptEmail(booking, client, contractor, services)
+    const email = createBookingCompletedClientEmail(booking, client, contractor, services)
     await transporter.sendMail({
       from: `"${process.env.SMTP_FROM_NAME}" <${process.env.SMTP_FROM}>`,
       to: client.email,
@@ -166,18 +167,27 @@ export async function sendPaymentFailureNotification(
 
 // Send new message notification
 export async function sendNewMessageNotification(
-  recipient: Client | Contractor,
-  sender: Client | Contractor,
-  message: { id: string; content: string; timestamp: Date; chatId: string },
-  isRecipientClient: boolean
+  message: {
+    id: string;
+    chatId: string;
+    senderId: string;
+    receiverId: string;
+    text: string;
+    timestamp: number;
+    readBy: { [userId: string]: boolean };
+  },
+  recipientName: string,
+  senderName: string,
+  recipientEmail: string,
+  isContractor: boolean = false
 ): Promise<void> {
   const transporter = createTransporter()
 
   try {
-    const email = createNewMessageEmail(recipient, sender, message, isRecipientClient)
+    const email = createNewMessageEmail(message, recipientName, senderName, isContractor)
     await transporter.sendMail({
       from: `"${process.env.SMTP_FROM_NAME}" <${process.env.SMTP_FROM}>`,
-      to: recipient.email,
+      to: recipientEmail,
       subject: email.subject,
       html: email.html,
       text: email.text,
@@ -199,7 +209,7 @@ export async function sendBookingCancelledNotification(
   const transporter = createTransporter()
 
   try {
-    const email = createBookingCancelledClientEmail(booking, client, contractor, services)
+    const email = createClientCancelledBookingEmail(booking, client, contractor, services)
     await transporter.sendMail({
       from: `"${process.env.SMTP_FROM_NAME}" <${process.env.SMTP_FROM}>`,
       to: client.email,
@@ -221,10 +231,13 @@ export async function sendClientCancelledBookingNotification(
   contractor: Contractor,
   services: PlatformService[]
 ): Promise<void> {
+  console.log('[DEBUG] sendClientCancelledBookingNotification called for booking:', booking.id)
   const transporter = createTransporter()
 
   try {
-    const email = createClientCancelledBookingContractorEmail(booking, client, contractor, services)
+    console.log('[DEBUG] Creating email template for contractor:', contractor.email)
+    const email = createGigCancelledContractorEmail(booking, client, contractor, services)
+    console.log('[DEBUG] Email template created, sending email...')
     await transporter.sendMail({
       from: `"${process.env.SMTP_FROM_NAME}" <${process.env.SMTP_FROM}>`,
       to: contractor.email,
@@ -236,5 +249,41 @@ export async function sendClientCancelledBookingNotification(
     console.log('Client cancelled booking notification sent successfully to contractor')
   } catch (error) {
     console.error('Error sending client cancelled booking notification:', error)
+  }
+}
+
+// Send services updated notification
+export async function sendServicesUpdatedNotification(
+  booking: Booking,
+  client: Client,
+  contractor: Contractor,
+  services: PlatformService[],
+  previousServices?: {
+    serviceId: string
+    paymentType: 'one_time' | 'daily'
+    price: number
+    name?: string
+  }[],
+  previousBookingData?: {
+    startDate: string
+    endDate: string
+    endTime?: string
+  }
+): Promise<void> {
+  const transporter = createTransporter()
+
+  try {
+    const email = createServicesUpdatedContractorEmail(booking, client, contractor, services, previousServices, previousBookingData)
+    await transporter.sendMail({
+      from: `"${process.env.SMTP_FROM_NAME}" <${process.env.SMTP_FROM}>`,
+      to: contractor.email,
+      subject: email.subject,
+      html: email.html,
+      text: email.text,
+    })
+
+    console.log('Services updated notification sent successfully')
+  } catch (error) {
+    console.error('Error sending services updated notification:', error)
   }
 } 

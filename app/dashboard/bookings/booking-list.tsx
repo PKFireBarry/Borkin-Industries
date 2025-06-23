@@ -13,6 +13,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Package, Clock, MessageSquare } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import { EndDatePicker } from '@/components/ui/date-range-picker'
 import { getAllPlatformServices } from '@/lib/firebase/services'
 import type { PlatformService } from '@/types/service'
 import { Elements } from '@stripe/react-stripe-js'
@@ -361,7 +362,9 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
       }
       
       // Send contractor notification for approved/completed bookings
+      console.log(`[DEBUG] Checking notification condition for booking ${booking.id}: status=${booking.status}`)
       if (booking.status === 'approved' || booking.status === 'completed') {
+        console.log(`[DEBUG] Sending contractor notification for cancelled booking ${booking.id}`)
         try {
           const response = await fetch('/api/notifications/client-cancelled-booking', {
             method: 'POST',
@@ -395,12 +398,15 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
           if (response.ok) {
             console.log('Contractor notification sent successfully for client cancellation')
           } else {
-            console.error('Failed to send contractor notification for client cancellation')
+            const errorText = await response.text()
+            console.error('Failed to send contractor notification for client cancellation:', response.status, errorText)
           }
         } catch (emailError) {
           console.error('Error sending contractor notification for client cancellation:', emailError)
           // Don't throw - we don't want email failures to break the cancellation process
         }
+      } else {
+        console.log(`[DEBUG] Skipping contractor notification for booking ${booking.id} with status ${booking.status}`)
       }
       
       await removeBooking(cancelId)
@@ -653,6 +659,34 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
     if (!editServicesModal.booking || !user || !editStartDate || !editEndDate || !editEndTime) return
     setIsEditServicesPending(true)
     setEditServicesError(null)
+    
+    // Store previous data for notification if services or dates have changed
+    const previousServices = editServicesModal.booking.services
+    const previousStartDate = editServicesModal.booking.startDate
+    const previousEndDate = editServicesModal.booking.endDate
+    const previousEndTime = editServicesModal.booking.time?.endTime
+    
+    console.log('=== EDIT SERVICES DEBUG ===')
+    console.log('Previous dates from booking:', {
+      startDate: previousStartDate,
+      endDate: previousEndDate,
+      endTime: previousEndTime
+    })
+    console.log('New dates from form:', {
+      startDate: editStartDate,
+      endDate: editEndDate,
+      endTime: editEndTime
+    })
+    console.log('============================')
+    
+    const servicesChanged = editServicesModal.booking.status === 'pending' && 
+      JSON.stringify(previousServices) !== JSON.stringify(editServices)
+    const datesChanged = editStartDate !== previousStartDate || 
+      editEndDate !== previousEndDate || 
+      editEndTime !== previousEndTime
+    
+    const shouldSendNotification = servicesChanged || datesChanged
+    
     try {
       const updated = await updateBookingServices({
         bookingId: editServicesModal.booking.id,
@@ -662,6 +696,32 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
         newEndDate: editEndDate,
         newEndTime: editEndTime,
       })
+      
+      // Send notification if services or dates were changed
+      if (shouldSendNotification) {
+        try {
+          await fetch('/api/notifications/services-updated', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              bookingId: editServicesModal.booking.id,
+              previousServices: previousServices,
+              previousBookingData: {
+                startDate: previousStartDate,
+                endDate: previousEndDate,
+                endTime: previousEndTime
+              }
+            }),
+          })
+          console.log('Booking updated notification sent successfully')
+        } catch (notificationError) {
+          console.error('Failed to send booking updated notification:', notificationError)
+          // Don't throw - we don't want notification failures to break the booking update
+        }
+      }
+      
       if (updated.paymentRequiresAction && updated.paymentClientSecret) {
         setPendingPaymentClientSecret(updated.paymentClientSecret)
         setPendingPaymentBookingId(updated.id)
@@ -734,14 +794,7 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
           </div>
         </div>
 
-        <Dialog open={isRequestOpen} onOpenChange={setIsRequestOpen}>
-          <DialogContent className="sm:max-w-2xl">
-            <DialogHeader>
-              <DialogTitle className="text-2xl font-bold text-slate-900">Create New Booking</DialogTitle>
-            </DialogHeader>
-            <BookingRequestForm onSuccess={handleRequestSuccess} />
-          </DialogContent>
-        </Dialog>
+
       </div>
     )
   }
@@ -1095,14 +1148,6 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <Dialog open={isRequestOpen} onOpenChange={setIsRequestOpen}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-bold text-slate-900">Create New Booking</DialogTitle>
-          </DialogHeader>
-          <BookingRequestForm onSuccess={handleRequestSuccess} />
-        </DialogContent>
-      </Dialog>
       <Dialog open={!!detailBooking} onOpenChange={() => setDetailBooking(null)}>
         <DialogContent className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader className="pb-6">
@@ -1388,58 +1433,174 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
           setEditModalWarning(null);
         }}
       >
-        <DialogContent className="w-full max-w-screen-sm mx-auto">
-          <DialogHeader>
-            <DialogTitle>Edit Booking</DialogTitle>
+        <DialogContent className="w-full max-w-[95vw] sm:max-w-4xl mx-auto max-h-[95vh] overflow-y-auto bg-gradient-to-br from-white via-slate-50/50 to-blue-50/30 backdrop-blur-sm border border-slate-200/60 rounded-3xl shadow-2xl">
+          <DialogHeader className="pb-6 border-b border-slate-200/60">
+            <div className="flex items-center space-x-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl flex items-center justify-center shadow-lg">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </div>
+              <div>
+                <DialogTitle className="text-2xl font-bold text-slate-900">Edit Booking</DialogTitle>
+                <p className="text-sm text-slate-600 mt-1">
+                  {editServicesModal.booking?.status === 'pending'
+                    ? 'Update services, dates, and times for your booking'
+                    : 'Adjust end date and time for your booking'}
+                </p>
+              </div>
+            </div>
           </DialogHeader>
+          
           {editModalWarning && (
-            <div className="text-xs text-red-600 mb-2">{editModalWarning}</div>
+            <div className="mb-6 p-4 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl">
+              <div className="flex items-center space-x-3">
+                <svg className="w-5 h-5 text-amber-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+                <span className="text-sm font-medium text-amber-800">{editModalWarning}</span>
+              </div>
+            </div>
           )}
+          
           {editServicesModal.booking && (
-            <section className="space-y-6">
-              <div className="text-sm mb-2">
-                {editServicesModal.booking.status === 'pending'
-                  ? 'You can edit services, end date, and end time.'
-                  : 'You can only edit the end date and end time for this booking.'}
+            <div className="space-y-8">
+              {editServicesError && (
+                <div className="p-4 bg-gradient-to-r from-red-50 to-rose-50 border border-red-200 rounded-xl">
+                  <div className="flex items-center space-x-3">
+                    <svg className="w-5 h-5 text-red-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="text-sm font-medium text-red-800">{editServicesError}</span>
               </div>
-              {editServicesError && <div className="text-red-600 text-xs mb-2">{editServicesError}</div>}
-              {/* Dates and Duration - Responsive, balanced for desktop */}
-              <div className="flex flex-col md:flex-row md:items-end gap-4 mb-2 w-full">
-                <div className="flex flex-col flex-1 min-w-0">
-                  <label className="block text-xs font-medium mb-1">End Date</label>
-                  <Input
-                    type="date"
-                    value={editEndDate || ''}
-                    min={editStartDate || new Date().toISOString().split('T')[0]}
-                    onChange={e => {
-                      if (editStartDate && e.target.value < editStartDate) return;
-                      setEditEndDate(e.target.value)
-                    }}
-                  />
                 </div>
-                <div className="flex flex-col flex-1 min-w-0">
-                  <label className="block text-xs font-medium mb-1">End Time</label>
-                  <Input type="time" value={editEndTime || ''} onChange={e => setEditEndTime(e.target.value)} />
+              )}
+
+              {/* Date & Time Section */}
+              <div className="p-6 bg-white rounded-2xl border border-slate-200/60 shadow-sm">
+                <div className="flex items-center space-x-3 mb-6">
+                  <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                    <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3a2 2 0 012-2h4a2 2 0 012 2v4m-6 0V6a2 2 0 012-2h4a2 2 0 012 2v1m-6 0h8m-8 0H6a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V9a2 2 0 00-2-2h-2" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-900">Schedule</h3>
+                    <p className="text-sm text-slate-600">Adjust your service dates and times</p>
+                  </div>
                 </div>
-                <div className="flex flex-col flex-none md:pl-4 md:items-end">
-                  <span className="text-xs text-muted-foreground">Duration</span>
-                  <span className="font-semibold text-base">{editNumDays} day{editNumDays !== 1 ? 's' : ''}</span>
+                
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {/* Calendar Section */}
+                  <div className="space-y-4">
+                    <div className="flex items-center space-x-3 mb-4">
+                      <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                        <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3a2 2 0 012-2h4a2 2 0 012 2v4m-6 0V6a2 2 0 012-2h4a2 2 0 012 2v1m-6 0h8m-8 0H6a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V9a2 2 0 00-2-2h-2" />
+                        </svg>
+                      </div>
+                      <div>
+                        <h4 className="text-lg font-semibold text-slate-900">Select End Date</h4>
+                        <p className="text-sm text-slate-600">Choose when your service should end</p>
+                      </div>
+                    </div>
+                    
+                    {editStartDate && (
+                      <EndDatePicker
+                        startDate={editStartDate}
+                        endDate={editEndDate}
+                        onChange={setEditEndDate}
+                        minDate={new Date().toISOString().split('T')[0]}
+                        className="w-full"
+                      />
+                    )}
+                  </div>
+                  
+                  {/* Time & Summary Section */}
+                  <div className="space-y-6">
+                    <div className="space-y-4">
+                      <div className="flex items-center space-x-3 mb-4">
+                        <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                          <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <h4 className="text-lg font-semibold text-slate-900">Time Details</h4>
+                          <p className="text-sm text-slate-600">Set your service end time</p>
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <label className="block text-sm font-semibold text-slate-700">End Time</label>
+                        <Input 
+                          type="time" 
+                          value={editEndTime || ''} 
+                          onChange={e => setEditEndTime(e.target.value)}
+                          className="bg-white border-slate-300 focus:border-purple-500 focus:ring-purple-500 rounded-xl"
+                        />
+                      </div>
+                    </div>
+                    
+                    {/* Service Summary */}
+                    <div className="p-6 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-2xl border border-blue-200/60">
+                      <div className="flex items-center space-x-3 mb-4">
+                        <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                          <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <h4 className="text-lg font-semibold text-slate-900">Service Summary</h4>
+                          <p className="text-sm text-slate-600">Updated booking details</p>
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-center p-3 bg-white/80 rounded-xl">
+                          <span className="text-sm font-medium text-slate-700">Duration</span>
+                          <span className="font-bold text-blue-800">{editNumDays} day{editNumDays !== 1 ? 's' : ''}</span>
+                        </div>
+                        
+                        <div className="flex justify-between items-center p-3 bg-white/80 rounded-xl">
+                          <span className="text-sm font-medium text-slate-700">Updated Total</span>
+                          <span className="text-xl font-bold text-blue-900">${(editTotal/100).toFixed(2)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
-              {/* Services List - Responsive Grid, balanced for desktop */}
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 w-full">
+
+              {/* Services Section */}
+              {editServicesModal.booking?.status === 'pending' && (
+                <div className="p-6 bg-white rounded-2xl border border-slate-200/60 shadow-sm">
+                  <div className="flex items-center space-x-3 mb-6">
+                    <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
+                      <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-slate-900">Services</h3>
+                      <p className="text-sm text-slate-600">Choose the services you need</p>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {editServicesOptions.map((offering: any) => {
                   const checked = editServices.some((s: any) => s.serviceId === offering.serviceId)
                   const platformService = platformServices.find(ps => ps.id === offering.serviceId)
-                  const isEditable = editServicesModal.booking?.status === 'pending'
+                      
                   return (
-                    <label key={offering.serviceId} className={`flex flex-col items-start gap-1 p-3 border rounded-md cursor-pointer transition-colors duration-100 min-w-0 ${checked ? 'bg-primary/10 border-primary' : 'hover:bg-accent'}${!isEditable ? ' opacity-50 pointer-events-none' : ''}`}>
-                      <div className="flex items-center w-full min-w-0">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => {
-                            if (!isEditable) return
+                        <div 
+                          key={offering.serviceId} 
+                          className={`group relative p-4 border-2 rounded-2xl cursor-pointer transition-all duration-200 ${
+                            checked 
+                              ? 'border-emerald-300 bg-gradient-to-br from-emerald-50 to-emerald-100 shadow-lg transform scale-105' 
+                              : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md hover:bg-slate-50'
+                          }`}
+                          onClick={() => {
                             const serviceToAdd = {
                               ...offering,
                               paymentType: offering.paymentType === 'per_day' ? 'daily' : offering.paymentType,
@@ -1451,38 +1612,90 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
                                 : [...prev, serviceToAdd]
                             )
                           }}
-                          className="accent-primary h-4 w-4 mr-2"
-                          disabled={!isEditable}
-                        />
-                        <span className="font-medium truncate">{platformService?.name || offering.serviceId}</span>
-                        <span className="text-xs text-muted-foreground ml-2">${(offering.price / 100).toFixed(2)}{(offering.paymentType === 'daily' || offering.paymentType === 'per_day') ? '/day' : ''}</span>
+                        >
+                          <div className="flex items-start space-x-3">
+                            <div className={`mt-0.5 w-5 h-5 border-2 rounded-md transition-all duration-200 flex items-center justify-center ${
+                              checked 
+                                ? 'bg-emerald-600 border-emerald-600' 
+                                : 'bg-white border-slate-300 group-hover:border-emerald-400'
+                            }`}>
+                              {checked && (
+                                <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-semibold text-slate-900 mb-1 group-hover:text-emerald-700 transition-colors">
+                                {platformService?.name || offering.serviceId}
+                              </h4>
+                              <div className="flex items-center justify-between">
+                                <span className="text-lg font-bold text-emerald-600">
+                                  ${(offering.price / 100).toFixed(2)}{(offering.paymentType === 'daily' || offering.paymentType === 'per_day') ? '/day' : ''}
+                                </span>
+                                <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-full">
+                                  {(offering.paymentType === 'daily' || offering.paymentType === 'per_day') ? 'Daily rate' : 'One-time fee'}
+                                </span>
                       </div>
                       {platformService?.description && (
-                        <span className="text-xs text-muted-foreground ml-6 break-words">{platformService.description}</span>
-                      )}
-                    </label>
-                  )
+                                <p className="text-sm text-slate-600 mt-2">{platformService.description}</p>
+                              )}
+                            </div>
+                          </div>
+                          {checked && (
+                            <div className="absolute -top-2 -right-2 w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center shadow-lg">
+                              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                              </svg>
+                            </div>
+                          )}
+                        </div>
+                      );
                 })}
               </div>
-              {/* Total and Actions - Responsive, centered for desktop */}
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mt-2 w-full">
-                <div className="text-right text-sm font-semibold flex-1">
-                  Total: <span className="text-primary text-lg font-bold">${(editTotal/100).toFixed(2)}</span>
                 </div>
-                <DialogFooter className="flex flex-col md:flex-row gap-2 w-full md:w-auto justify-end">
-                  <Button variant="outline" onClick={() => setEditServicesModal({ open: false, booking: null })} disabled={isEditServicesPending || !!pendingPaymentClientSecret || !editServicesModal.booking} className="w-full md:w-auto">Cancel</Button>
-                  <Button
-                    onClick={handleSaveEditServices}
-                    disabled={isEditServicesPending || !!pendingPaymentClientSecret || !editServicesModal.booking}
-                    className="w-full md:w-auto"
-                  >
-                    Save Changes
-                  </Button>
-                </DialogFooter>
+              )}
+
+              {/* Actions */}
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setEditServicesModal({ open: false, booking: null })} 
+                  disabled={isEditServicesPending || !!pendingPaymentClientSecret || !editServicesModal.booking}
+                  className="bg-white hover:bg-slate-50 border-slate-300 text-slate-700 font-medium rounded-xl px-8 py-3"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSaveEditServices}
+                  disabled={isEditServicesPending || !!pendingPaymentClientSecret || !editServicesModal.booking}
+                  className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl px-8 py-3 shadow-lg hover:shadow-xl transition-all duration-200"
+                >
+                  {isEditServicesPending ? (
+                    <div className="flex items-center space-x-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <span>Saving...</span>
+                    </div>
+                  ) : (
+                    'Save Changes'
+                  )}
+                </Button>
               </div>
+
               {/* Payment Reauth (if needed) */}
               {pendingPaymentClientSecret && editServicesModal.booking && pendingPaymentBookingId === editServicesModal.booking.id && (
-                <div className="mt-4">
+                <div className="p-6 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl">
+                  <div className="flex items-center space-x-3 mb-4">
+                    <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center">
+                      <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m0 0v2m0-2h2m-2 0h-2M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-amber-800">Payment Authorization Required</h4>
+                      <p className="text-sm text-amber-700">Please confirm your payment method to complete the booking update</p>
+                    </div>
+                  </div>
                   <Elements stripe={stripePromise} options={{ clientSecret: pendingPaymentClientSecret }}>
                     <PaymentReauthForm
                       clientSecret={pendingPaymentClientSecret}
@@ -1503,7 +1716,7 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
                   </Elements>
                 </div>
               )}
-            </section>
+            </div>
           )}
         </DialogContent>
       </Dialog>
@@ -1609,6 +1822,26 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+      
+      {/* New Booking Modal - Placed at the end to avoid conflicts */}
+      <Dialog open={isRequestOpen} onOpenChange={setIsRequestOpen}>
+        <DialogContent className="w-full max-w-[95vw] sm:max-w-4xl lg:max-w-6xl mx-auto max-h-[95vh] overflow-y-auto p-4 sm:p-6">
+          <DialogHeader className="pb-6 border-b border-slate-200/60">
+            <div className="flex items-center space-x-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+              </div>
+              <div>
+                <DialogTitle className="text-2xl font-bold text-slate-900">Create New Booking</DialogTitle>
+                <p className="text-sm text-slate-600 mt-1">Book professional pet care services with our certified contractors</p>
+              </div>
+            </div>
+          </DialogHeader>
+          <BookingRequestForm onSuccess={handleRequestSuccess} />
         </DialogContent>
       </Dialog>
     </div>

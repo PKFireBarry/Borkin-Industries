@@ -106,7 +106,8 @@ interface AddBookingDataInput extends Omit<Booking,
   'id' | 'numberOfDays' | 'paymentAmount' | 'platformFee' | 'paymentIntentId' | 
   'paymentClientSecret' | 'status' | 'paymentStatus' | 'createdAt' | 'updatedAt'> {
   stripeCustomerId: string;
-  totalAmount?: number; // Optional pre-calculated total amount in cents
+  totalAmount?: number; // Optional pre-calculated total amount in cents (what client pays)
+  baseServiceAmount?: number; // Base service amount in cents (what contractor receives)
   time?: {
     startTime: string;
     endTime: string;
@@ -137,24 +138,34 @@ export async function addBooking(data: AddBookingDataInput): Promise<string> {
     throw new Error("Booking must be for at least one day.");
   }
 
-  // Calculate total payment amount from services
-  let paymentAmountInCents = 0;
+  // Calculate payment amounts - new fee structure where client pays fees
+  let paymentAmountInCents = 0; // Total amount client pays (including fees)
+  let baseServiceAmountInCents = 0; // Base service amount contractor receives
   
-  if (data.totalAmount) {
-    // Use pre-calculated total if provided
+  if (data.totalAmount && data.baseServiceAmount) {
+    // Use pre-calculated amounts if provided (new fee structure)
     paymentAmountInCents = data.totalAmount;
+    baseServiceAmountInCents = data.baseServiceAmount;
+  } else if (data.totalAmount) {
+    // Legacy: totalAmount provided without baseServiceAmount
+    paymentAmountInCents = data.totalAmount;
+    baseServiceAmountInCents = data.totalAmount; // Fallback for backward compatibility
   } else if (data.services && data.services.length > 0) {
-    // Calculate from services array
+    // Calculate base service amount from services array
     data.services.forEach(service => {
       if (service.paymentType === 'one_time') {
-        paymentAmountInCents += service.price;
+        baseServiceAmountInCents += service.price;
       } else { // daily
-        paymentAmountInCents += service.price * numberOfDays;
+        baseServiceAmountInCents += service.price * numberOfDays;
       }
     });
+    
+    // Calculate total amount client pays (base + platform fee + stripe fee)
+    const platformFeeInCents = calculatePlatformFee(baseServiceAmountInCents);
+    const estimatedStripeFeeInCents = calculateStripeFee(baseServiceAmountInCents);
+    paymentAmountInCents = baseServiceAmountInCents + platformFeeInCents + estimatedStripeFeeInCents;
   } else if (data.serviceType) {
     // Legacy support for single service
-    // If services array is not present but serviceType is, fetch the service
     const contractorId = data.contractorId;
     const serviceId = data.serviceType;
     
@@ -167,10 +178,15 @@ export async function addBooking(data: AddBookingDataInput): Promise<string> {
         const paymentType = offeringData.paymentType || 'daily';
         
         if (paymentType === 'one_time') {
-          paymentAmountInCents = offeringData.price;
+          baseServiceAmountInCents = offeringData.price;
         } else {
-          paymentAmountInCents = offeringData.price * numberOfDays;
+          baseServiceAmountInCents = offeringData.price * numberOfDays;
         }
+        
+        // Calculate total amount client pays
+        const platformFeeInCents = calculatePlatformFee(baseServiceAmountInCents);
+        const estimatedStripeFeeInCents = calculateStripeFee(baseServiceAmountInCents);
+        paymentAmountInCents = baseServiceAmountInCents + platformFeeInCents + estimatedStripeFeeInCents;
       } else {
         throw new Error(`Service offering not found: ${serviceId}`);
       }
@@ -182,12 +198,13 @@ export async function addBooking(data: AddBookingDataInput): Promise<string> {
     throw new Error("No services specified for booking.");
   }
   
-  if (paymentAmountInCents <= 0) {
-    throw new Error("Calculated payment amount is invalid.");
+  if (paymentAmountInCents <= 0 || baseServiceAmountInCents <= 0) {
+    throw new Error("Calculated payment amounts are invalid.");
   }
 
-  const platformFeeInCents = calculatePlatformFee(paymentAmountInCents);
-  const estimatedStripeFeeInCents = calculateStripeFee(paymentAmountInCents);
+  // Calculate fees for display/tracking purposes
+  const platformFeeInCents = calculatePlatformFee(baseServiceAmountInCents);
+  const estimatedStripeFeeInCents = calculateStripeFee(baseServiceAmountInCents);
 
   // Fetch contractor stripe account ID
   let contractorStripeAccountId: string | undefined = undefined;
@@ -224,12 +241,13 @@ export async function addBooking(data: AddBookingDataInput): Promise<string> {
   };
 
   const stripePayload: any = {
-    amount: paymentAmountInCents,
+    amount: paymentAmountInCents, // Total amount client pays
     currency: 'usd',
     customerId: data.stripeCustomerId,
     contractorId: data.contractorId,
+    baseServiceAmount: baseServiceAmountInCents, // Amount contractor receives
     metadata: stripeMetadata,
-    // The API route /api/stripe/create-payment-intent handles fee calculations and transfers
+    // The API route /api/stripe/create-payment-intent handles the new fee structure
   };
   if (paymentMethodId) {
     stripePayload.paymentMethodId = paymentMethodId;
@@ -263,7 +281,8 @@ export async function addBooking(data: AddBookingDataInput): Promise<string> {
     services: data.services || [],
     serviceType: serviceType || "", // Ensure serviceType is never undefined
     numberOfDays,
-    paymentAmount: paymentAmountInCents / 100,
+    paymentAmount: paymentAmountInCents / 100, // Total amount client pays
+    baseServiceAmount: baseServiceAmountInCents / 100, // Base service amount contractor receives
     platformFee: platformFeeInCents / 100,
     stripeFee: estimatedStripeFeeInCents / 100, // Store estimated Stripe fee
     paymentIntentId,
@@ -496,14 +515,25 @@ export async function updateBookingServices({ bookingId, newServices, userId, ne
   if (booking.status === 'completed' || booking.status === 'cancelled') throw new Error('Cannot edit completed or cancelled bookings')
   if (booking.clientId !== userId) throw new Error('You do not have permission to edit this booking')
 
-  // Use new dates if provided, else current
-  const startDate = newStartDate || booking.startDate
+  // Use new dates if provided, else current (start date should never change)
+  const startDate = booking.startDate // Start date is never changed
   const endDate = newEndDate || booking.endDate
   const endTime = newEndTime || booking.time?.endTime
 
-  // Validate dates
-  if (new Date(startDate) > new Date(endDate)) throw new Error('Start date must be before end date')
-  if (new Date(startDate) < new Date()) throw new Error('Cannot set start date in the past')
+  // Validate end date
+  if (new Date(endDate) < new Date(startDate)) {
+    throw new Error('End date cannot be before start date')
+  }
+  
+  // Ensure end date is not in the past (at least today)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0) // Reset to start of day for comparison
+  const endDateOnly = new Date(endDate)
+  endDateOnly.setHours(0, 0, 0, 0) // Reset to start of day for comparison
+  
+  if (endDateOnly < today) {
+    throw new Error('End date cannot be in the past')
+  }
 
   // Only allow service changes if pending
   let servicesToSave = booking.services
@@ -511,95 +541,30 @@ export async function updateBookingServices({ bookingId, newServices, userId, ne
     servicesToSave = newServices
   }
 
-  // Recalculate total
+  // Recalculate totals with new fee structure
   const numberOfDays = calculateNumberOfDays(startDate, endDate)
-  let newTotal = 0
+  let newBaseServiceAmount = 0 // Base service amount contractor receives
   servicesToSave.forEach(service => {
     if (service.paymentType === 'one_time') {
-      newTotal += service.price
+      newBaseServiceAmount += service.price
     } else {
-      newTotal += service.price * numberOfDays
+      newBaseServiceAmount += service.price * numberOfDays
     }
   })
-  if (newTotal <= 0) throw new Error('Total must be greater than zero')
-  const newPlatformFee = calculatePlatformFee(newTotal)
-  const newEstimatedStripeFee = calculateStripeFee(newTotal)
+  if (newBaseServiceAmount <= 0) throw new Error('Service amount must be greater than zero')
+  
+  // Calculate fees based on base service amount (new fee structure)
+  const newPlatformFee = calculatePlatformFee(newBaseServiceAmount)
+  const newEstimatedStripeFee = calculateStripeFee(newBaseServiceAmount)
+  
+  // Total amount client pays (base + platform fee + stripe fee)
+  const newTotal = newBaseServiceAmount + newPlatformFee + newEstimatedStripeFee
 
-  // Get contractor's Stripe account ID
-  const contractorRef = doc(db, 'contractors', booking.contractorId)
-  const contractorSnap = await getDoc(contractorRef)
-  if (!contractorSnap.exists()) throw new Error('Contractor not found')
-  const contractorStripeAccountId = contractorSnap.data()?.stripeAccountId
-  if (!contractorStripeAccountId) throw new Error('Contractor has no Stripe account')
-
-  // Get client Stripe customer ID and currency
-  const clientRef = doc(db, 'clients', booking.clientId)
-  const clientSnap = await getDoc(clientRef)
-  if (!clientSnap.exists()) throw new Error('Client not found')
-  const stripeCustomerId = clientSnap.data()?.stripeCustomerId
-  if (!stripeCustomerId) throw new Error('Client has no Stripe customer ID')
-  // Default to USD; update if multi-currency support is added
-  const currency = 'usd'
-
-  // Fetch default payment method if not present on booking
-  let paymentMethodId: string | undefined = booking.paymentMethodId
-  if (!paymentMethodId) {
-    try {
-      const res = await fetch('/api/stripe/list-payment-methods', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerId: stripeCustomerId }),
-      })
-      if (res.ok) {
-        const { paymentMethods } = await res.json()
-        const defaultCard = paymentMethods.find((pm: any) => pm.isDefault) || paymentMethods[0]
-        if (defaultCard) paymentMethodId = defaultCard.id
-      }
-    } catch (err) {
-      // Optionally log error
-    }
-  }
-
-  // Update the PaymentIntent
-  const updateRes = await fetch('/api/stripe/update-payment-intent', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      paymentIntentId: booking.paymentIntentId,
-      newAmount: newTotal,
-      currency,
-      customerId: stripeCustomerId,
-      contractorId: booking.contractorId,
-      ...(paymentMethodId ? { paymentMethodId } : {}),
-    }),
-  })
-  const updateData = await updateRes.json()
-  if (!updateRes.ok) {
-    throw new Error(updateData.error || 'Failed to update payment intent')
-  }
-
-  let paymentIntentId = booking.paymentIntentId
-  let paymentClientSecret = booking.paymentClientSecret
-  let paymentRequiresAction = false
-  // Only require payment action if status is requires_payment_method or requires_confirmation
-  if (updateData.replaced && updateData.paymentIntentId && updateData.clientSecret) {
-    paymentIntentId = updateData.paymentIntentId
-    paymentClientSecret = updateData.clientSecret
-    if (updateData.status === 'requires_payment_method' || updateData.status === 'requires_confirmation') {
-      paymentRequiresAction = true
-    }
-    // Update Firestore booking with new PaymentIntent
-    await updateDoc(bookingRef, {
-      paymentIntentId,
-      paymentClientSecret,
-      ...(paymentMethodId ? { paymentMethodId } : {}),
-    })
-  }
-
-  // Update Firestore booking
+  // Update Firestore booking with new amounts (no Stripe processing during edits)
   await updateDoc(bookingRef, {
     services: servicesToSave,
-    paymentAmount: newTotal / 100,
+    paymentAmount: newTotal / 100, // Total amount client pays
+    baseServiceAmount: newBaseServiceAmount / 100, // Base service amount contractor receives
     platformFee: newPlatformFee / 100,
     stripeFee: newEstimatedStripeFee / 100, // Store estimated Stripe fee
     startDate,
@@ -610,8 +575,8 @@ export async function updateBookingServices({ bookingId, newServices, userId, ne
       endTime,
     },
     updatedAt: new Date().toISOString(),
-    ...(paymentMethodId ? { paymentMethodId } : {}),
   })
+  
   const updatedSnap = await getDoc(bookingRef)
-  return { ...(updatedSnap.data() as Booking), id: updatedSnap.id, paymentRequiresAction, paymentClientSecret }
+  return { ...(updatedSnap.data() as Booking), id: updatedSnap.id }
 } 

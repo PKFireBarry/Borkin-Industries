@@ -6,6 +6,7 @@ export * from './booking-cancelled'
 export * from './booking-completed'
 export * from './payment-failure'
 export * from './new-message'
+export * from './services-updated'
 
 // Future templates will be exported here:
 // export * from './booking-approved'

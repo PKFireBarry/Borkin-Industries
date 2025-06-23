@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { DateRangePicker } from '@/components/ui/date-range-picker'
 // import { DatePicker, DateRangePicker } from '@/components/ui/date-picker'; // Future: Consider Shadcn date picker
 import { useUser } from '@clerk/nextjs'
 import { getClientProfile } from '@/lib/firebase/client'
@@ -16,6 +17,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Plus, X } from 'lucide-react'
+import { calculateClientFeeBreakdown } from '@/lib/utils'
 
 // REMOVED Unused constant
 // const SERVICE_TYPES = [
@@ -83,8 +85,10 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
   const [selectedServices, setSelectedServices] = useState<SelectedService[]>([])
   
   const [selectedPets, setSelectedPets] = useState<string[]>([])
-  const [startDate, setStartDate] = useState('') // yyyy-mm-dd
-  const [endDate, setEndDate] = useState('') // yyyy-mm-dd
+  const [dateRange, setDateRange] = useState<{ startDate: string | null; endDate: string | null }>({
+    startDate: null,
+    endDate: null
+  })
   const [startTime, setStartTime] = useState('09:00')
   const [endTime, setEndTime] = useState('17:00')
 
@@ -154,7 +158,7 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
 
   // Update useEffect to calculate hours duration
   useEffect(() => {
-    const days = calculateDays(startDate, endDate);
+    const days = calculateDays(dateRange.startDate || '', dateRange.endDate || '');
     setNumberOfDays(days);
     setHoursPerDay(calculateHours(startTime, endTime));
     
@@ -176,7 +180,7 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
     } else {
       setCalculatedTotalPrice(null);
     }
-  }, [startDate, endDate, startTime, endTime, selectedServices]);
+  }, [dateRange.startDate, dateRange.endDate, startTime, endTime, selectedServices]);
 
   const handlePetToggle = (petId: string) => {
     setSelectedPets(prev =>
@@ -226,9 +230,9 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
     if (!selectedContractorId) return setError('Please select a contractor.');
     if (selectedServices.length === 0) return setError('Please select at least one service.');
     if (!selectedPets.length) return setError('Please select at least one pet.');
-    if (!startDate || !endDate) return setError('Please select a start and end date.');
+    if (!dateRange.startDate || !dateRange.endDate) return setError('Please select a start and end date.');
     
-    const days = calculateDays(startDate, endDate);
+    const days = calculateDays(dateRange.startDate, dateRange.endDate);
     if (days <= 0) return setError('End date must be after start date, for at least one day.');
 
     setIsPending(true);
@@ -240,15 +244,21 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
         return;
       }
 
-      // Calculate total price for all services
-      let totalPaymentAmount = 0;
+      // Calculate total price for all services (base amount)
+      let baseServiceAmount = 0;
       selectedServices.forEach(service => {
         if (service.paymentType === 'one_time') {
-          totalPaymentAmount += service.price;
+          baseServiceAmount += service.price;
         } else {
-          totalPaymentAmount += service.price * days;
+          baseServiceAmount += service.price * days;
         }
       });
+
+      // Calculate total amount including platform fee and processing fee
+      // Client now pays: service amount + platform fee + processing fee
+      const baseAmountInDollars = baseServiceAmount / 100;
+      const feeBreakdown = calculateClientFeeBreakdown(baseAmountInDollars);
+      const totalPaymentAmount = Math.round(feeBreakdown.totalAmount * 100); // Convert back to cents
 
       // Get client's default payment method
       let paymentMethodId: string | undefined = undefined;
@@ -284,10 +294,11 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
         contractorPhone: selectedContractor?.phone || '',
         petIds: selectedPets,
         services: selectedServices,
-        startDate: new Date(`${startDate}T${startTime}:00`).toISOString(),
-        endDate: new Date(`${endDate}T${endTime}:00`).toISOString(),
+        startDate: new Date(`${dateRange.startDate}T${startTime}:00`).toISOString(),
+        endDate: new Date(`${dateRange.endDate}T${endTime}:00`).toISOString(),
         stripeCustomerId: profile.stripeCustomerId,
-        totalAmount: totalPaymentAmount,
+        totalAmount: totalPaymentAmount, // Total amount client pays (including fees)
+        baseServiceAmount: baseServiceAmount, // Base service amount contractor receives
         paymentMethodId: paymentMethodId, // Include payment method ID
         time: {
           startTime,
@@ -301,8 +312,7 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
       setSelectedContractorId(preselectedContractorId || '');
       setSelectedServices([]);
       setSelectedPets([]);
-      setStartDate('');
-      setEndDate('');
+      setDateRange({ startDate: null, endDate: null });
       onSuccess();
     } catch (err) {
       console.error("Booking creation error:", err);
@@ -318,73 +328,142 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <div>
-        <label className="block text-sm font-medium mb-1">Select Pet(s)</label>
-        {pets.length === 0 && <p className="text-sm text-muted-foreground">No pets found. Add pets in your dashboard.</p>}
-        <div className="flex flex-wrap gap-2">
+    <form onSubmit={handleSubmit} className="space-y-8">
+      {/* Pet Selection Section */}
+      <div className="p-6 bg-white rounded-2xl border border-slate-200/60 shadow-sm">
+        <div className="flex items-center space-x-3 mb-6">
+          <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
+            <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+            </svg>
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">Select Pet(s)</h3>
+            <p className="text-sm text-slate-600">Choose which pets need care</p>
+          </div>
+        </div>
+        {pets.length === 0 && (
+          <div className="p-4 bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200 rounded-xl">
+            <p className="text-yellow-800 font-medium">No pets found. Add pets in your dashboard first.</p>
+          </div>
+        )}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {pets.map((pet) => (
-            <label key={pet.id} className="flex items-center gap-1 cursor-pointer p-2 border rounded-md hover:bg-accent">
-              <input
-                type="checkbox"
-                checked={selectedPets.includes(pet.id)}
-                onChange={() => handlePetToggle(pet.id)}
-                className="accent-primary form-checkbox h-4 w-4 text-primary border-gray-300 rounded focus:ring-primary"
-              />
-              <span className="ml-2 text-sm">{pet.name}</span>
+            <label 
+              key={pet.id} 
+              className={`group relative p-4 border-2 rounded-2xl cursor-pointer transition-all duration-200 ${
+                selectedPets.includes(pet.id)
+                  ? 'border-orange-300 bg-gradient-to-br from-orange-50 to-orange-100 shadow-lg transform scale-105'
+                  : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md hover:bg-slate-50'
+              }`}
+            >
+              <div className="flex items-center space-x-3">
+                <input
+                  type="checkbox"
+                  checked={selectedPets.includes(pet.id)}
+                  onChange={() => handlePetToggle(pet.id)}
+                  className="w-5 h-5 text-orange-600 bg-white border-2 border-slate-300 rounded-md focus:ring-orange-500 focus:ring-2"
+                />
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-semibold text-slate-900 group-hover:text-orange-700 transition-colors">
+                    {pet.name}
+                  </h4>
+                  <p className="text-sm text-slate-500">{pet.breed || 'Pet'}</p>
+                </div>
+              </div>
+              {selectedPets.includes(pet.id) && (
+                <div className="absolute -top-2 -right-2 w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center shadow-lg">
+                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+              )}
             </label>
           ))}
         </div>
       </div>
       
-      <div>
-        <label htmlFor="contractorSelect" className="block text-sm font-medium mb-1">Contractor</label>
+      {/* Contractor Selection */}
+      <div className="p-6 bg-white rounded-2xl border border-slate-200/60 shadow-sm">
+        <div className="flex items-center space-x-3 mb-6">
+          <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+            <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">Choose Contractor</h3>
+            <p className="text-sm text-slate-600">Select your preferred pet care professional</p>
+          </div>
+        </div>
         <select
           id="contractorSelect"
-          className="w-full border rounded-md px-3 py-2 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+          className="w-full bg-white border-2 border-slate-300 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 shadow-sm hover:border-slate-400"
           value={selectedContractorId}
           onChange={e => setSelectedContractorId(e.target.value)}
           required
-          disabled={!!preselectedContractorId} // Disable if contractor is preselected
+          disabled={!!preselectedContractorId}
         >
           <option value="" disabled>Select a contractor</option>
           {allContractors.map(c => (
-            <option key={c.id} value={c.id}>{c.name || c.email}</option> // Fallback to email if name is not set
+            <option key={c.id} value={c.id}>{c.name || c.email}</option>
           ))}
         </select>
       </div>
       
-      <div>
-        <label className="block text-sm font-medium mb-1">Services</label>
-        {isLoadingServices && <p className="text-sm text-muted-foreground">Loading services...</p>}
+      {/* Services Selection */}
+      <div className="p-6 bg-white rounded-2xl border border-slate-200/60 shadow-sm">
+        <div className="flex items-center space-x-3 mb-6">
+          <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
+            <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">Services</h3>
+            <p className="text-sm text-slate-600">Choose the services you need</p>
+          </div>
+        </div>
+        
+        {isLoadingServices && (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
+            <p className="text-slate-600 ml-3">Loading services...</p>
+          </div>
+        )}
+        
         {!isLoadingServices && contractorServices.length === 0 && selectedContractorId && (
-          <p className="text-sm text-muted-foreground">No services available for this contractor.</p>
+          <div className="p-4 bg-gradient-to-r from-gray-50 to-slate-50 border border-gray-200 rounded-xl">
+            <p className="text-slate-600 font-medium">No services available for this contractor.</p>
+          </div>
         )}
         
         {/* Selected services display */}
         {selectedServices.length > 0 && (
-          <div className="mb-4">
-            <p className="text-sm font-medium mb-2">Selected Services:</p>
+          <div className="mb-6">
+            <h4 className="text-sm font-semibold text-slate-700 mb-3">Selected Services:</h4>
             <div className="flex flex-wrap gap-2">
               {selectedServices.map(service => (
-                <Badge key={service.serviceId} variant="secondary" className="flex items-center gap-1">
-                  {service.name} ({formatPrice(service.price, service.paymentType)})
+                <div key={service.serviceId} className="flex items-center gap-2 bg-gradient-to-r from-emerald-50 to-emerald-100 border border-emerald-200 px-4 py-2 rounded-xl">
+                  <span className="font-medium text-emerald-800">
+                    {service.name} ({formatPrice(service.price, service.paymentType)})
+                  </span>
                   <button 
                     type="button" 
                     onClick={() => handleServiceToggle(contractorServices.find(s => s.serviceId === service.serviceId)!)}
-                    className="text-red-500 hover:text-red-700 ml-1 p-0.5"
-        >
+                    className="text-emerald-600 hover:text-emerald-800 transition-colors p-1 rounded-full hover:bg-emerald-200"
+                  >
                     <X className="h-3 w-3" />
                   </button>
-                </Badge>
+                </div>
               ))}
             </div>
           </div>
         )}
         
-        {/* Service selection grid - using native HTML checkboxes instead of Radix */}
+        {/* Service selection grid */}
         {!isLoadingServices && contractorServices.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {contractorServices.map(service => {
               const serviceName = getServiceName(service.serviceId);
               const checked = isServiceSelected(service.serviceId);
@@ -392,29 +471,51 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
               return (
                 <div 
                   key={service.serviceId} 
-                  className={`cursor-pointer transition-colors border rounded-md ${checked ? 'border-primary bg-primary/5' : 'hover:bg-accent'}`}
+                  className={`group relative p-4 border-2 rounded-2xl cursor-pointer transition-all duration-200 ${
+                    checked 
+                      ? 'border-emerald-300 bg-gradient-to-br from-emerald-50 to-emerald-100 shadow-lg transform scale-105' 
+                      : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md hover:bg-slate-50'
+                  }`}
                   onClick={() => handleServiceToggle(service)}
                 >
-                  <div className="p-3 flex items-center justify-between">
-                    <div className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        readOnly
-                        className="accent-primary h-4 w-4 mr-2 text-primary border-gray-300 rounded focus:ring-primary"
-                      />
-                      <div>
-                        <p className="font-medium">{serviceName}</p>
-                        <p className="text-sm text-muted-foreground">
+                  <div className="flex items-start space-x-3">
+                    <div className={`mt-0.5 w-5 h-5 border-2 rounded-md transition-all duration-200 flex items-center justify-center ${
+                      checked 
+                        ? 'bg-emerald-600 border-emerald-600' 
+                        : 'bg-white border-slate-300 group-hover:border-emerald-400'
+                    }`}>
+                      {checked && (
+                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-semibold text-slate-900 mb-1 group-hover:text-emerald-700 transition-colors">
+                        {serviceName}
+                      </h4>
+                      <div className="flex items-center justify-between">
+                        <span className="text-lg font-bold text-emerald-600">
                           {formatPrice(service.price, service.paymentType)}
-                          <span className="ml-2 text-xs">
-                            ({service.paymentType === 'daily' ? 'Daily rate' : 'One-time fee'})
-                          </span>
-                        </p>
+                        </span>
+                        <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-full">
+                          {service.paymentType === 'daily' ? 'Daily rate' : 'One-time fee'}
+                        </span>
                       </div>
                     </div>
-                    {!checked && <Plus className="h-5 w-5 text-muted-foreground" />}
                   </div>
+                  {checked && (
+                    <div className="absolute -top-2 -right-2 w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center shadow-lg">
+                      <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                  )}
+                  {!checked && (
+                    <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Plus className="h-5 w-5 text-slate-400" />
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -422,122 +523,203 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
         )}
       </div>
       
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="flex-1">
-          <label htmlFor="startDate" className="block text-sm font-medium mb-1">Start Date</label>
-          <Input
-            id="startDate"
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            min={new Date().toISOString().split('T')[0]} 
-            required
+      {/* Date & Time Selection */}
+      <div className="p-6 bg-white rounded-2xl border border-slate-200/60 shadow-sm">
+        <div className="flex items-center space-x-3 mb-6">
+          <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+            <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3a2 2 0 012-2h4a2 2 0 012 2v4m-6 0V6a2 2 0 012-2h4a2 2 0 012 2v1m-6 0h8m-8 0H6a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V9a2 2 0 00-2-2h-2" />
+            </svg>
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">Schedule</h3>
+            <p className="text-sm text-slate-600">Set your service dates and times</p>
+          </div>
+        </div>
+        
+        <div className="space-y-2 mb-6">
+          <label className="block text-sm font-semibold text-slate-700">Select Date Range</label>
+          <DateRangePicker
+            value={dateRange}
+            onChange={setDateRange}
+            minDate={new Date().toISOString().split('T')[0]}
+            className="w-full"
           />
         </div>
-        <div className="flex-1">
-          <label htmlFor="endDate" className="block text-sm font-medium mb-1">End Date</label>
-          <Input
-            id="endDate"
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            min={startDate || new Date().toISOString().split('T')[0]}
-            required 
-          />
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-2">
+            <label htmlFor="startTime" className="block text-sm font-semibold text-slate-700">Start Time</label>
+            <Input 
+              id="startTime" 
+              type="time" 
+              value={startTime} 
+              onChange={(e) => setStartTime(e.target.value)}
+              required
+              className="bg-white border-slate-300 focus:border-purple-500 focus:ring-purple-500 rounded-xl"
+            />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="endTime" className="block text-sm font-semibold text-slate-700">End Time</label>
+            <Input 
+              id="endTime" 
+              type="time" 
+              value={endTime} 
+              onChange={(e) => setEndTime(e.target.value)}
+              required 
+              className="bg-white border-slate-300 focus:border-purple-500 focus:ring-purple-500 rounded-xl"
+            />
+          </div>
         </div>
       </div>
       
-      <div className="flex flex-col sm:flex-row gap-4 mt-4">
-        <div className="flex-1">
-          <label htmlFor="startTime" className="block text-sm font-medium mb-1">Start Time</label>
-          <Input 
-            id="startTime" 
-            type="time" 
-            value={startTime} 
-            onChange={(e) => setStartTime(e.target.value)}
-            required
-          />
-        </div>
-        <div className="flex-1">
-          <label htmlFor="endTime" className="block text-sm font-medium mb-1">End Time</label>
-          <Input 
-            id="endTime" 
-            type="time" 
-            value={endTime} 
-            onChange={(e) => setEndTime(e.target.value)}
-            required 
-          />
-        </div>
-      </div>
-      
-      {numberOfDays > 0 && selectedServices.length > 0 && (
-        <div className="bg-muted p-4 rounded-md">
-          <div className="flex justify-between">
-            <span className="font-medium">Duration:</span>
-            <span>{numberOfDays} day{numberOfDays !== 1 ? 's' : ''}</span>
+      {/* Booking Summary */}
+      {numberOfDays > 0 && selectedServices.length > 0 && calculatedTotalPrice && (
+        <div className="p-6 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-2xl border border-blue-200/60 shadow-sm">
+          <div className="flex items-center space-x-3 mb-6">
+            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900">Booking Summary</h3>
+              <p className="text-sm text-slate-600">Review your booking details</p>
+            </div>
           </div>
           
-          <div className="flex justify-between mt-1">
-            <span className="font-medium">Time:</span>
-            <span>{startTime} - {endTime} ({hoursPerDay} hour{hoursPerDay !== 1 ? 's' : ''} per day)</span>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div className="text-center p-4 bg-white/80 rounded-xl border border-blue-200/40">
+              <p className="text-sm font-medium text-blue-600 mb-1">Duration</p>
+              <p className="text-2xl font-bold text-blue-900">{numberOfDays}</p>
+              <p className="text-sm text-blue-600">day{numberOfDays !== 1 ? 's' : ''}</p>
+            </div>
+            <div className="text-center p-4 bg-white/80 rounded-xl border border-blue-200/40">
+              <p className="text-sm font-medium text-blue-600 mb-1">Daily Hours</p>
+              <p className="text-2xl font-bold text-blue-900">{hoursPerDay}</p>
+              <p className="text-sm text-blue-600">hour{hoursPerDay !== 1 ? 's' : ''}</p>
+            </div>
+            <div className="text-center p-4 bg-white/80 rounded-xl border border-blue-200/40">
+              <p className="text-sm font-medium text-blue-600 mb-1">Total Hours</p>
+              <p className="text-2xl font-bold text-blue-900">{numberOfDays * hoursPerDay}</p>
+              <p className="text-sm text-blue-600">hour{numberOfDays * hoursPerDay !== 1 ? 's' : ''}</p>
+            </div>
           </div>
           
-          <div className="flex justify-between mt-1">
-            <span className="font-medium">Total Hours:</span>
-            <span>{numberOfDays * hoursPerDay} hour{numberOfDays * hoursPerDay !== 1 ? 's' : ''}</span>
-          </div>
-          
-          {/* Service breakdown */}
-          <div className="mt-2 space-y-1">
-            <p className="font-medium">Services:</p>
-            {selectedServices.map(service => {
-              const servicePrice = service.paymentType === 'one_time' 
-                ? service.price 
-                : service.price * numberOfDays;
-                
+          <div className="space-y-4">
+            <div>
+              <h4 className="font-semibold text-slate-900 mb-3">Services Breakdown:</h4>
+              <div className="space-y-2">
+                {selectedServices.map(service => {
+                  const servicePrice = service.paymentType === 'one_time' 
+                    ? service.price 
+                    : service.price * numberOfDays;
+                    
+                  return (
+                    <div key={service.serviceId} className="flex justify-between items-center py-2 px-4 bg-white/60 rounded-lg border border-blue-200/30">
+                      <div>
+                        <span className="font-medium text-slate-900">{service.name}</span>
+                        <span className="text-sm text-slate-600 ml-2">
+                          ({service.paymentType === 'daily' ? 'Daily' : 'One-time'})
+                        </span>
+                      </div>
+                      <span className="font-bold text-blue-900">${(servicePrice / 100).toFixed(2)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            
+            {/* Fee breakdown */}
+            {(() => {
+              const feeBreakdown = calculateClientFeeBreakdown(calculatedTotalPrice);
               return (
-                <div key={service.serviceId} className="flex justify-between text-sm">
-                  <span>{service.name} ({service.paymentType === 'daily' ? 'Daily' : 'One-time'})</span>
-                  <span>${(servicePrice / 100).toFixed(2)}</span>
+                <div className="p-4 bg-white/80 rounded-xl border border-blue-200/40">
+                  <div className="space-y-3">
+                    <div className="flex justify-between text-slate-700">
+                      <span>Services Subtotal:</span>
+                      <span className="font-semibold">${feeBreakdown.baseAmount.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-600 text-sm">
+                      <span>Platform Fee (5%):</span>
+                      <span>+${feeBreakdown.platformFee.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-600 text-sm">
+                      <span>Processing Fee:</span>
+                      <span>+${feeBreakdown.stripeFee.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-xl font-bold text-blue-900 pt-3 border-t border-blue-200">
+                      <span>Total Amount:</span>
+                      <span>${feeBreakdown.totalAmount.toFixed(2)}</span>
+                    </div>
+                  </div>
                 </div>
               );
-            })}
+            })()}
+            
+            <p className="text-xs text-slate-600 text-center bg-white/60 p-3 rounded-lg border border-blue-200/30">
+              The contractor receives the full service amount. Platform and processing fees support our service operations.
+            </p>
           </div>
-          
-          <div className="flex justify-between font-semibold text-lg mt-4 pt-2 border-t">
-            <span>Total:</span>
-            <span>${calculatedTotalPrice?.toFixed(2) || '--'}</span>
-          </div>
-          <p className="text-xs text-muted-foreground mt-2">
-            A 5% platform fee (including processing fees) will be added at checkout.
-          </p>
         </div>
       )}
       
+      {/* Error & Success Messages */}
       {error && (
-        <div className="p-3 rounded-md bg-red-50 border border-red-200 text-red-700">
-          <p>{error}</p>
+        <div className="p-4 bg-gradient-to-r from-red-50 to-red-100 border border-red-200 rounded-xl">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+              <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </div>
+            <p className="text-red-800 font-medium">{error}</p>
+          </div>
         </div>
       )}
+      
       {success && (
-        <div className="p-3 rounded-md bg-green-50 border border-green-200 text-green-700">
-          <p>Booking created successfully!</p>
+        <div className="p-4 bg-gradient-to-r from-green-50 to-green-100 border border-green-200 rounded-xl">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+              <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <p className="text-green-800 font-medium">Booking created successfully!</p>
+          </div>
         </div>
       )}
-      <Button 
-        type="submit" 
-        className="w-full" 
-        disabled={
-          isPending || 
-          success || 
-          selectedServices.length === 0 || 
-          selectedPets.length === 0 || 
-          !startDate || 
-          !endDate
-        }
-      >
-        {isPending ? 'Creating Booking...' : 'Book Now'}
-      </Button>
+      
+      {/* Submit Button */}
+      <div className="flex justify-center">
+        <Button 
+          type="submit" 
+          className="px-12 py-4 text-lg font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                     disabled={
+             isPending || 
+             success || 
+             selectedServices.length === 0 || 
+             selectedPets.length === 0 || 
+             !dateRange.startDate || 
+             !dateRange.endDate
+           }
+        >
+          {isPending ? (
+            <div className="flex items-center space-x-3">
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+              <span>Creating Booking...</span>
+            </div>
+          ) : (
+            <div className="flex items-center space-x-3">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              <span>Book Now</span>
+            </div>
+          )}
+        </Button>
+      </div>
     </form>
-  );
+  )
 } 

@@ -26,7 +26,8 @@ export interface Booking {
   status: 'pending' | 'approved' | 'completed' | 'cancelled'
   
   // Payment related fields
-  paymentAmount: number // Total amount in currency (e.g., USD, not cents here for display type)
+  paymentAmount: number // Total amount client pays (including fees) in currency
+  baseServiceAmount?: number // Base service amount contractor receives (new fee structure)
   platformFee: number // Platform fee in currency
   stripeFee?: number // Actual Stripe fee for the transaction
   netPayout?: number // Actual net payout to contractor

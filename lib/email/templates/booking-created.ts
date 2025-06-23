@@ -55,7 +55,6 @@ export function createBookingRequestClientEmail(
       
       <div style="margin-bottom: 15px;">
         <strong style="color: #374151;">Total Amount:</strong> ${totalAmount}
-        <br><small style="color: #6b7280;">*Includes 5% platform fee</small>
       </div>
       
       <div style="margin-bottom: 15px;">
@@ -72,7 +71,7 @@ export function createBookingRequestClientEmail(
     
     <ul style="color: #374151; font-size: 16px; line-height: 1.6; margin-bottom: 20px; padding-left: 20px;">
       <li>Your contractor will review your request and respond within 24 hours</li>
-      <li>If approved, your payment method will be charged and the booking will be confirmed</li>
+      <li>If approved, your payment method will be authorized and the booking will be confirmed</li>
       <li>You'll receive another email with confirmation details and next steps</li>
       <li>You can track your booking status by logging into your account</li>
     </ul>
@@ -107,13 +106,12 @@ Services Requested:
 ${serviceDetails.map(s => `- ${s.name} - $${(s.price / 100).toFixed(2)}${s.paymentType === 'daily' ? '/day' : ''}`).join('\n')}
 
 Total Amount: ${totalAmount}
-*Includes 5% platform fee
 
 Status: Pending Contractor Approval
 
 WHAT HAPPENS NEXT:
 - Your contractor will review your request and respond within 24 hours
-- If approved, your payment method will be charged and the booking will be confirmed
+- If approved, your payment method will be authorized and the booking will be confirmed
 - You'll receive another email with confirmation details and next steps
 - You can track your booking status by logging into your account
 
@@ -148,6 +146,12 @@ export function createNewGigRequestContractorEmail(
     }
   }) || []
 
+  // Calculate contractor earnings (base service amount)
+  const baseServiceAmount = booking.baseServiceAmount || booking.services?.reduce((total, service) => total + service.price, 0) || 0
+  // baseServiceAmount is already in dollars if it exists, but service prices are in cents
+  const contractorEarnings = booking.baseServiceAmount 
+    ? `$${baseServiceAmount.toFixed(2)}` 
+    : `$${(baseServiceAmount / 100).toFixed(2)}`
   const totalAmount = `$${booking.paymentAmount.toFixed(2)}`
   const dateRange = formatBookingDateRange(booking.startDate, booking.endDate)
 
@@ -183,8 +187,7 @@ export function createNewGigRequestContractorEmail(
       </div>
       
       <div style="margin-bottom: 15px;">
-        <strong style="color: #374151;">Total Payment:</strong> ${totalAmount}
-        <br><small style="color: #6b7280;">*After platform fees, you'll receive approximately $${((booking.paymentAmount * 0.9) - (booking.paymentAmount * 0.029)).toFixed(2)}</small>
+        <strong style="color: #374151;">Your Earnings:</strong> ${contractorEarnings}
       </div>
     </div>
     
@@ -222,8 +225,7 @@ Date & Time: ${dateRange}
 Services Requested:
 ${serviceDetails.map(s => `- ${s.name} - $${(s.price / 100).toFixed(2)}${s.paymentType === 'daily' ? '/day' : ''}`).join('\n')}
 
-Total Payment: ${totalAmount}
-*After platform fees, you'll receive approximately $${((booking.paymentAmount * 0.9) - (booking.paymentAmount * 0.029)).toFixed(2)}
+Your Earnings: ${contractorEarnings}
 
 Please respond within 24 hours to accept or decline this gig request. The client is waiting for your confirmation.
 

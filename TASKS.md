@@ -10,6 +10,8 @@
  - add coupons to admin dashboard in the pricing page
  - [x] implement platform fees: 5% base fee for first three months, then 10% base fee after 3 months
  - [x] add internal messaging system for client-contractor communication about gigs (Backend Started)
+ - [x] Shift fee structure: clients now pay platform and processing fees, contractors receive full service amount
+ - [x] Fix email notification issues: update payment collection messaging, contractor earnings display, missing template functions, and remove unnecessary fee messaging
 
 ## Overview
 A web platform for Borkin Industries to connect clients seeking high-quality, luxury at-home pet care with accredited veterinary technicians (contractors). The platform will facilitate client/contractor onboarding, booking management, payment processing, and company oversight, with a focus on Southeast Florida.
@@ -182,6 +184,9 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
 - [x] Fix service name display in booking edit modal to show human-readable names instead of primitive service IDs
 - [x] Add contractor name and phone number to booking details model and display in booking details UI
 - [x] Clean up and restyle booking details modal for clarity and client-friendliness
+- [x] Fix edit services modal date handling: properly display and update end dates, format dates correctly for HTML inputs, and show both start/end dates for better UX
+- [x] Simplify edit services flow: remove immediate payment processing, only update booking amounts and details. Payment collection now only happens at booking completion when both client and contractor mark as completed
+- [x] Restore modern styling for edit services modal: professional headers, enhanced date section, modern service cards, and improved overall UX to match new booking modal design standards
 - [x] Refine dashboard navigation layout to be fully responsive and collapsible for all device types
 - [x] Create reusable PhotoUpload component
 - [x] Integrate PhotoUpload into client profile, contractor profile, and pet management
@@ -312,6 +317,15 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
   - [x] Updated Contact component with functional contact form
   - [x] Added auto-reply functionality for customer confirmation emails
   - [x] Created test endpoints and components for email verification
+- [x] Add booking updated email notification for contractors when clients edit booking services or dates
+  - [x] Created services-updated email template with before/after service comparison
+  - [x] Implemented API endpoint for sending booking updated notifications
+  - [x] Integrated notification sending into booking edit flow for both service and date changes
+  - [x] Added professional email styling with clear action items for contractors
+  - [x] Updated template to handle both service changes and date/time changes
+  - [x] Enhanced template to show date changes with before/after comparison
+  - [x] Updated language to be generic ("Changes Made") instead of service-specific
+  - [x] Improved visual organization with separate sections for schedule and service changes
 - [ ] Prompt clients for review/rating after gig completion
 - [ ] Store and display contractor ratings
 - [x] Allow contractors to leave feedback on reviews (one-time response per review)
@@ -373,6 +387,25 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
   - Applied modern design patterns similar to Twitter, Instagram, Facebook, Coinbase, and Airbnb
 - [x] Add payment confirmation modal for client "Mark as completed" action
   - Created payment confirmation modal that shows before processing payment
+- [x] Modernize client booking modals UI/UX with professional, cohesive design
+- Redesigned new booking modal with modern gradient backgrounds, enhanced header with icons, improved form layout with sectioned cards
+- Updated edit services modal with professional styling, modern service selection cards, enhanced visual hierarchy
+- Applied consistent design patterns matching OpenAI, Facebook, Instagram, AirBnB, and Coinbase aesthetics
+- Enhanced booking request form with modern card-based layout, improved service selection interface, and professional styling
+- Added modern icons, gradients, shadows, and hover effects throughout the booking flow
+- Improved responsive design with mobile-first approach and proper visual feedback
+- [x] Replace dual date inputs with single calendar date range picker for booking form
+- Created custom DateRangePicker component with modern calendar interface and range selection
+- Implemented click-to-select-range functionality where users click start and end dates on one calendar
+- Added visual range highlighting, hover effects, and professional styling matching the booking form design
+- Updated booking request form to use the new date range picker instead of separate start/end date inputs
+- Enhanced user experience with intuitive date selection and improved visual feedback
+- [x] Add similar calendar interface to edit services modal for end date selection
+- Created custom EndDatePicker component for selecting end dates with a fixed start date
+- Replaced basic HTML date input with modern calendar interface in edit services modal
+- Added visual range display showing service period from start to selected end date
+- Enhanced edit services modal layout with two-column design: calendar on left, time/summary on right
+- Improved user experience with consistent calendar interface across booking and editing flows
   - Displays total amount, service date, contractor name, services breakdown, payment method, and fee breakdown
   - Provides clear confirmation before payment is captured
   - Improves user experience by showing exactly what they're paying for

@@ -23,10 +23,10 @@ export function createBookingCompletedClientEmail(
   const totalAmount = `$${booking.paymentAmount.toFixed(2)}`
   const dateRange = formatBookingDateRange(booking.startDate, booking.endDate)
   
-  // Calculate breakdown
-  const subtotal = booking.paymentAmount * 0.95 // Remove 5% platform fee
-  const platformFee = booking.paymentAmount * 0.05
-  const processingFee = booking.paymentAmount * 0.029 // Stripe fee
+  // Calculate breakdown based on new fee structure
+  const subtotal = booking.baseServiceAmount || (booking.paymentAmount * 0.95) // Use baseServiceAmount if available, fallback to legacy calculation
+  const platformFee = booking.platformFee || (subtotal * 0.05)
+  const processingFee = booking.stripeFee || (subtotal * 0.029 + 0.30) // Use actual stripe fee if available
 
   const content = `
     <p style="color: #374151; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">

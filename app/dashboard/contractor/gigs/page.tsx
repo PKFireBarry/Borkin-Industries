@@ -1198,14 +1198,19 @@ export default function ContractorGigsPage() {
                       {isPaymentBreakdownExpanded && (
                         <div className="space-y-2 pt-3 border-t border-slate-200 mt-3">
                           <div className="flex justify-between items-center text-sm">
-                            <span className="text-slate-600">Platform Fee (5%)</span>
-                            <span className="text-red-600 font-medium">-${(detailGig.platformFee || (detailGig.paymentAmount || 0) * 0.05).toFixed(2)}</span>
-                    </div>
+                            <span className="text-slate-600">Platform Fee (paid by client)</span>
+                            <span className="text-blue-600 font-medium">${(detailGig.platformFee || (detailGig.paymentAmount || 0) * 0.05).toFixed(2)}</span>
+                          </div>
                           <div className="flex justify-between items-center text-sm">
-                            <span className="text-slate-600">Processing Fee</span>
-                            <span className="text-red-600 font-medium">-${((detailGig.stripeFee && detailGig.stripeFee > 0 ? detailGig.stripeFee : ((detailGig.paymentAmount || 0) * 0.029 + 0.3)).toFixed(2))}</span>
-                    </div>
-                  </div>
+                            <span className="text-slate-600">Processing Fee (paid by client)</span>
+                            <span className="text-blue-600 font-medium">${((detailGig.stripeFee && detailGig.stripeFee > 0 ? detailGig.stripeFee : ((detailGig.paymentAmount || 0) * 0.029 + 0.3)).toFixed(2))}</span>
+                          </div>
+                          <div className="mt-2 p-2 bg-green-50 rounded-md border border-green-200">
+                            <p className="text-xs text-green-800">
+                              💡 You receive the full service amount. Fees are now paid by the client.
+                            </p>
+                          </div>
+                        </div>
                       )}
                 </div>
                   </div>
