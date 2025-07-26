@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { doc, getDoc, setDoc, deleteDoc, collection, getDocs } from "firebase/firestore"; 
+import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, writeBatch } from "firebase/firestore"; 
 import { db } from "@/firebase";
 import type { ContractorServiceOffering } from "@/types/service";
 
@@ -9,6 +9,7 @@ export interface ActionResponse {
   message?: string | null;
   error?: string | null;
   newOffering?: ContractorServiceOffering | null;
+  newOfferings?: ContractorServiceOffering[] | null;
   updatedOfferings?: ContractorServiceOffering[] | null; 
 }
 
@@ -153,5 +154,85 @@ export async function deleteServiceOfferingAction(
   } catch (error) {
     console.error("Error deleting service offering:", error);
     return { error: "Failed to delete service. Please try again." };
+  }
+} 
+
+export async function addMultipleServiceOfferingsAction(
+  prevState: ActionResponse | null,
+  formData: FormData
+): Promise<ActionResponse> {
+  const contractorId = formData.get("contractorId") as string;
+  const servicesData = formData.get("servicesData") as string;
+
+  if (!contractorId || !servicesData) {
+    return { error: "Missing required fields." };
+  }
+
+  let servicesToAdd: Array<{
+    serviceId: string;
+    price: number;
+    paymentType: 'one_time' | 'daily';
+  }>;
+
+  try {
+    servicesToAdd = JSON.parse(servicesData);
+  } catch (error) {
+    return { error: "Invalid services data format." };
+  }
+
+  if (!Array.isArray(servicesToAdd) || servicesToAdd.length === 0) {
+    return { error: "No services provided to add." };
+  }
+
+  // Validate all services before adding any
+  for (const service of servicesToAdd) {
+    if (!service.serviceId || !service.price || service.price <= 0) {
+      return { error: "Invalid service data. All services must have a valid serviceId and positive price." };
+    }
+    if (service.paymentType !== 'one_time' && service.paymentType !== 'daily') {
+      return { error: "Invalid payment type. Must be 'one_time' or 'daily'." };
+    }
+  }
+
+  try {
+    const contractorDocRef = doc(db, "contractors", contractorId);
+    const contractorSnap = await getDoc(contractorDocRef);
+    if (!contractorSnap.exists()) {
+      return { error: "Contractor not found." };
+    }
+
+    // Use a batch write to add all services atomically
+    const batch = writeBatch(db);
+    const newOfferings: ContractorServiceOffering[] = [];
+
+    for (const service of servicesToAdd) {
+      const offeringData: Omit<ContractorServiceOffering, 'serviceId'> = {
+        contractorUid: contractorId,
+        price: service.price,
+        paymentType: service.paymentType,
+      };
+
+      const serviceOfferingRef = getServiceOfferingDocRef(contractorId, service.serviceId);
+      batch.set(serviceOfferingRef, offeringData);
+
+      newOfferings.push({
+        serviceId: service.serviceId,
+        ...offeringData,
+      });
+    }
+
+    await batch.commit();
+
+    const updatedOfferings = await getAllOfferingsForContractor(contractorId);
+    revalidatePath("/dashboard/contractor/profile");
+    
+    return { 
+      message: `Successfully added ${newOfferings.length} service${newOfferings.length > 1 ? 's' : ''}!`, 
+      newOfferings,
+      updatedOfferings 
+    };
+  } catch (error) {
+    console.error("Error saving multiple service offerings:", error);
+    return { error: "Failed to save services. Please try again." };
   }
 } 

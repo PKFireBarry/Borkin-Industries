@@ -11,13 +11,15 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { getContractorProfile, updateContractorProfile, getContractorServiceOfferings } from '@/lib/firebase/contractors'
+import { getContractorCoupons } from '@/lib/firebase/coupons'
 import dynamic from 'next/dynamic'
 import type { ContractorServiceOffering, PlatformService } from '@/types/service';
 import type { Contractor, ContractorApplication, Availability, PaymentInfo, WorkHistory, Rating } from '@/types/contractor';
+import type { Coupon } from '@/types/coupon';
 import { ContractorProfileServiceManager } from './components/contractor-profile-service-manager';
 import { getAllPlatformServices } from '@/lib/firebase/services'
 import { PhotoUpload } from '@/components/PhotoUpload'
-import { MapPin, Phone, Mail, Edit3, Save, X, Star, Award, Calendar, Clock } from 'lucide-react'
+import { MapPin, Phone, Mail, Edit3, Save, X, Star, Award, Calendar, Clock, Tag, Copy } from 'lucide-react'
 
 
 const VETERINARY_SKILLS = [
@@ -66,6 +68,7 @@ export default function ContractorProfilePage() {
   const [originalForm, setOriginalForm] = useState<Omit<Contractor, 'serviceOfferings'>>(initialContractorFormState);
   const [serviceOfferings, setServiceOfferings] = useState<ContractorServiceOffering[]>([]);
   const [platformServices, setPlatformServices] = useState<PlatformService[]>([]);
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [editing, setEditing] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -77,11 +80,43 @@ export default function ContractorProfilePage() {
     if (!user) return
     setLoading(true)
     setError(null);
-    Promise.all([
-        getContractorProfile(user.id),
-        getContractorServiceOfferings(user.id),
-        getAllPlatformServices()
-    ]).then(([profile, offerings, platformServices]) => {
+    
+    // Load each piece of data individually to handle failures gracefully
+    const loadProfileData = async () => {
+      try {
+        // Load profile data
+        let profile = null;
+        try {
+          profile = await getContractorProfile(user.id);
+        } catch (err) {
+          console.warn('Failed to load contractor profile:', err);
+        }
+
+        // Load service offerings
+        let offerings: ContractorServiceOffering[] = [];
+        try {
+          offerings = await getContractorServiceOfferings(user.id);
+        } catch (err) {
+          console.warn('Failed to load service offerings:', err);
+        }
+
+        // Load platform services
+        let platformServices: PlatformService[] = [];
+        try {
+          platformServices = await getAllPlatformServices();
+        } catch (err) {
+          console.warn('Failed to load platform services:', err);
+        }
+
+        // Load coupons
+        let contractorCoupons: Coupon[] = [];
+        try {
+          contractorCoupons = await getContractorCoupons(user.id);
+        } catch (err) {
+          console.warn('Failed to load contractor coupons:', err);
+        }
+
+        // Set profile data
         if (profile) {
           const profileData: Omit<Contractor, 'serviceOfferings'> = {
             id: profile.id || '',
@@ -112,18 +147,23 @@ export default function ContractorProfilePage() {
           setForm(profileData);
           setOriginalForm(profileData);
         } else {
-            const baseForm = {...initialContractorFormState, id: user.id, email: user.primaryEmailAddress?.emailAddress || ''};
-            setForm(baseForm);
-            setOriginalForm(baseForm);
+          const baseForm = {...initialContractorFormState, id: user.id, email: user.primaryEmailAddress?.emailAddress || ''};
+          setForm(baseForm);
+          setOriginalForm(baseForm);
         }
+        
         setServiceOfferings(offerings || []);
         setPlatformServices(platformServices || []);
-    }).catch((err) => {
-        console.error("Failed to load profile or services:", err);
-        setError('Failed to load profile data.')
-    }).finally(() => {
-        setLoading(false)
-    })
+        setCoupons(contractorCoupons || []);
+      } catch (err) {
+        console.error("Failed to load profile data:", err);
+        setError('Failed to load profile data.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProfileData();
   }, [user])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -260,6 +300,11 @@ export default function ContractorProfilePage() {
     return match ? parseFloat(match[1]) : 10
   }
 
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    // You could add a toast notification here if you have a toast system
+  }
+
   if (!isLoaded || !isAuthorized) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 flex items-center justify-center">
@@ -343,7 +388,12 @@ export default function ContractorProfilePage() {
               <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
                 <div className="relative">
                   <Avatar className="w-32 h-32 md:w-40 md:h-40 border-4 border-white shadow-xl">
-                    <AvatarImage src={form.profileImage} alt={form.name} className="object-cover"/>
+                    <AvatarImage 
+                      src={form.profileImage} 
+                      alt={form.name} 
+                      objectPosition="center"
+                      className="object-cover"
+                    />
                     <AvatarFallback className="text-5xl bg-primary/10 text-primary font-bold">
                       {form.name ? form.name.charAt(0).toUpperCase() : 'U'}
                     </AvatarFallback>
@@ -470,6 +520,67 @@ export default function ContractorProfilePage() {
 
           {/* Service Manager */}
         {renderServiceManager()}
+
+        {/* Available Coupons */}
+        {coupons.length > 0 && (
+          <Card className="border-0 shadow-sm bg-white rounded-2xl">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-xl font-semibold text-slate-900 flex items-center gap-2">
+                <div className="w-2 h-6 bg-green-500 rounded-full"></div>
+                <Tag className="w-5 h-5" />
+                Available Coupons
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <p className="text-slate-600 text-sm">
+                  These are the active coupons available for your clients. Share these codes with clients to offer discounts.
+                </p>
+                <div className="grid gap-4">
+                  {coupons.map((coupon) => (
+                    <div key={coupon.id} className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <h4 className="font-semibold text-green-800">{coupon.name}</h4>
+                            <Badge variant="outline" className="font-mono text-sm">
+                              {coupon.code}
+                            </Badge>
+                            <Button
+                              variant="outline"
+                              onClick={() => copyToClipboard(coupon.code)}
+                              className="text-green-600 hover:text-green-700"
+                            >
+                              <Copy className="w-4 h-4" />
+                            </Button>
+                          </div>
+                          {coupon.description && (
+                            <p className="text-sm text-green-700 mb-2">{coupon.description}</p>
+                          )}
+                          <div className="flex items-center gap-4 text-xs text-green-600">
+                            <span>
+                              {coupon.type === 'fixed_price' 
+                                ? `$${(coupon.value / 100).toFixed(2)} per day`
+                                : `${coupon.value}% off`
+                              }
+                            </span>
+                            {coupon.expirationDate && (
+                              <span>Expires: {new Date(coupon.expirationDate).toLocaleDateString()}</span>
+                            )}
+                            <span>Used {coupon.usageCount} times</span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
         </div>
       </div>
     )
@@ -542,11 +653,16 @@ export default function ContractorProfilePage() {
               {/* Profile Picture */}
               <div className="flex flex-col items-center space-y-4">
                 <Avatar className="w-32 h-32 border-4 border-slate-200 shadow-lg">
-                             <AvatarImage src={form.profileImage} alt={form.name} className="object-cover"/>
+                  <AvatarImage 
+                    src={form.profileImage} 
+                    alt={form.name} 
+                    objectPosition="center"
+                    className="object-cover"
+                  />
                   <AvatarFallback className="text-4xl bg-slate-100 text-slate-600">
                     {form.name?.charAt(0) || 'U'}
                   </AvatarFallback>
-                         </Avatar>
+                </Avatar>
                 <div className="w-full max-w-sm">
                   <PhotoUpload
                     label="Profile Picture"
@@ -554,6 +670,10 @@ export default function ContractorProfilePage() {
                     initialUrl={form.profileImage}
                     onUpload={url => setForm(prev => ({ ...prev, profileImage: url }))}
                     disabled={saving}
+                    enableCropping={true}
+                    aspectRatio={1}
+                    previewSize="lg"
+                    quality={0.9}
                   />
                 </div>
               </div>

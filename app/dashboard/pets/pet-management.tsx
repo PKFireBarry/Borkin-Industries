@@ -454,6 +454,10 @@ export function PetManagement({ initialPets = [] }: PetManagementProps) {
                 initialUrl={addForm.photoUrl}
                 onUpload={url => setAddForm(prev => ({ ...prev, photoUrl: url }))}
                 disabled={loading}
+                enableCropping={true}
+                aspectRatio={1}
+                previewSize="md"
+                quality={0.8}
               />
             </div>
 
@@ -659,6 +663,10 @@ export function PetManagement({ initialPets = [] }: PetManagementProps) {
                 initialUrl={editForm.photoUrl}
                 onUpload={url => setEditForm(prev => ({ ...prev, photoUrl: url }))}
                 disabled={loading}
+                enableCropping={true}
+                aspectRatio={1}
+                previewSize="md"
+                quality={0.8}
               />
             </div>
 

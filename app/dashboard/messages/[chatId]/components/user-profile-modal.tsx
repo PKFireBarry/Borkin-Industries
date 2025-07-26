@@ -201,7 +201,12 @@ export function UserProfileModal({ isOpen, onClose, participant, bookingId, curr
             {/* User Header */}
             <div className="flex items-center space-x-4 p-6 bg-gradient-to-r from-blue-50 to-purple-50 rounded-2xl">
               <Avatar className="h-20 w-20 ring-4 ring-white shadow-lg">
-                <AvatarImage src={participant.avatarUrl || ''} alt={participant.displayName} className="object-cover" />
+                <AvatarImage 
+                  src={participant.avatarUrl || ''} 
+                  alt={participant.displayName} 
+                  objectPosition="center"
+                  className="object-cover" 
+                />
                 <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-xl font-semibold">
                   {getInitials(participant.displayName)}
                 </AvatarFallback>
@@ -363,6 +368,29 @@ export function UserProfileModal({ isOpen, onClose, participant, bookingId, curr
                             <span className="font-semibold text-base">Total Payment</span>
                             <span className="font-bold text-primary text-xl">${formatAmount(booking.paymentAmount || 0)}</span>
                           </div>
+                          
+                          {/* Coupon Information */}
+                          {booking.couponCode && (
+                            <div className="mt-3 p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-2">
+                                  <div className="w-4 h-4 bg-green-600 rounded-full flex items-center justify-center">
+                                    <svg className="w-2 h-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                  </div>
+                                  <div>
+                                    <span className="text-sm font-semibold text-green-800">Coupon Applied</span>
+                                    <p className="text-xs text-green-600">Code: {booking.couponCode}</p>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <span className="text-sm font-bold text-green-600">-${(booking.couponDiscount || 0).toFixed(2)}</span>
+                                  <p className="text-xs text-green-600">Discount</p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <p className="text-sm text-muted-foreground">

@@ -258,7 +258,11 @@ export default function ContractorDashboardHome() {
         <div className="text-center space-y-4">
           <div className="flex items-center justify-center gap-3 mb-4">
             <Avatar className="w-16 h-16 border-4 border-white shadow-lg">
-              <AvatarImage src={profile?.profileImage || user?.imageUrl} alt={profile?.name || user?.fullName || 'Contractor'} />
+              <AvatarImage 
+                src={profile?.profileImage || user?.imageUrl} 
+                alt={profile?.name || user?.fullName || 'Contractor'} 
+                objectPosition="center"
+              />
               <AvatarFallback className="bg-primary/10 text-primary text-xl font-bold">
                 {(profile?.name || user?.fullName || 'C')[0].toUpperCase()}
               </AvatarFallback>
@@ -512,6 +516,21 @@ export default function ContractorDashboardHome() {
                         </span>
                       </div>
                     </div>
+                    
+                    {/* Coupon Information */}
+                    {booking.couponCode && (
+                      <div className="mt-3 p-2 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
+                        <div className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                            <span className="text-green-700 font-medium">Coupon: {booking.couponCode}</span>
+                          </div>
+                          <span className="text-green-600 font-medium">
+                            -${(booking.couponDiscount || 0).toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

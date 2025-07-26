@@ -77,6 +77,9 @@ export function ContractorProfileModal({ contractor, open, onClose, onBookNow, c
   // or falls back to serviceId. A proper shared utility for platform services is better long-term.
   const getServiceName = (serviceId: string) => 
     platformServices.find(ps => ps.id === serviceId)?.name || serviceId;
+  
+  const getServiceDescription = (serviceId: string) => 
+    platformServices.find(ps => ps.id === serviceId)?.description || '';
 
   // Safely access contractor properties to avoid null reference errors
   const contractorName = validContractor.name || 'Contractor';
@@ -230,24 +233,30 @@ export function ContractorProfileModal({ contractor, open, onClose, onBookNow, c
                     </div>
                   ) : serviceOfferings.length > 0 ? (
                     <div className="space-y-3">
-                      {serviceOfferings.map(offering => (
-                        <div key={offering.serviceId} className="bg-white rounded-lg p-4 border border-slate-200">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <h4 className="font-semibold text-slate-900">{getServiceName(offering.serviceId)}</h4>
-                            </div>
-                            <div className="text-right">
-                              <div className="flex items-center gap-1 text-primary font-bold text-lg">
-                                <DollarSign className="w-4 h-4" />
-                                {(offering.price / 100).toFixed(2)}
+                      {serviceOfferings.map(offering => {
+                        const serviceDescription = getServiceDescription(offering.serviceId);
+                        return (
+                          <div key={offering.serviceId} className="bg-white rounded-lg p-4 border border-slate-200">
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1">
+                                <h4 className="font-semibold text-slate-900">{getServiceName(offering.serviceId)}</h4>
+                                {serviceDescription && (
+                                  <p className="text-sm text-slate-600 mt-1">{serviceDescription}</p>
+                                )}
                               </div>
-                              <Badge variant="outline" className="text-xs mt-1">
-                                {offering.paymentType === 'daily' ? 'per day' : 'one-time'}
-                              </Badge>
+                              <div className="text-right">
+                                <div className="flex items-center gap-1 text-primary font-bold text-lg">
+                                  <DollarSign className="w-4 h-4" />
+                                  {(offering.price / 100).toFixed(2)}
+                                </div>
+                                <Badge variant="outline" className="text-xs mt-1">
+                                  {offering.paymentType === 'daily' ? 'per day' : 'one-time'}
+                                </Badge>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <p className="text-slate-600">No specific services listed. Contact for custom pricing.</p>

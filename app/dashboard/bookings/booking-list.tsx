@@ -20,6 +20,8 @@ import { Elements } from '@stripe/react-stripe-js'
 import { loadStripe } from '@stripe/stripe-js'
 import { PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js'
 import { isOpenBookingStatus } from '@/app/actions/messaging-actions'
+import { validateCoupon } from '@/lib/firebase/coupons'
+import type { Coupon } from '@/types/coupon'
 import Link from 'next/link'
 import { toast } from 'sonner'
 
@@ -205,6 +207,13 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
   const [editNumDays, setEditNumDays] = useState<number>(1)
   const [editTotal, setEditTotal] = useState<number>(0)
   const [platformServices, setPlatformServices] = useState<PlatformService[]>([])
+  
+  // Coupon state for edit services modal
+  const [editCouponCode, setEditCouponCode] = useState('')
+  const [editAppliedCoupon, setEditAppliedCoupon] = useState<Coupon | null>(null)
+  const [editCouponError, setEditCouponError] = useState<string | null>(null)
+  const [isValidatingEditCoupon, setIsValidatingEditCoupon] = useState(false)
+  const [editOriginalPrice, setEditOriginalPrice] = useState<number | null>(null)
   const [pendingPaymentClientSecret, setPendingPaymentClientSecret] = useState<string | null>(null)
   const [pendingPaymentBookingId, setPendingPaymentBookingId] = useState<string | null>(null)
   const [releasePaymentError, setReleasePaymentError] = useState<string | null>(null)
@@ -287,7 +296,30 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
       setEditEndDate(editServicesModal.booking.endDate)
       setEditEndTime(editServicesModal.booking.time?.endTime || '17:00')
       setEditNumDays(editServicesModal.booking.numberOfDays || 1)
-      setEditTotal(calcEditTotal(editServicesModal.booking.services, editServicesModal.booking.numberOfDays || 1))
+      
+      // Calculate original total and set it
+      const originalTotal = calcEditTotal(editServicesModal.booking.services, editServicesModal.booking.numberOfDays || 1)
+      setEditTotal(originalTotal)
+      setEditOriginalPrice(originalTotal / 100) // Convert to dollars
+      
+      // Handle existing coupon if present
+      if (editServicesModal.booking.couponCode) {
+        setEditAppliedCoupon({
+          id: '',
+          code: editServicesModal.booking.couponCode,
+          name: 'Applied Coupon',
+          type: 'percentage', // Default type, could be enhanced
+          value: 0,
+          isActive: true,
+          createdAt: '',
+          updatedAt: '',
+          usageCount: 0
+        })
+        setEditCouponCode(editServicesModal.booking.couponCode)
+      } else {
+        setEditAppliedCoupon(null)
+        setEditCouponCode('')
+      }
     }
   }, [editServicesModal.open, editServicesModal.booking])
 
@@ -334,6 +366,71 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
     const c = contractors.find(c => c.id === id)
     return c ? c.name : id
   }
+
+  // Coupon validation and application for edit modal
+  const handleApplyEditCoupon = async () => {
+    if (!editCouponCode.trim() || !editServicesModal.booking?.contractorId || !editOriginalPrice) {
+      return;
+    }
+
+    setIsValidatingEditCoupon(true);
+    setEditCouponError(null);
+
+    try {
+      const response = await fetch('/api/coupons/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: editCouponCode.trim(),
+          contractorId: editServicesModal.booking.contractorId,
+          bookingAmount: editOriginalPrice * 100 // Convert to cents
+        })
+      });
+
+      const result = await response.json();
+
+      if (result.isValid && result.coupon) {
+        setEditAppliedCoupon(result.coupon);
+        setEditCouponError(null);
+        
+        // Apply coupon logic using the validation result
+        if (result.coupon.type === 'fixed_price') {
+          // For fixed_price coupons, result.finalPrice is the per-day price in cents
+          const fixedPricePerDayInCents = result.finalPrice;
+          const fixedPricePerDayInDollars = fixedPricePerDayInCents / 100;
+          const totalFixedPrice = fixedPricePerDayInDollars * editNumDays;
+          setEditTotal(totalFixedPrice * 100); // Convert to cents
+        } else if (result.coupon.type === 'percentage') {
+          // For percentage coupons, result.finalPrice is the total discounted amount in cents
+          setEditTotal(result.finalPrice);
+        }
+      } else {
+        setEditAppliedCoupon(null);
+        setEditCouponError(result.error || 'Invalid coupon code');
+        setEditCouponCode(''); // Clear invalid code
+        // Reset to original price
+        if (editOriginalPrice !== null) {
+          setEditTotal(editOriginalPrice * 100); // Convert to cents
+        }
+      }
+    } catch (error) {
+      console.error('Error validating coupon:', error);
+      setEditCouponError('Failed to validate coupon. Please try again.');
+      setEditCouponCode('');
+    } finally {
+      setIsValidatingEditCoupon(false);
+    }
+  };
+
+  const handleRemoveEditCoupon = () => {
+    setEditAppliedCoupon(null);
+    setEditCouponCode('');
+    setEditCouponError(null);
+    // Reset to original price
+    if (editOriginalPrice !== null) {
+      setEditTotal(editOriginalPrice * 100); // Convert to cents
+    }
+  };
 
   const handleCancel = async () => {
     if (!cancelId) return
@@ -709,6 +806,12 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
         newStartDate: editStartDate,
         newEndDate: editEndDate,
         newEndTime: editEndTime,
+        // Add coupon information if present
+        ...(editAppliedCoupon && editOriginalPrice && {
+          couponCode: editAppliedCoupon.code,
+          couponDiscount: editOriginalPrice - (editTotal / 100),
+          originalPrice: editOriginalPrice
+        })
       })
       
       // Send notification if services or dates were changed
@@ -1334,6 +1437,37 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
                       </div>
                     );
                   })}
+                  {/* Coupon Information */}
+                  {detailBooking.couponCode && (
+                    <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border-2 border-green-200 mt-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center">
+                            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </div>
+                          <div>
+                            <span className="text-lg font-bold text-slate-900">Coupon Applied</span>
+                            <p className="text-sm text-green-600">Code: {detailBooking.couponCode}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          {detailBooking.originalPrice && detailBooking.couponDiscount !== undefined && (
+                            <>
+                              <span className={`text-lg font-bold ${detailBooking.couponDiscount > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                {detailBooking.couponDiscount > 0 ? '-' : '+'}${formatAmount(Math.abs(detailBooking.couponDiscount))}
+                              </span>
+                              <p className={`text-xs ${detailBooking.couponDiscount > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                {detailBooking.couponDiscount > 0 ? 'Discount' : 'Price Increase'}
+                              </p>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
                   <div className="flex justify-between items-center p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border-2 border-blue-200 mt-6">
                     <div className="flex items-center space-x-3">
                       <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
@@ -1576,6 +1710,20 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
                           <span className="font-bold text-blue-800">{editNumDays} day{editNumDays !== 1 ? 's' : ''}</span>
                         </div>
                         
+                        {editAppliedCoupon && editOriginalPrice && (
+                          <div className="flex justify-between items-center p-3 bg-green-50 border border-green-200 rounded-xl">
+                            <span className="text-sm font-medium text-green-700">Original Price</span>
+                            <span className="font-bold text-green-800 line-through">${editOriginalPrice.toFixed(2)}</span>
+                          </div>
+                        )}
+                        
+                        {editAppliedCoupon && (
+                          <div className="flex justify-between items-center p-3 bg-green-50 border border-green-200 rounded-xl">
+                            <span className="text-sm font-medium text-green-700">Coupon Discount</span>
+                            <span className="font-bold text-green-800">-${(editOriginalPrice! - (editTotal/100)).toFixed(2)}</span>
+                          </div>
+                        )}
+                        
                         <div className="flex justify-between items-center p-3 bg-white/80 rounded-xl">
                           <span className="text-sm font-medium text-slate-700">Updated Total</span>
                           <span className="text-xl font-bold text-blue-900">${(editTotal/100).toFixed(2)}</span>
@@ -1585,6 +1733,85 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
                   </div>
                 </div>
               </div>
+
+              {/* Coupon Section */}
+              {editServicesModal.booking?.status === 'pending' && (
+                <div className="p-6 bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 rounded-2xl border border-green-200/60 shadow-sm">
+                  <div className="flex items-center space-x-3 mb-6">
+                    <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                      <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-slate-900">Have a Coupon?</h3>
+                      <p className="text-sm text-slate-600">Enter your coupon code to get a discount</p>
+                    </div>
+                  </div>
+
+                  {!editAppliedCoupon ? (
+                    <div className="flex gap-3">
+                      <div className="flex-1">
+                        <Input
+                          type="text"
+                          placeholder="Enter coupon code"
+                          value={editCouponCode}
+                          onChange={(e) => setEditCouponCode(e.target.value.toUpperCase())}
+                          maxLength={8}
+                          className="bg-white border-green-300 focus:border-green-500 focus:ring-green-500 rounded-xl"
+                          disabled={isValidatingEditCoupon}
+                        />
+                      </div>
+                      <Button
+                        onClick={handleApplyEditCoupon}
+                        disabled={!editCouponCode.trim() || isValidatingEditCoupon}
+                        className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-semibold transition-all duration-200"
+                      >
+                        {isValidatingEditCoupon ? (
+                          <div className="flex items-center space-x-2">
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                            <span>Validating...</span>
+                          </div>
+                        ) : (
+                          'Apply'
+                        )}
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between p-4 bg-white/80 rounded-xl border border-green-200/40">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                          <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                        <div>
+                          <p className="font-semibold text-green-800">{editAppliedCoupon.name}</p>
+                          <p className="text-sm text-green-600">Code: {editAppliedCoupon.code}</p>
+                        </div>
+                      </div>
+                      <Button
+                        onClick={handleRemoveEditCoupon}
+                        variant="outline"
+                        className="text-red-600 border-red-300 hover:bg-red-50 rounded-xl"
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  )}
+
+                  {editCouponError && (
+                    <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-xl">
+                      <div className="flex items-center space-x-2">
+                        <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        <p className="text-red-800 text-sm">{editCouponError}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Services Section */}
               {editServicesModal.booking?.status === 'pending' && (

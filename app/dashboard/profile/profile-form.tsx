@@ -250,6 +250,10 @@ export function ProfileForm({ initialProfile, isEditing }: ProfileFormProps) {
                 initialUrl={form.avatar}
                 onUpload={url => setForm(prev => ({ ...prev, avatar: url }))}
                 disabled={isSaving}
+                enableCropping={true}
+                aspectRatio={1}
+                previewSize="lg"
+                quality={0.9}
               />
             </div>
           </div>

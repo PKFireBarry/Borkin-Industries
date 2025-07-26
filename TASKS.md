@@ -13,6 +13,105 @@
  - [x] Shift fee structure: clients now pay platform and processing fees, contractors receive full service amount
  - [x] Fix email notification issues: update payment collection messaging, contractor earnings display, missing template functions, and remove unnecessary fee messaging
 
+## Coupon System Implementation
+
+### Data Model & Database
+- [x] Design coupon data model in Firebase (Firestore)
+  - [x] Create `coupons` collection with fields: code, name, type (fixed_price/percentage), value, contractorId (optional), expirationDate (optional), description, isActive
+  - [x] Add coupon validation rules and indexes
+  - [x] Create TypeScript interfaces for coupon types
+- [x] Update booking data model to include coupon information
+  - [x] Add couponCode, couponDiscount, originalPrice fields to booking schema
+  - [x] Update booking calculation logic to handle coupon discounts
+
+### Admin Dashboard - Coupon Management
+- [x] Create coupon management page in admin dashboard
+  - [x] Add coupon management section to admin navigation
+  - [x] Create coupon list view with search and filter functionality
+  - [x] Implement coupon creation form with all required fields
+  - [x] Add coupon editing and deletion functionality
+  - [x] Create coupon usage analytics and history view
+- [x] Implement coupon CRUD operations
+  - [x] Create server actions for coupon management
+  - [x] Add API endpoints for coupon operations
+  - [x] Implement coupon validation and business logic
+
+### Booking Flow Integration
+- [x] Add coupon input to booking request form
+  - [x] Create coupon code input field with validation
+  - [x] Implement real-time coupon validation and price calculation
+  - [x] Display coupon discount in booking summary
+- [x] Update booking calculation logic
+  - [x] Modify price calculation to handle fixed price coupons
+  - [x] Implement percentage discount calculation for site-wide coupons
+  - [x] Update tax calculation to apply after coupon discount
+- [x] Add coupon management to existing bookings
+  - [x] Allow adding/removing coupons from pending bookings
+  - [x] Implement price recalculation when coupons are added/removed
+  - [x] Update Stripe PaymentIntent when coupon changes
+
+### Contractor Dashboard Integration
+- [x] Add coupon display to contractor profile
+  - [x] Show available coupons for contractor in profile page
+  - [x] Display coupon codes and descriptions for contractor reference
+  - [x] Add coupon usage tracking for contractor-specific coupons
+- [x] Add coupon information to contractor dashboard displays
+  - [x] Show coupon information in contractor dashboard home page booking cards
+  - [x] Display coupon information in contractor gigs page booking cards
+  - [x] Add coupon information to user profile modal booking details
+  - [x] Show coupon information in client dashboard booking cards
+
+### Payment & Stripe Integration
+- [x] Update payment flow to handle coupons
+  - [x] Modify PaymentIntent creation to include coupon information
+  - [x] Update payment capture logic for coupon-adjusted amounts
+  - [x] Handle coupon validation in payment processing
+- [x] Update payout calculations for contractors
+  - [x] Ensure contractor payouts reflect coupon-adjusted amounts
+  - [x] Update platform fee calculations for coupon scenarios
+
+### UI/UX Enhancements
+- [x] Design coupon input interface
+  - [x] Create modern coupon code input with validation feedback
+  - [x] Design coupon discount display in booking summary
+  - [x] Add coupon removal functionality with clear visual feedback
+- [x] Update booking modals and forms
+  - [x] Integrate coupon functionality into existing booking modals
+  - [x] Update edit services modal to handle coupon changes
+  - [x] Enhance booking details display to show coupon information
+
+### Testing & Validation
+- [x] Implement comprehensive coupon testing
+  - [x] Test fixed price coupon scenarios
+  - [x] Test percentage discount scenarios
+  - [x] Test contractor-specific coupon validation
+  - [x] Test coupon expiration and usage limits
+  - [x] Test coupon removal and price reversion
+- [x] Validate payment flow with coupons
+  - [x] Test PaymentIntent creation with coupons
+  - [x] Test payment capture with coupon-adjusted amounts
+  - [x] Test contractor payout calculations
+- [x] Fix coupon calculation issues
+  - [x] Fix date parsing issues in edit modal causing "Invalid Date" display
+  - [x] Fix coupon calculation logic for fixed_price coupons in edit modal
+  - [x] Fix coupon calculation logic for percentage coupons in edit modal
+  - [x] Update booking update function to properly handle coupon calculations
+- [x] Fix contractor profile loading issues
+  - [x] Handle missing Firebase index for coupon queries gracefully
+  - [x] Implement fallback query for coupons when index doesn't exist
+  - [x] Make profile loading resilient to individual data fetch failures
+  - [x] Prevent profile loading from failing due to coupon query errors
+
+### Documentation & Analytics
+- [x] Add coupon usage tracking
+  - [x] Implement coupon usage analytics in admin dashboard
+  - [x] Track coupon performance and effectiveness
+  - [x] Add coupon usage reporting with client and contractor names
+- [ ] Update documentation
+  - [ ] Document coupon system for admin users
+  - [ ] Update API documentation for coupon endpoints
+  - [ ] Create user guides for coupon functionality
+
 ## Overview
 A web platform for Borkin Industries to connect clients seeking high-quality, luxury at-home pet care with accredited veterinary technicians (contractors). The platform will facilitate client/contractor onboarding, booking management, payment processing, and company oversight, with a focus on Southeast Florida.
 
@@ -190,6 +289,17 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
 - [x] Refine dashboard navigation layout to be fully responsive and collapsible for all device types
 - [x] Create reusable PhotoUpload component
 - [x] Integrate PhotoUpload into client profile, contractor profile, and pet management
+- [x] Implement enhanced image cropping system with responsive design
+  - [x] Create ImageCropper component with interactive cropping interface
+  - [x] Add zoom, rotation, and drag controls for precise image editing
+  - [x] Implement aspect ratio constraints and quality settings
+  - [x] Add touch support for mobile devices
+  - [x] Create responsive image components for optimal display across all devices
+  - [x] Enhance Avatar component with object positioning controls
+  - [x] Add image processing utilities for resizing, cropping, and format conversion
+  - [x] Update all profile forms to use enhanced cropping features
+  - [x] Implement fallback handling and error recovery for images
+  - [x] Add loading states and progressive enhancement
 - [x] Update forms to save/display photo URLs
 
 ### 5. Contractor Application & Onboarding

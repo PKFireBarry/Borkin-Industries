@@ -18,6 +18,8 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Plus, X } from 'lucide-react'
 import { calculateClientFeeBreakdown } from '@/lib/utils'
+import { validateCoupon } from '@/lib/firebase/coupons'
+import { Coupon } from '@/types/coupon'
 
 // REMOVED Unused constant
 // const SERVICE_TYPES = [
@@ -96,6 +98,13 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
   const [hoursPerDay, setHoursPerDay] = useState<number>(0);
   const [calculatedTotalPrice, setCalculatedTotalPrice] = useState<number | null>(null);
 
+  // Coupon state
+  const [couponCode, setCouponCode] = useState('')
+  const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null)
+  const [couponError, setCouponError] = useState<string | null>(null)
+  const [isValidatingCoupon, setIsValidatingCoupon] = useState(false)
+  const [originalPrice, setOriginalPrice] = useState<number | null>(null)
+
   const [isPending, setIsPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
@@ -156,7 +165,53 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
     fetchContractorServices();
   }, [selectedContractorId]);
 
-  // Update useEffect to calculate hours duration
+  // Function to recalculate coupon when base price changes
+  const recalculateCoupon = async (basePrice: number) => {
+    if (appliedCoupon && selectedContractorId) {
+      try {
+        const response = await fetch('/api/coupons/validate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code: appliedCoupon.code,
+            contractorId: selectedContractorId,
+            bookingAmount: basePrice * 100 // Convert to cents
+          })
+        });
+
+        const result = await response.json();
+
+        if (result.isValid && result.coupon) {
+          // Apply coupon logic using the validation result
+          if (result.coupon.type === 'fixed_price') {
+            // For fixed_price coupons, result.finalPrice is the per-day price in cents
+            const fixedPricePerDayInCents = result.finalPrice;
+            const fixedPricePerDayInDollars = fixedPricePerDayInCents / 100;
+            const totalFixedPrice = fixedPricePerDayInDollars * numberOfDays;
+            setCalculatedTotalPrice(totalFixedPrice);
+          } else if (result.coupon.type === 'percentage') {
+            // For percentage coupons, result.finalPrice is the total discounted amount in cents
+            setCalculatedTotalPrice(result.finalPrice / 100);
+          }
+        } else {
+          // Coupon is no longer valid, remove it
+          setAppliedCoupon(null);
+          setCouponCode('');
+          setCouponError('Coupon is no longer valid');
+          setCalculatedTotalPrice(basePrice);
+        }
+      } catch (error) {
+        console.error('Error recalculating coupon:', error);
+        // If there's an error, fall back to base price
+        setCalculatedTotalPrice(basePrice);
+      }
+    } else {
+      // No coupon applied, use base price
+      setCalculatedTotalPrice(basePrice);
+    }
+  };
+
+  // Update useEffect to calculate hours duration and handle coupon recalculation
   useEffect(() => {
     const days = calculateDays(dateRange.startDate || '', dateRange.endDate || '');
     setNumberOfDays(days);
@@ -176,11 +231,16 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
       });
       
       // Convert cents to dollars
-      setCalculatedTotalPrice(total / 100);
+      const basePrice = total / 100;
+      setOriginalPrice(basePrice);
+      
+      // Recalculate coupon if one is applied
+      recalculateCoupon(basePrice);
     } else {
       setCalculatedTotalPrice(null);
+      setOriginalPrice(null);
     }
-  }, [dateRange.startDate, dateRange.endDate, startTime, endTime, selectedServices]);
+  }, [dateRange.startDate, dateRange.endDate, startTime, endTime, selectedServices, appliedCoupon, selectedContractorId, numberOfDays]);
 
   const handlePetToggle = (petId: string) => {
     setSelectedPets(prev =>
@@ -221,6 +281,71 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
     return paymentType === 'daily' ? `${formattedPrice}/day` : formattedPrice;
   };
 
+  // Coupon validation and application
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim() || !selectedContractorId || !originalPrice) {
+      return;
+    }
+
+    setIsValidatingCoupon(true);
+    setCouponError(null);
+
+    try {
+      const response = await fetch('/api/coupons/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: couponCode.trim(),
+          contractorId: selectedContractorId,
+          bookingAmount: originalPrice * 100 // Convert to cents
+        })
+      });
+
+      const result = await response.json();
+
+      if (result.isValid && result.coupon) {
+        setAppliedCoupon(result.coupon);
+        setCouponError(null);
+        
+        // Apply coupon logic using the validation result
+        if (result.coupon.type === 'fixed_price') {
+          // For fixed_price coupons, result.finalPrice is the per-day price in cents
+          const fixedPricePerDayInCents = result.finalPrice;
+          const fixedPricePerDayInDollars = fixedPricePerDayInCents / 100;
+          const totalFixedPrice = fixedPricePerDayInDollars * numberOfDays;
+          setCalculatedTotalPrice(totalFixedPrice);
+        } else if (result.coupon.type === 'percentage') {
+          // For percentage coupons, result.finalPrice is the total discounted amount in cents
+          setCalculatedTotalPrice(result.finalPrice / 100);
+        }
+      } else {
+        setAppliedCoupon(null);
+        setCouponError(result.error || 'Invalid coupon code');
+        setCouponCode(''); // Clear invalid code
+        // Reset to original price
+        if (originalPrice !== null) {
+          setCalculatedTotalPrice(originalPrice);
+        }
+      }
+    } catch (error) {
+      console.error('Error validating coupon:', error);
+      setCouponError('Failed to validate coupon. Please try again.');
+      setCouponCode('');
+    } finally {
+      setIsValidatingCoupon(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponCode('');
+    setCouponError(null);
+    // Reset to original price
+    if (originalPrice !== null) {
+      setCalculatedTotalPrice(originalPrice);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -234,6 +359,31 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
     
     const days = calculateDays(dateRange.startDate, dateRange.endDate);
     if (days <= 0) return setError('End date must be after start date, for at least one day.');
+
+    // Validate coupon again at submission time
+    if (appliedCoupon) {
+      try {
+        const response = await fetch('/api/coupons/validate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code: appliedCoupon.code,
+            contractorId: selectedContractorId,
+            bookingAmount: originalPrice! * 100 // Convert to cents
+          })
+        });
+
+        const result = await response.json();
+        if (!result.isValid) {
+          setError('Coupon is no longer valid. Please remove it and try again.');
+          return;
+        }
+      } catch (error) {
+        console.error('Error validating coupon at submission:', error);
+        setError('Failed to validate coupon. Please try again.');
+        return;
+      }
+    }
 
     setIsPending(true);
     try {
@@ -254,10 +404,12 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
         }
       });
 
+      // Use coupon-adjusted amount if coupon is applied
+      const finalBaseAmountInDollars = calculatedTotalPrice || (baseServiceAmount / 100);
+      
       // Calculate total amount including platform fee and processing fee
       // Client now pays: service amount + platform fee + processing fee
-      const baseAmountInDollars = baseServiceAmount / 100;
-      const feeBreakdown = calculateClientFeeBreakdown(baseAmountInDollars);
+      const feeBreakdown = calculateClientFeeBreakdown(finalBaseAmountInDollars);
       const totalPaymentAmount = Math.round(feeBreakdown.totalAmount * 100); // Convert back to cents
 
       // Get client's default payment method
@@ -298,12 +450,18 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
         endDate: new Date(`${dateRange.endDate}T${endTime}:00`).toISOString(),
         stripeCustomerId: profile.stripeCustomerId,
         totalAmount: totalPaymentAmount, // Total amount client pays (including fees)
-        baseServiceAmount: baseServiceAmount, // Base service amount contractor receives
+        baseServiceAmount: Math.round(finalBaseAmountInDollars * 100), // Base service amount contractor receives (coupon-adjusted)
         paymentMethodId: paymentMethodId, // Include payment method ID
         time: {
           startTime,
           endTime
-        }
+        },
+        // Add coupon information
+        ...(appliedCoupon && originalPrice && {
+          couponCode: appliedCoupon.code,
+          couponDiscount: originalPrice - calculatedTotalPrice!, // Store the actual difference (positive = discount, negative = price increase)
+          originalPrice: originalPrice
+        })
       };
 
       console.log('[booking] Creating booking with payload:', bookingPayload);
@@ -636,10 +794,24 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
               return (
                 <div className="p-4 bg-white/80 rounded-xl border border-blue-200/40">
                   <div className="space-y-3">
+                    {appliedCoupon && originalPrice && (
+                      <div className="flex justify-between text-slate-600 text-sm">
+                        <span>Original Price:</span>
+                        <span className="line-through">${originalPrice.toFixed(2)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between text-slate-700">
                       <span>Services Subtotal:</span>
-                      <span className="font-semibold">${feeBreakdown.baseAmount.toFixed(2)}</span>
+                      <span className="font-semibold">${calculatedTotalPrice!.toFixed(2)}</span>
                     </div>
+                    {appliedCoupon && (
+                      <div className="flex justify-between text-green-600 text-sm">
+                        <span>Coupon Applied ({appliedCoupon.name}):</span>
+                        <span className={calculatedTotalPrice! > originalPrice! ? 'text-red-600' : 'text-green-600'}>
+                          {calculatedTotalPrice! > originalPrice! ? '+' : '-'}${Math.abs(originalPrice! - calculatedTotalPrice!).toFixed(2)}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex justify-between text-slate-600 text-sm">
                       <span>Platform Fee (5%):</span>
                       <span>+${feeBreakdown.platformFee.toFixed(2)}</span>
@@ -661,6 +833,85 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
               The contractor receives the full service amount. Platform and processing fees support our service operations.
             </p>
           </div>
+        </div>
+      )}
+
+      {/* Coupon Section */}
+      {numberOfDays > 0 && selectedServices.length > 0 && calculatedTotalPrice && (
+        <div className="p-6 bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 rounded-2xl border border-green-200/60 shadow-sm">
+          <div className="flex items-center space-x-3 mb-6">
+            <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+              <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900">Have a Coupon?</h3>
+              <p className="text-sm text-slate-600">Enter your coupon code to get a discount</p>
+            </div>
+          </div>
+
+          {!appliedCoupon ? (
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <Input
+                  type="text"
+                  placeholder="Enter coupon code"
+                  value={couponCode}
+                  onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                  maxLength={8}
+                  className="bg-white border-green-300 focus:border-green-500 focus:ring-green-500 rounded-xl"
+                  disabled={isValidatingCoupon}
+                />
+              </div>
+              <Button
+                onClick={handleApplyCoupon}
+                disabled={!couponCode.trim() || isValidatingCoupon}
+                className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-semibold transition-all duration-200"
+              >
+                {isValidatingCoupon ? (
+                  <div className="flex items-center space-x-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span>Validating...</span>
+                  </div>
+                ) : (
+                  'Apply'
+                )}
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between p-4 bg-white/80 rounded-xl border border-green-200/40">
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                  <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="font-semibold text-green-800">{appliedCoupon.name}</p>
+                  <p className="text-sm text-green-600">Code: {appliedCoupon.code}</p>
+                </div>
+              </div>
+              <Button
+                onClick={handleRemoveCoupon}
+                variant="outline"
+                className="text-red-600 border-red-300 hover:bg-red-50 rounded-xl"
+              >
+                Remove
+              </Button>
+            </div>
+          )}
+
+          {couponError && (
+            <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-xl">
+              <div className="flex items-center space-x-2">
+                <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                <p className="text-red-800 text-sm">{couponError}</p>
+              </div>
+            </div>
+          )}
         </div>
       )}
       

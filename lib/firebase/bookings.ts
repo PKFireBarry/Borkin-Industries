@@ -5,6 +5,7 @@ import type { ContractorServiceOffering } from '@/types/service'
 import { getAllPlatformServices } from './services'
 import { addGigDatesToContractorCalendar, removeGigDatesFromContractorCalendar } from './contractors'
 import { calculatePlatformFee, calculateStripeFee } from '@/lib/utils'
+import { recordCouponUsage } from './coupons'
 
 // Helper function to calculate the number of days
 function calculateNumberOfDays(startDateISO: string, endDateISO: string): number {
@@ -112,6 +113,10 @@ interface AddBookingDataInput extends Omit<Booking,
     startTime: string;
     endTime: string;
   };
+  // Coupon fields
+  couponCode?: string;
+  couponDiscount?: number; // Amount saved in currency
+  originalPrice?: number; // Original price before coupon
 }
 
 export async function addBooking(data: AddBookingDataInput): Promise<string> {
@@ -237,7 +242,10 @@ export async function addBooking(data: AddBookingDataInput): Promise<string> {
     contractor_id: data.contractorId,
     num_days: numberOfDays.toString(), // Stripe metadata values must be strings
     total_services: (data.services?.length || 1).toString(),
-    services: JSON.stringify(servicesMetadata).slice(0, 500) // Limit metadata length
+    services: JSON.stringify(servicesMetadata).slice(0, 500), // Limit metadata length
+    ...(data.couponCode && { coupon_code: data.couponCode }),
+    ...(data.couponDiscount && { coupon_discount: data.couponDiscount.toString() }),
+    ...(data.originalPrice && { original_price: data.originalPrice.toString() })
   };
 
   const stripePayload: any = {
@@ -294,9 +302,36 @@ export async function addBooking(data: AddBookingDataInput): Promise<string> {
     ...(data.paymentType && { paymentType: data.paymentType }), // For backward compatibility
     ...(paymentMethodId && { paymentMethodId }),
     ...(data.time && { time: data.time }), // Add time information if provided
+    // Add coupon information if provided
+    ...(data.couponCode && { couponCode: data.couponCode }),
+    ...(data.couponDiscount && { couponDiscount: data.couponDiscount }),
+    ...(data.originalPrice && { originalPrice: data.originalPrice }),
   };
 
   await setDoc(newBookingDocRef, bookingToSave);
+  
+  // Record coupon usage if coupon was applied
+  if (data.couponCode && data.couponDiscount && data.originalPrice) {
+    try {
+      // Get coupon ID from code for recording usage
+      const { getCouponByCode } = await import('./coupons');
+      const coupon = await getCouponByCode(data.couponCode);
+      if (coupon) {
+        await recordCouponUsage(
+          coupon.id,
+          newBookingDocRef.id,
+          data.clientId,
+          data.contractorId,
+          Math.round(data.couponDiscount * 100), // Convert to cents
+          Math.round(data.originalPrice * 100), // Convert to cents
+          paymentAmountInCents
+        );
+      }
+    } catch (error) {
+      console.error('Failed to record coupon usage:', error);
+      // Don't fail the booking creation if coupon recording fails
+    }
+  }
   
   // Send email notifications via API route (to avoid client-side Node.js module issues)
   try {
@@ -497,13 +532,16 @@ export async function getBookingById(bookingId: string): Promise<Booking | null>
 /**
  * Update the services for a pending booking and update the Stripe PaymentIntent
  */
-export async function updateBookingServices({ bookingId, newServices, userId, newStartDate, newEndDate, newEndTime }: {
+export async function updateBookingServices({ bookingId, newServices, userId, newStartDate, newEndDate, newEndTime, couponCode, couponDiscount, originalPrice }: {
   bookingId: string,
   newServices: BookingService[],
   userId: string,
   newStartDate?: string,
   newEndDate?: string,
   newEndTime?: string,
+  couponCode?: string,
+  couponDiscount?: number,
+  originalPrice?: number,
 }): Promise<Booking & { paymentRequiresAction?: boolean; paymentClientSecret?: string }> {
   // Fetch the booking
   const bookingRef = doc(db, 'bookings', bookingId)
@@ -553,18 +591,27 @@ export async function updateBookingServices({ bookingId, newServices, userId, ne
   })
   if (newBaseServiceAmount <= 0) throw new Error('Service amount must be greater than zero')
   
-  // Calculate fees based on base service amount (new fee structure)
-  const newPlatformFee = calculatePlatformFee(newBaseServiceAmount)
-  const newEstimatedStripeFee = calculateStripeFee(newBaseServiceAmount)
+  // Apply coupon discount if provided
+  let finalBaseServiceAmount = newBaseServiceAmount
+  if (couponCode && originalPrice && couponDiscount) {
+    // Calculate the discount amount based on the original price and coupon discount
+    const originalPriceInCents = originalPrice * 100
+    const discountAmountInCents = originalPriceInCents - (newBaseServiceAmount * (originalPrice / (originalPrice + couponDiscount)))
+    finalBaseServiceAmount = Math.max(0, newBaseServiceAmount - discountAmountInCents)
+  }
   
-  // Total amount client pays (base + platform fee + stripe fee)
-  const newTotal = newBaseServiceAmount + newPlatformFee + newEstimatedStripeFee
+  // Calculate fees based on final base service amount (after coupon discount)
+  const newPlatformFee = calculatePlatformFee(finalBaseServiceAmount)
+  const newEstimatedStripeFee = calculateStripeFee(finalBaseServiceAmount)
+  
+  // Total amount client pays (final base + platform fee + stripe fee)
+  const newTotal = finalBaseServiceAmount + newPlatformFee + newEstimatedStripeFee
 
   // Update Firestore booking with new amounts (no Stripe processing during edits)
   await updateDoc(bookingRef, {
     services: servicesToSave,
     paymentAmount: newTotal / 100, // Total amount client pays
-    baseServiceAmount: newBaseServiceAmount / 100, // Base service amount contractor receives
+    baseServiceAmount: finalBaseServiceAmount / 100, // Base service amount contractor receives
     platformFee: newPlatformFee / 100,
     stripeFee: newEstimatedStripeFee / 100, // Store estimated Stripe fee
     startDate,
@@ -575,6 +622,10 @@ export async function updateBookingServices({ bookingId, newServices, userId, ne
       endTime,
     },
     updatedAt: new Date().toISOString(),
+    // Add coupon information if provided
+    ...(couponCode && { couponCode }),
+    ...(couponDiscount && { couponDiscount }),
+    ...(originalPrice && { originalPrice }),
   })
   
   const updatedSnap = await getDoc(bookingRef)

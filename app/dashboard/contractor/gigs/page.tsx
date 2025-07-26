@@ -47,6 +47,10 @@ interface Gig {
   endDate?: string
   numberOfDays?: number
   paymentIntentId?: string
+  // Coupon information
+  couponCode?: string
+  couponDiscount?: number // Amount saved in currency
+  originalPrice?: number // Original price before coupon
 }
 
 const statusLabels = {
@@ -935,6 +939,22 @@ export default function ContractorGigsPage() {
                             Net: <span className="font-semibold text-green-600">${getNetPayout(gig).toFixed(2)}</span>
                           </div>
                         </div>
+                        
+                        {/* Coupon Information */}
+                        {gig.couponCode && (
+                          <div className="mt-2 p-2 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
+                            <div className="flex items-center justify-between text-xs">
+                              <div className="flex items-center gap-1">
+                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                <span className="text-green-700 font-medium">{gig.couponCode}</span>
+                              </div>
+                              <span className="text-green-600 font-medium">
+                                -${(gig.couponDiscount || 0).toFixed(2)}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                        
                         <div className={`text-xs px-2 py-1 rounded-full font-medium ${
                           gig.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' :
                           gig.paymentStatus === 'escrow' ? 'bg-blue-100 text-blue-700' :
@@ -1172,6 +1192,29 @@ export default function ContractorGigsPage() {
                     
                     {/* Payment Summary with Collapsible Breakdown */}
                     <div className="bg-gradient-to-r from-slate-50 to-slate-100 rounded-xl p-4">
+                      {/* Coupon Information */}
+                      {detailGig.couponCode && (
+                        <div className="mb-3 p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                              <div className="w-6 h-6 bg-green-600 rounded-full flex items-center justify-center">
+                                <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                              </div>
+                              <div>
+                                <span className="text-sm font-semibold text-slate-900">Coupon Applied</span>
+                                <p className="text-xs text-green-600">Code: {detailGig.couponCode}</p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-sm font-bold text-green-600">-${(detailGig.couponDiscount || 0).toFixed(2)}</span>
+                              <p className="text-xs text-green-600">Discount</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
                       <div className="flex justify-between items-center gap-2">
                         <span className="font-semibold text-sm sm:text-base text-slate-900">Total Payment</span>
                         <span className="font-bold text-primary text-lg sm:text-xl">${(detailGig.paymentAmount || 0).toFixed(2)}</span>

@@ -60,4 +60,9 @@ export interface Booking {
 
   contractorName: string // Contractor's name at time of booking
   contractorPhone: string // Contractor's phone at time of booking
+
+  // Coupon information
+  couponCode?: string
+  couponDiscount?: number // Amount saved in currency
+  originalPrice?: number // Original price before coupon
 } 

@@ -4,7 +4,8 @@ import { useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { uploadFileToStorage } from "@/lib/firebase/storage"
-import { Loader2, UploadCloud } from "lucide-react"
+import { Loader2, UploadCloud, Crop, RotateCcw } from "lucide-react"
+import { ImageCropper } from "@/components/ui/image-cropper"
 
 interface PhotoUploadProps {
   storagePath: string // e.g. `avatars/${userId}.jpg`
@@ -12,21 +13,61 @@ interface PhotoUploadProps {
   label?: string
   initialUrl?: string
   disabled?: boolean
+  enableCropping?: boolean
+  aspectRatio?: number // 1 for square, 4/3 for landscape, etc.
+  minWidth?: number
+  minHeight?: number
+  maxWidth?: number
+  maxHeight?: number
+  quality?: number // 0-1, default 0.8
+  previewSize?: 'sm' | 'md' | 'lg' | 'xl'
 }
 
-export function PhotoUpload({ storagePath, onUpload, label = "Upload Photo", initialUrl, disabled }: PhotoUploadProps) {
+export function PhotoUpload({ 
+  storagePath, 
+  onUpload, 
+  label = "Upload Photo", 
+  initialUrl, 
+  disabled,
+  enableCropping = true,
+  aspectRatio = 1,
+  minWidth = 100,
+  minHeight = 100,
+  maxWidth = 800,
+  maxHeight = 800,
+  quality = 0.8,
+  previewSize = 'md'
+}: PhotoUploadProps) {
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(initialUrl || null)
   const [isUploading, setIsUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showCropper, setShowCropper] = useState(false)
+  const [tempImageUrl, setTempImageUrl] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  const previewSizeClasses = {
+    sm: 'w-16 h-16',
+    md: 'w-32 h-32',
+    lg: 'w-48 h-48',
+    xl: 'w-64 h-64'
+  }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
     if (f) {
+      console.log('File selected:', f.name, 'Cropping enabled:', enableCropping)
       setFile(f)
-      setPreview(URL.createObjectURL(f))
+      const url = URL.createObjectURL(f)
+      setTempImageUrl(url)
+      setPreview(url)
       setError(null)
+      
+      // If cropping is enabled, show cropper immediately
+      if (enableCropping) {
+        console.log('Setting showCropper to true')
+        setShowCropper(true)
+      }
     }
   }
 
@@ -35,9 +76,36 @@ export function PhotoUpload({ storagePath, onUpload, label = "Upload Photo", ini
     const f = e.dataTransfer.files?.[0]
     if (f) {
       setFile(f)
-      setPreview(URL.createObjectURL(f))
+      const url = URL.createObjectURL(f)
+      setTempImageUrl(url)
+      setPreview(url)
       setError(null)
+      
+      // If cropping is enabled, show cropper immediately
+      if (enableCropping) {
+        setShowCropper(true)
+      }
     }
+  }
+
+  const handleCrop = (croppedImageUrl: string) => {
+    setPreview(croppedImageUrl)
+    setTempImageUrl(croppedImageUrl)
+    setShowCropper(false)
+    
+    // Convert the cropped image URL back to a File object for upload
+    fetch(croppedImageUrl)
+      .then(res => res.blob())
+      .then(blob => {
+        const croppedFile = new File([blob], file?.name || 'cropped-image.jpg', {
+          type: 'image/jpeg'
+        })
+        setFile(croppedFile)
+      })
+      .catch(err => {
+        console.error('Error converting cropped image to file:', err)
+        setError('Failed to process cropped image')
+      })
   }
 
   const handleUpload = async () => {
@@ -55,11 +123,58 @@ export function PhotoUpload({ storagePath, onUpload, label = "Upload Photo", ini
     }
   }
 
+  const handleRotate = () => {
+    if (!tempImageUrl) return
+    
+    // Create a canvas to rotate the image
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
+    const img = new Image()
+    
+    img.onload = () => {
+      // Swap width and height for 90-degree rotation
+      canvas.width = img.height
+      canvas.height = img.width
+      
+      if (ctx) {
+        ctx.translate(canvas.width / 2, canvas.height / 2)
+        ctx.rotate(Math.PI / 2)
+        ctx.drawImage(img, -img.width / 2, -img.height / 2)
+        
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const rotatedUrl = URL.createObjectURL(blob)
+            setTempImageUrl(rotatedUrl)
+            setPreview(rotatedUrl)
+            
+            const rotatedFile = new File([blob], file?.name || 'rotated-image.jpg', {
+              type: 'image/jpeg'
+            })
+            setFile(rotatedFile)
+          }
+        }, 'image/jpeg', quality)
+      }
+    }
+    
+    img.src = tempImageUrl
+  }
+
+  const handleRemove = () => {
+    setFile(null)
+    setPreview(initialUrl || null)
+    setTempImageUrl(null)
+    setError(null)
+    if (inputRef.current) {
+      inputRef.current.value = ''
+    }
+  }
+
   return (
-    <div className="space-y-2">
+    <div className="space-y-4">
       {label && <label className="block text-sm font-medium mb-1">{label}</label>}
+      
       <div
-        className="relative flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-4 cursor-pointer hover:border-primary focus-within:border-primary transition-colors bg-muted/30"
+        className="relative flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-6 cursor-pointer hover:border-primary focus-within:border-primary transition-colors bg-muted/30"
         tabIndex={0}
         onClick={() => inputRef.current?.click()}
         onDrop={handleDrop}
@@ -67,11 +182,99 @@ export function PhotoUpload({ storagePath, onUpload, label = "Upload Photo", ini
         aria-label="Upload photo"
       >
         {preview ? (
-          <img src={preview} alt="Preview" className="w-32 h-32 object-cover rounded-full mb-2 border" />
+          <div className="space-y-4">
+            <div className="relative">
+              <img 
+                src={preview} 
+                alt="Preview" 
+                className={`${previewSizeClasses[previewSize]} object-cover rounded-full border shadow-lg`} 
+              />
+              
+              {/* Quick action buttons */}
+              {file && enableCropping && (
+                <div className="absolute -top-2 -right-2 flex gap-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-8 h-8 p-0 rounded-full shadow-lg"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setShowCropper(true)
+                    }}
+                    title="Crop image"
+                  >
+                    <Crop className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-8 h-8 p-0 rounded-full shadow-lg"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleRotate()
+                    }}
+                    title="Rotate image"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
+            
+            <div className="text-center space-y-2">
+              <p className="text-sm text-gray-600">
+                {file ? 'Click to change or drag a new image' : 'Click to upload or drag a new image'}
+              </p>
+              {file && (
+                <div className="flex gap-2 justify-center">
+                  <Button
+                    type="button"
+                    className="px-3 py-1 text-sm"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleUpload()
+                    }}
+                    disabled={disabled || isUploading}
+                  >
+                    {isUploading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      'Upload'
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="px-3 py-1 text-sm"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleRemove()
+                    }}
+                    disabled={disabled || isUploading}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
         ) : (
-          <UploadCloud className="w-12 h-12 text-gray-400 mb-2" />
+          <div className="text-center space-y-4">
+            <UploadCloud className="w-12 h-12 text-gray-400 mx-auto" />
+            <div>
+              <p className="text-sm font-medium text-gray-700">Upload a photo</p>
+              <p className="text-xs text-gray-500 mt-1">
+                Drag & drop or click to select
+                {enableCropping && <br />}
+                {enableCropping && "Supports cropping and rotation"}
+              </p>
+            </div>
+          </div>
         )}
-        <span className="text-xs text-gray-500">Drag & drop or click to select</span>
+        
         <Input
           ref={inputRef}
           type="file"
@@ -81,17 +284,27 @@ export function PhotoUpload({ storagePath, onUpload, label = "Upload Photo", ini
           disabled={disabled || isUploading}
         />
       </div>
-      {file && !isUploading && (
-        <Button type="button" onClick={handleUpload} className="mt-2 w-full" disabled={disabled}>
-          Upload
-        </Button>
-      )}
-      {isUploading && (
-        <div className="flex items-center gap-2 text-sm text-gray-500 mt-2">
-          <Loader2 className="animate-spin w-4 h-4" /> Uploading...
-        </div>
-      )}
+      
       {error && <div className="text-destructive text-xs mt-1">{error}</div>}
+      
+      {/* Image Cropper Dialog */}
+      {(() => {
+        console.log('PhotoUpload render - showCropper:', showCropper, 'tempImageUrl:', !!tempImageUrl)
+        return showCropper && tempImageUrl && (
+          <ImageCropper
+            isOpen={showCropper}
+            onClose={() => setShowCropper(false)}
+            imageUrl={tempImageUrl}
+            onCrop={handleCrop}
+            aspectRatio={aspectRatio}
+            minWidth={minWidth}
+            minHeight={minHeight}
+            maxWidth={maxWidth}
+            maxHeight={maxHeight}
+            quality={quality}
+          />
+        )
+      })()}
     </div>
   )
 } 

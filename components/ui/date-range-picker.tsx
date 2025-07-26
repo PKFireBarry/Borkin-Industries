@@ -53,7 +53,17 @@ export function DateRangePicker({ value, onChange, minDate, className = '' }: Da
 
   // Parse date string to Date object
   const parseDate = (dateStr: string) => {
-    return new Date(dateStr + 'T00:00:00')
+    try {
+      const date = new Date(dateStr + 'T00:00:00')
+      if (isNaN(date.getTime())) {
+        throw new Error('Invalid date')
+      }
+      return date
+    } catch (error) {
+      console.error('Error parsing date:', dateStr, error)
+      // Return a fallback date to prevent crashes
+      return new Date()
+    }
   }
 
   // Check if date is in range
@@ -324,7 +334,17 @@ export function EndDatePicker({ startDate, endDate, onChange, minDate, className
 
   // Parse date string to Date object
   const parseDate = (dateStr: string) => {
-    return new Date(dateStr + 'T00:00:00')
+    try {
+      const date = new Date(dateStr + 'T00:00:00')
+      if (isNaN(date.getTime())) {
+        throw new Error('Invalid date')
+      }
+      return date
+    } catch (error) {
+      console.error('Error parsing date:', dateStr, error)
+      // Return a fallback date to prevent crashes
+      return new Date()
+    }
   }
 
   // Check if date is in range (between start and end/hover)

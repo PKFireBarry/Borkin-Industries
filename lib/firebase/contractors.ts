@@ -9,6 +9,14 @@ export async function getAllContractors(): Promise<Contractor[]> {
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Contractor))
 }
 
+export async function getApprovedContractors(): Promise<Contractor[]> {
+  const contractorsRef = collection(db, 'contractors')
+  const snapshot = await getDocs(contractorsRef)
+  const allContractors = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Contractor))
+  
+  return allContractors.filter(contractor => contractor.application?.status === 'approved')
+}
+
 export async function getContractorProfile(userId: string): Promise<Contractor | null> {
   const contractorRef = doc(db, 'contractors', userId)
   const snapshot = await getDoc(contractorRef)
