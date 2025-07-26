@@ -20,6 +20,8 @@ interface Booking {
   clientId?: string;
   contractorId?: string;
   serviceType?: string;
+  startDate?: string; // ISO date string
+  endDate?: string; // ISO date string
   date: string | Date | { seconds: number, nanoseconds: number }; // Allow for Firestore Timestamp object
   status: 'pending' | 'approved' | 'completed' | 'cancelled' | 'paid' | string;
   paymentStatus?: string;
@@ -72,15 +74,16 @@ export default function BookingsSummary({ bookings }: { bookings: Booking[] }) {
       }
       
       // Group by month for current year
-      if (booking.date) {
+      const dateToCheck = booking.startDate || booking.date
+      if (dateToCheck) {
         let dateObject: Date;
-        if (typeof booking.date === 'string') {
-          dateObject = new Date(booking.date);
-        } else if (booking.date instanceof Date) {
-          dateObject = booking.date;
-        } else if (typeof booking.date === 'object' && 'seconds' in booking.date) {
+        if (typeof dateToCheck === 'string') {
+          dateObject = new Date(dateToCheck);
+        } else if (dateToCheck instanceof Date) {
+          dateObject = dateToCheck;
+        } else if (typeof dateToCheck === 'object' && 'seconds' in dateToCheck) {
           // Handle Firestore Timestamp like object for booking.date
-          dateObject = new Date((booking.date as { seconds: number, nanoseconds: number }).seconds * 1000 + (booking.date as { seconds: number, nanoseconds: number }).nanoseconds / 1000000);
+          dateObject = new Date((dateToCheck as { seconds: number, nanoseconds: number }).seconds * 1000 + (dateToCheck as { seconds: number, nanoseconds: number }).nanoseconds / 1000000);
         } else {
           // Skip if date format is unrecognized
           return; 
@@ -114,8 +117,8 @@ export default function BookingsSummary({ bookings }: { bookings: Booking[] }) {
 
   // Helper for dollar amount formatting
   const formatCurrency = (value: number) => {
-    // Assuming value is in cents, convert to dollars for display
-    return `$${(value / 100).toFixed(2)}`
+    // Value is already in dollars
+    return `$${value.toFixed(2)}`
   }
 
   // Create data for bar chart

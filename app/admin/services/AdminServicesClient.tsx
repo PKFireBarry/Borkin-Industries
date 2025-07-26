@@ -8,15 +8,6 @@ import {
 } from '@/lib/firebase/services'
 import type { PlatformService } from '@/types/service'
 import { 
-  Table, 
-  TableBody, 
-  TableCaption, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from '@/components/ui/table'
-import { 
   Dialog, 
   DialogContent, 
   DialogHeader, 
@@ -27,7 +18,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, Edit, Trash2, AlertCircle } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Plus, Edit, Trash2, AlertCircle, Settings } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface AdminServicesClientProps {
@@ -134,9 +127,9 @@ export default function AdminServicesClient({ initialServices }: AdminServicesCl
   }
 
   return (
-    <div className="container mx-auto py-10 px-4">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">Platform Services</h1>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <Button 
           onClick={() => {
             setServiceToEdit(null)
@@ -147,8 +140,9 @@ export default function AdminServicesClient({ initialServices }: AdminServicesCl
         </Button>
       </div>
 
+      {/* Error Display */}
       {_error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-md mb-6">
+        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-md">
           <div className="flex items-center">
             <AlertCircle className="h-4 w-4 mr-2" />
             <h3 className="font-medium">Error</h3>
@@ -157,54 +151,90 @@ export default function AdminServicesClient({ initialServices }: AdminServicesCl
         </div>
       )}
 
-      <Table>
-        <TableCaption>List of available services contractors can offer</TableCaption>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-[200px]">Service Name</TableHead>
-            <TableHead>Description</TableHead>
-            <TableHead className="text-right w-[150px]">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {services.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
-                No services found. Click &quot;Add New Service&quot; to create one.
-              </TableCell>
-            </TableRow>
-          ) : (
-            services.map((service) => (
-              <TableRow key={service.id}>
-                <TableCell className="font-medium">{service.name}</TableCell>
-                <TableCell>{service.description || '—'}</TableCell>
-                <TableCell className="text-right">
-                  <div className="flex items-center justify-end gap-2">
-                    <Button 
-                      variant="outline" 
-                      onClick={() => handleEditClick(service)}
-                      className="h-8 w-8 p-0"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button 
-                      variant="destructive" 
-                      onClick={() => handleDeleteClick(service)}
-                      className="h-8 w-8 p-0"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
+      {/* Services Grid */}
+      {services.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Settings className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium mb-2">No services found</h3>
+            <p className="text-muted-foreground text-center mb-4">
+              Get started by adding your first platform service.
+            </p>
+            <Button 
+              onClick={() => {
+                setServiceToEdit(null)
+                setIsDialogOpen(true)
+              }}
+            >
+              <Plus className="mr-2 h-4 w-4" /> Add First Service
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {services.map((service) => (
+            <Card key={service.id} className="group hover:shadow-md transition-shadow">
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <CardTitle className="text-lg leading-tight">{service.name}</CardTitle>
+                                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                     <Button 
+                       variant="outline" 
+                       onClick={() => handleEditClick(service)}
+                       className="h-8 w-8 p-0"
+                     >
+                       <Edit className="h-4 w-4" />
+                     </Button>
+                     <Button 
+                       variant="destructive" 
+                       onClick={() => handleDeleteClick(service)}
+                       className="h-8 w-8 p-0"
+                     >
+                       <Trash2 className="h-4 w-4" />
+                     </Button>
+                   </div>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                {service.description ? (
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    {service.description}
+                  </p>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">
+                    No description provided
+                  </p>
+                )}
+                <div className="mt-4 flex items-center justify-between">
+                  <Badge variant="secondary" className="text-xs">
+                    Platform Service
+                  </Badge>
+                                     <div className="flex items-center gap-1 sm:hidden">
+                     <Button 
+                       variant="outline" 
+                       onClick={() => handleEditClick(service)}
+                       className="h-8 w-8 p-0"
+                     >
+                       <Edit className="h-4 w-4" />
+                     </Button>
+                     <Button 
+                       variant="destructive" 
+                       onClick={() => handleDeleteClick(service)}
+                       className="h-8 w-8 p-0"
+                     >
+                       <Trash2 className="h-4 w-4" />
+                     </Button>
+                   </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* Create/Edit Service Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>
               {serviceToEdit ? 'Edit Service' : 'Add New Service'}

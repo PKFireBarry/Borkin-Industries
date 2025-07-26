@@ -1,29 +1,42 @@
 'use client'
 import { useState } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Calendar, Search, Filter, DollarSign, Users, Clock } from 'lucide-react'
 
 interface Booking {
   id: string;
   clientId?: string;
   contractorId?: string;
   serviceType?: string;
-  date: string | Date | { seconds: number, nanoseconds: number }; // Can be string, Date, or Firestore timestamp
-  status: 'pending' | 'approved' | 'completed' | 'cancelled' | 'paid' | string; // Allow for other statuses
+  startDate?: string; // ISO date string
+  endDate?: string; // ISO date string
+  date: string | Date | { seconds: number, nanoseconds: number };
+  status: 'pending' | 'approved' | 'completed' | 'cancelled' | 'paid' | string;
   paymentStatus?: string;
   paymentAmount?: number;
   stripeCustomerId?: string;
   paymentIntentId?: string;
   petIds?: string[] | string;
-  // Allow other properties not explicitly defined with unknown type
+  // New fields from the updated page
+  clientName?: string;
+  contractorName?: string;
+  serviceName?: string;
+  displayAmount?: string;
   [key: string]: unknown;
 }
 
 function formatDate(date: Date | string | { seconds: number, nanoseconds: number } | null) {
   if (!date) return '-'
-  if (typeof date === 'string') return new Date(date).toLocaleString()
-  if (date instanceof Date) return date.toLocaleString()
+  if (typeof date === 'string') return new Date(date).toLocaleDateString()
+  if (date instanceof Date) return date.toLocaleDateString()
   // Handle Firestore timestamp
   if ('seconds' in date && 'nanoseconds' in date) {
-    return new Date(date.seconds * 1000).toLocaleString()
+    return new Date(date.seconds * 1000).toLocaleDateString()
   }
   return '-'
 }
@@ -38,144 +51,177 @@ const statusColors = {
 } as const
 
 export default function AdminBookingsClient({ bookings }: { bookings: Booking[] }) {
-  const [client, setClient] = useState('')
-  const [contractor, setContractor] = useState('')
-  const [date, setDate] = useState('')
-  const [status, setStatus] = useState('')
+  const [clientFilter, setClientFilter] = useState('')
+  const [contractorFilter, setContractorFilter] = useState('')
+  const [dateFilter, setDateFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
   const [search, setSearch] = useState('')
 
   const filtered = bookings.filter(b => {
-    if (client && b.clientId !== client) return false
-    if (contractor && b.contractorId !== contractor) return false
-    if (status && b.status !== status) return false
-    if (date) {
-      const d = typeof b.date === 'string' 
-        ? new Date(b.date) 
-        : b.date instanceof Date 
-          ? b.date 
-          : 'seconds' in b.date 
-            ? new Date(b.date.seconds * 1000) 
+    if (clientFilter && b.clientName && !b.clientName.toLowerCase().includes(clientFilter.toLowerCase())) return false
+    if (contractorFilter && b.contractorName && !b.contractorName.toLowerCase().includes(contractorFilter.toLowerCase())) return false
+    if (statusFilter && statusFilter !== 'all' && b.status !== statusFilter) return false
+    if (dateFilter) {
+      // Use startDate as primary date field, fallback to date field
+      const dateToCheck = b.startDate || b.date
+      const d = typeof dateToCheck === 'string' 
+        ? new Date(dateToCheck) 
+        : dateToCheck instanceof Date 
+          ? dateToCheck 
+          : 'seconds' in dateToCheck 
+            ? new Date(dateToCheck.seconds * 1000) 
             : null
       if (!d) return false
-      const filterDate = new Date(date)
+      const filterDate = new Date(dateFilter)
       if (d.toDateString() !== filterDate.toDateString()) return false
     }
     if (search) {
       const s = search.toLowerCase()
       if (!(
-        (b.serviceType && b.serviceType.toLowerCase().includes(s)) ||
-        (b.id && b.id.toLowerCase().includes(s))
+        (b.serviceName && b.serviceName.toLowerCase().includes(s)) ||
+        (b.id && b.id.toLowerCase().includes(s)) ||
+        (b.clientName && b.clientName.toLowerCase().includes(s)) ||
+        (b.contractorName && b.contractorName.toLowerCase().includes(s))
       )) return false
     }
     return true
   })
 
   return (
-    <div>
-      <h2 className="text-2xl font-bold mb-6">Booking Details</h2>
-      <div className="mb-6 flex flex-wrap gap-4 items-end">
-        <input
-          className="border rounded px-3 py-2"
-          placeholder="Filter by clientId"
-          value={client}
-          onChange={e => setClient(e.target.value)}
-        />
-        <input
-          className="border rounded px-3 py-2"
-          placeholder="Filter by contractorId"
-          value={contractor}
-          onChange={e => setContractor(e.target.value)}
-        />
-        <input
-          className="border rounded px-3 py-2"
-          type="date"
-          value={date}
-          onChange={e => setDate(e.target.value)}
-        />
-        <select
-          className="border rounded px-3 py-2"
-          value={status}
-          onChange={e => setStatus(e.target.value)}
-        >
-          <option value="">All Statuses</option>
-          <option value="pending">Pending</option>
-          <option value="approved">Approved</option>
-          <option value="completed">Completed</option>
-          <option value="cancelled">Cancelled</option>
-        </select>
-        <input
-          className="border rounded px-3 py-2 w-64"
-          placeholder="Search by service type or booking id"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-        />
-      </div>
-      <div className="overflow-x-auto">
-        <table className="min-w-full border text-sm">
-          <thead>
-            <tr className="bg-muted">
-              <th className="p-2 border">Booking ID</th>
-              <th className="p-2 border">Client ID</th>
-              <th className="p-2 border">Contractor ID</th>
-              <th className="p-2 border">Service</th>
-              <th className="p-2 border">Date</th>
-              <th className="p-2 border">Status</th>
-              <th className="p-2 border">Payment</th>
-              <th className="p-2 border">Stripe</th>
-              <th className="p-2 border">Pet IDs</th>
-              <th className="p-2 border">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 ? (
-              <tr><td colSpan={10} className="text-center text-muted-foreground py-8">No bookings found.</td></tr>
-            ) : filtered.map((b: Booking) => (
-              <tr key={b.id} className="hover:bg-accent">
-                <td className="p-2 border font-mono">{b.id}</td>
-                <td className="p-2 border font-mono">{b.clientId}</td>
-                <td className="p-2 border font-mono">{b.contractorId}</td>
-                <td className="p-2 border">{b.serviceType}</td>
-                <td className="p-2 border">{formatDate(b.date)}</td>
-                <td className="p-2 border">
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${statusColors[(b.status as keyof typeof statusColors) in statusColors ? b.status as keyof typeof statusColors : 'default']}`}>{b.status}</span>
-                </td>
-                <td className="p-2 border">
-                  <div className="text-xs">{b.paymentStatus}</div>
-                  <div className="text-xs">{b.paymentAmount ? `$${(b.paymentAmount / 100).toFixed(2)}` : '-'}</div>
-                </td>
-                <td className="p-2 border">
-                  {b.stripeCustomerId && (
-                    <a
-                      href={`https://dashboard.stripe.com/customers/${b.stripeCustomerId}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="underline text-blue-600"
-                    >
-                      Customer
-                    </a>
-                  )}
-                  {b.paymentIntentId && (
-                    <div>
-                      <a
-                        href={`https://dashboard.stripe.com/payments/${b.paymentIntentId}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="underline text-blue-600"
-                      >
-                        Payment
-                      </a>
-                    </div>
-                  )}
-                </td>
-                <td className="p-2 border font-mono">
-                  {Array.isArray(b.petIds) ? b.petIds.join(', ') : b.petIds}
-                </td>
-                <td className="p-2 border">{b.paymentAmount ? `$${(b.paymentAmount / 100).toFixed(2)}` : '-'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Calendar className="h-5 w-5" />
+            Booking Details
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {/* Filters */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Client</label>
+              <Input
+                placeholder="Filter by client name"
+                value={clientFilter}
+                onChange={e => setClientFilter(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Contractor</label>
+              <Input
+                placeholder="Filter by contractor name"
+                value={contractorFilter}
+                onChange={e => setContractorFilter(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Date</label>
+              <Input
+                type="date"
+                value={dateFilter}
+                onChange={e => setDateFilter(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Status</label>
+                             <Select value={statusFilter} onValueChange={setStatusFilter}>
+                 <SelectTrigger>
+                   <SelectValue placeholder="All Statuses" />
+                 </SelectTrigger>
+                 <SelectContent>
+                   <SelectItem value="all">All Statuses</SelectItem>
+                   <SelectItem value="pending">Pending</SelectItem>
+                   <SelectItem value="approved">Approved</SelectItem>
+                   <SelectItem value="completed">Completed</SelectItem>
+                   <SelectItem value="cancelled">Cancelled</SelectItem>
+                 </SelectContent>
+               </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Search</label>
+              <Input
+                placeholder="Search bookings..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Results */}
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Booking ID</TableHead>
+                  <TableHead>Client</TableHead>
+                  <TableHead>Contractor</TableHead>
+                  <TableHead>Service</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Payment</TableHead>
+                  <TableHead>Amount</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                      No bookings found matching your filters.
+                    </TableCell>
+                  </TableRow>
+                ) : filtered.map((b: Booking) => (
+                  <TableRow key={b.id} className="hover:bg-muted/50">
+                    <TableCell className="font-mono text-sm">{b.id}</TableCell>
+                    <TableCell className="font-medium">{b.clientName || 'Unknown Client'}</TableCell>
+                    <TableCell className="font-medium">{b.contractorName || 'Unknown Contractor'}</TableCell>
+                    <TableCell>{b.serviceName || 'Unknown Service'}</TableCell>
+                    <TableCell>{formatDate(b.startDate || b.date)}</TableCell>
+                    <TableCell>
+                      <Badge variant={
+                        b.status === 'completed' ? 'default' :
+                        b.status === 'approved' ? 'secondary' :
+                        b.status === 'pending' ? 'outline' :
+                        'destructive'
+                      }>
+                        {b.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        <div className="text-xs text-muted-foreground">{b.paymentStatus || 'Unknown'}</div>
+                        {b.stripeCustomerId && (
+                          <a
+                            href={`https://dashboard.stripe.com/customers/${b.stripeCustomerId}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-blue-600 hover:underline"
+                          >
+                            View Customer
+                          </a>
+                        )}
+                        {b.paymentIntentId && (
+                          <a
+                            href={`https://dashboard.stripe.com/payments/${b.paymentIntentId}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-blue-600 hover:underline block"
+                          >
+                            View Payment
+                          </a>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      ${b.displayAmount || '0.00'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 } 

@@ -4,6 +4,27 @@ import { redirect } from 'next/navigation'
 import { getAllContractorApplications, updateContractorApplicationStatus, updateContractorProfile } from '@/lib/firebase/contractors'
 import AdminApplicationsClient, { type Application } from './AdminApplicationsClient'
 
+// Helper function to serialize Firestore timestamps
+function serializeTimestamps(obj: any): any {
+  if (obj === null || obj === undefined) return obj
+  if (typeof obj !== 'object') return obj
+  
+  if (obj.toDate && typeof obj.toDate === 'function') {
+    // This is a Firestore Timestamp
+    return obj.toDate().toISOString()
+  }
+  
+  if (Array.isArray(obj)) {
+    return obj.map(serializeTimestamps)
+  }
+  
+  const serialized: any = {}
+  for (const [key, value] of Object.entries(obj)) {
+    serialized[key] = serializeTimestamps(value)
+  }
+  return serialized
+}
+
 async function approveContractor(id: string) {
   'use server'
   await updateContractorApplicationStatus(id, 'approved')
@@ -123,8 +144,12 @@ export default async function AdminApplicationsPage() {
 
   // Fetch all contractor applications, sorted by createdAt descending
   const applicationsData = await getAllContractorApplications();
+  
+  // Serialize timestamps before passing to client component
+  const serializedApplicationsData = serializeTimestamps(applicationsData);
+  
   // Ensure applicationsData is treated as an array of Application
-  const applications = (applicationsData as Application[]).sort((a, b) => {
+  const applications = (serializedApplicationsData as Application[]).sort((a, b) => {
     let timeA = 0;
     if (a.createdAt) {
       if (typeof a.createdAt === 'number') timeA = a.createdAt;

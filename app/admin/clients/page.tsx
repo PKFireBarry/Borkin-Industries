@@ -10,9 +10,14 @@ export default async function AdminClientsPage() {
   }
   
   return (
-    <main className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-6">Clients Administration</h1>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Client Management</h1>
+        <p className="text-muted-foreground">
+          Manage active and banned clients on the platform.
+        </p>
+      </div>
       <AdminClientsClient />
-    </main>
+    </div>
   )
 } 

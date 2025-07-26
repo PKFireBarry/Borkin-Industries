@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
-// import { Input } from '@/components/ui/input' // Unused import
 import { Textarea } from '@/components/ui/textarea'
 import { 
   Dialog, 
@@ -11,6 +10,12 @@ import {
   DialogTitle, 
   DialogFooter,
 } from '@/components/ui/dialog'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { UserX, Users, AlertCircle, CheckCircle } from 'lucide-react'
 
 // Interfaces
 interface Client {
@@ -49,7 +54,6 @@ function Notification({ message, type, onClose }: { message: string, type: 'succ
 export function AdminClientsClient() {
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'active' | 'banned'>('active')
   const [banned, setBanned] = useState<BannedUser[]>([])
   const [loadingBanned, setLoadingBanned] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<{ open: boolean, client?: Client }>({ open: false })
@@ -65,15 +69,13 @@ export function AdminClientsClient() {
         setLoading(false)
       })
 
-    // If we're on the banned tab, load banned users
-    if (tab === 'banned') {
-      setLoadingBanned(true)
-      fetch('/api/admin/list-banned-clients')
-        .then(res => res.json())
-        .then(data => setBanned(data.banned || []))
-        .finally(() => setLoadingBanned(false))
-    }
-  }, [tab])
+    // Load banned users
+    setLoadingBanned(true)
+    fetch('/api/admin/list-banned-clients')
+      .then(res => res.json())
+      .then(data => setBanned(data.banned || []))
+      .finally(() => setLoadingBanned(false))
+  }, [])
 
   const handleRemoveClient = async (client: Client) => {
     if (!client || !client.id) return
@@ -98,25 +100,22 @@ export function AdminClientsClient() {
         body: JSON.stringify(payload)
       })
 
-      if (!res.ok) {
-        throw new Error('Failed to remove client')
+      if (res.ok) {
+        // Remove client from local state
+        setClients(prev => prev.filter(c => c.id !== client.id))
+        showNotification('success', `Successfully removed and banned ${client.name}`)
+        setBanReason('') // Reset reason
+      } else {
+        const error = await res.text()
+        showNotification('error', `Failed to remove client: ${error}`)
       }
-
-      // Update UI
-      setClients(clients.filter(c => c.id !== client.id))
-      showNotification('success', 'Client removed and banned.')
-
-      // Clear ban reason for next time
-      setBanReason('')
     } catch (error) {
       console.error('Error removing client:', error)
-      showNotification('error', 'Failed to remove client.')
+      showNotification('error', 'Failed to remove client. Please try again.')
     }
   }
 
   const handleUnbanClient = async (userId: string) => {
-    if (!userId) return
-    
     try {
       const res = await fetch('/api/admin/unban-client', {
         method: 'POST',
@@ -126,16 +125,17 @@ export function AdminClientsClient() {
         body: JSON.stringify({ userId })
       })
 
-      if (!res.ok) {
-        throw new Error('Failed to unban client')
+      if (res.ok) {
+        // Remove from banned list
+        setBanned(prev => prev.filter(b => b.userId !== userId))
+        showNotification('success', 'Client unbanned successfully')
+      } else {
+        const error = await res.text()
+        showNotification('error', `Failed to unban client: ${error}`)
       }
-
-      // Update UI
-      setBanned(banned.filter(b => b.userId !== userId))
-      showNotification('success', 'Client unbanned successfully.')
     } catch (error) {
       console.error('Error unbanning client:', error)
-      showNotification('error', 'Failed to unban client.')
+      showNotification('error', 'Failed to unban client. Please try again.')
     }
   }
 
@@ -145,7 +145,6 @@ export function AdminClientsClient() {
 
   return (
     <div className="space-y-6">
-      {/* Notification */}
       {notification && (
         <Notification 
           message={notification.message} 
@@ -154,99 +153,156 @@ export function AdminClientsClient() {
         />
       )}
 
-      {/* Tabs */}
-      <div className="flex space-x-2 border-b pb-2">
-        <button 
-          className={`px-4 py-2 rounded ${tab==='active'?'bg-primary text-white':'bg-muted'}`} 
-          onClick={()=>setTab('active')}
-        >
-          Active Clients
-        </button>
-        <button 
-          className={`px-4 py-2 rounded ${tab==='banned'?'bg-primary text-white':'bg-muted'}`} 
-          onClick={()=>setTab('banned')}
-        >
-          Banned Clients
-        </button>
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Active Clients</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{loading ? '...' : clients.length}</div>
+            <p className="text-xs text-muted-foreground">
+              Registered on the platform
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Banned Clients</CardTitle>
+            <UserX className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{loadingBanned ? '...' : banned.length}</div>
+            <p className="text-xs text-muted-foreground">
+              Removed from platform
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Active Clients Tab */}
-      {tab === 'active' && (
-        <div>
-          {loading ? <div>Loading...</div> : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full border-collapse">
-                <thead>
-                  <tr className="bg-muted">
-                    <th className="p-2 border">Name</th>
-                    <th className="p-2 border">Email</th>
-                    <th className="p-2 border">Phone</th>
-                    <th className="p-2 border">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {clients.length === 0 ? (
-                    <tr><td colSpan={4} className="text-center text-muted-foreground py-8">No clients found.</td></tr>
-                  ) : clients.map(client => (
-                    <tr key={client.id} className="hover:bg-muted/50">
-                      <td className="p-2 border">{client.name}</td>
-                      <td className="p-2 border">{client.email}</td>
-                      <td className="p-2 border">{client.phone || '-'}</td>
-                      <td className="p-2 border">
-                        <Button 
-                          variant="destructive" 
-                          onClick={() => setConfirmDelete({ open: true, client })}
-                        >
-                          Remove & Ban
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
+      {/* Tabs */}
+      <Tabs defaultValue="active" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="active" className="flex items-center gap-2">
+            <CheckCircle className="h-4 w-4" />
+            Active Clients
+          </TabsTrigger>
+          <TabsTrigger value="banned" className="flex items-center gap-2">
+            <UserX className="h-4 w-4" />
+            Banned Clients
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Banned Clients Tab */}
-      {tab === 'banned' && (
-        <div>
-          {loadingBanned ? <div>Loading...</div> : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full border-collapse">
-                <thead>
-                  <tr className="bg-muted">
-                    <th className="p-2 border">Email</th>
-                    <th className="p-2 border">Reason</th>
-                    <th className="p-2 border">Banned At</th>
-                    <th className="p-2 border">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {banned.length === 0 ? (
-                    <tr><td colSpan={4} className="text-center text-muted-foreground py-8">No banned users.</td></tr>
-                  ) : banned.map(b => (
-                    <tr key={b.userId} className="hover:bg-muted/50">
-                      <td className="p-2 border">{b.email}</td>
-                      <td className="p-2 border">{b.reason || '-'}</td>
-                      <td className="p-2 border">{b.bannedAt ? new Date(b.bannedAt).toLocaleString() : '-'}</td>
-                      <td className="p-2 border">
-                        <Button 
-                          variant="outline" 
-                          onClick={() => handleUnbanClient(b.userId)}
-                        >
-                          Unban
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        {/* Active Clients Tab */}
+        <TabsContent value="active" className="space-y-4">
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="text-muted-foreground">Loading clients...</div>
             </div>
+          ) : clients.length === 0 ? (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                No active clients found on the platform.
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>Active Clients</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <Table>
+                                         <TableHeader>
+                       <TableRow>
+                         <TableHead>Name</TableHead>
+                         <TableHead className="hidden md:table-cell">Email</TableHead>
+                         <TableHead className="hidden lg:table-cell">Phone</TableHead>
+                         <TableHead className="text-right">Actions</TableHead>
+                       </TableRow>
+                     </TableHeader>
+                                         <TableBody>
+                       {clients.map(client => (
+                         <TableRow key={client.id}>
+                           <TableCell className="font-medium">{client.name}</TableCell>
+                           <TableCell className="hidden md:table-cell">{client.email}</TableCell>
+                           <TableCell className="hidden lg:table-cell">{client.phone || '-'}</TableCell>
+                           <TableCell className="text-right">
+                             <Button 
+                               variant="destructive" 
+                               onClick={() => setConfirmDelete({ open: true, client })}
+                             >
+                               Remove & Ban
+                             </Button>
+                           </TableCell>
+                         </TableRow>
+                       ))}
+                     </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
           )}
-        </div>
-      )}
+        </TabsContent>
+
+        {/* Banned Clients Tab */}
+        <TabsContent value="banned" className="space-y-4">
+          {loadingBanned ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="text-muted-foreground">Loading banned clients...</div>
+            </div>
+          ) : banned.length === 0 ? (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                No banned clients found.
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>Banned Clients</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Reason</TableHead>
+                        <TableHead>Banned At</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {banned.map(b => (
+                        <TableRow key={b.userId}>
+                          <TableCell className="font-medium">{b.email}</TableCell>
+                          <TableCell>{b.reason || '-'}</TableCell>
+                          <TableCell>
+                            {b.bannedAt ? new Date(b.bannedAt).toLocaleDateString() : '-'}
+                          </TableCell>
+                                                     <TableCell className="text-right">
+                             <Button 
+                               variant="outline" 
+                               onClick={() => handleUnbanClient(b.userId)}
+                             >
+                               Unban
+                             </Button>
+                           </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+      </Tabs>
 
       {/* Confirmation Dialog */}
       <Dialog open={confirmDelete.open} onOpenChange={(open) => setConfirmDelete({ open, client: confirmDelete.client })}>
@@ -256,7 +312,7 @@ export function AdminClientsClient() {
             <div className="mt-2 text-sm text-muted-foreground">
               This will permanently remove the client account and add them to the banned list.
               {confirmDelete.client && (
-                <div className="mt-2">
+                <div className="mt-2 space-y-1">
                   <p><strong>Name:</strong> {confirmDelete.client.name}</p>
                   <p><strong>Email:</strong> {confirmDelete.client.email}</p>
                 </div>
