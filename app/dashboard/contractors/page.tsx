@@ -189,14 +189,14 @@ export default function ContractorsPageWrapper() {
                 <label className="block text-sm font-semibold text-slate-700 mb-2">Service Type</label>
                 <Select value={filterSkill} onValueChange={setFilterSkill}>
                   <SelectTrigger className="rounded-xl border-2 border-slate-200">
-                    <SelectValue placeholder="All Services" />
+                    <SelectValue placeholder={filterSkill === 'all' ? 'All Services' : (allSkills.find(skill => skill === filterSkill) || 'All Services')} />
                   </SelectTrigger>
-                                     <SelectContent>
-                     <SelectItem value="all">All Services</SelectItem>
-                     {allSkills.map(skill => (
-                       <SelectItem key={skill} value={skill}>{skill}</SelectItem>
-                     ))}
-                   </SelectContent>
+                  <SelectContent>
+                    <SelectItem value="all">All Services</SelectItem>
+                    {allSkills.map(skill => (
+                      <SelectItem key={skill} value={skill}>{skill}</SelectItem>
+                    ))}
+                  </SelectContent>
                 </Select>
               </div>
               
@@ -381,7 +381,7 @@ export default function ContractorsPageWrapper() {
       {isBookingOpen && (
         <Dialog open={isBookingOpen} onOpenChange={handleBookingClose}>
           <DialogContent 
-            className="max-w-2xl rounded-2xl"
+            className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto rounded-2xl"
             aria-labelledby="bookingRequestTitle"
           >
             <DialogHeader>
@@ -390,10 +390,12 @@ export default function ContractorsPageWrapper() {
                 Submit a new booking request for the selected contractor.
               </DialogDescription>
             </DialogHeader>
-            <BookingRequestForm 
-                onSuccess={handleBookingClose} 
-                preselectedContractorId={bookingForContractorId} 
-            />
+            <div className="overflow-y-auto max-h-[calc(90vh-8rem)]">
+              <BookingRequestForm 
+                  onSuccess={handleBookingClose} 
+                  preselectedContractorId={bookingForContractorId} 
+              />
+            </div>
           </DialogContent>
         </Dialog>
       )}

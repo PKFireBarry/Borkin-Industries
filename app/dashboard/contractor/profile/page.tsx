@@ -74,6 +74,7 @@ export default function ContractorProfilePage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
   const [formValid, setFormValid] = useState(true)
 
   useEffect(() => {
@@ -274,6 +275,30 @@ export default function ContractorProfilePage() {
     } finally {
       console.log('Submit process complete, setting saving to false');
       setSaving(false);
+    }
+  }
+
+  // Handle avatar upload - save immediately to database
+  const handleAvatarUpload = async (url: string) => {
+    setIsUploadingAvatar(true)
+    setError(null)
+    try {
+      if (!user) throw new Error('User not found')
+      
+      // Update local form state
+      setForm(prev => ({ ...prev, profileImage: url }))
+      
+      // Save immediately to database
+      await updateContractorProfile(user.id, { profileImage: url })
+      
+      // Show success message briefly
+      setSuccess(true)
+      setTimeout(() => setSuccess(false), 3000)
+    } catch (err) {
+      setError('Failed to update profile picture')
+      console.error('Avatar upload error:', err)
+    } finally {
+      setIsUploadingAvatar(false)
     }
   }
 
@@ -668,13 +693,16 @@ export default function ContractorProfilePage() {
                     label="Profile Picture"
                     storagePath={`contractor-avatars/${user?.id || 'unknown'}`}
                     initialUrl={form.profileImage}
-                    onUpload={url => setForm(prev => ({ ...prev, profileImage: url }))}
-                    disabled={saving}
+                    onUpload={handleAvatarUpload}
+                    disabled={saving || isUploadingAvatar}
                     enableCropping={true}
                     aspectRatio={1}
                     previewSize="lg"
                     quality={0.9}
                   />
+                  {isUploadingAvatar && (
+                    <p className="text-sm text-blue-600 mt-2">Saving profile picture...</p>
+                  )}
                 </div>
               </div>
 

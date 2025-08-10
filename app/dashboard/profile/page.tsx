@@ -22,8 +22,7 @@ export default function ProfilePage() {
   if (!isLoaded || !isAuthorized || loading) return null
 
   return (
-    <section className="max-w-xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">Update Profile</h1>
+    <section className="w-full">
       <ProfileForm initialProfile={profile} isEditing={false} />
     </section>
   )

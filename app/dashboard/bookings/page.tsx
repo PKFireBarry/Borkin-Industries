@@ -3,13 +3,17 @@ import { useEffect, useState } from 'react'
 import { useUser } from '@clerk/nextjs'
 import { getBookingsForClient } from '@/lib/firebase/bookings'
 import { BookingList } from './booking-list'
+import { BookingRequestForm } from './booking-request-form'
 import { useRequireRole } from '../use-require-role'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 
 export default function BookingsPage() {
   const { isLoaded, isAuthorized } = useRequireRole('client')
   const { user } = useUser()
   const [bookings, setBookings] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [isNewBookingOpen, setIsNewBookingOpen] = useState(false)
 
   useEffect(() => {
     if (!user) return
@@ -18,6 +22,20 @@ export default function BookingsPage() {
       .then((data) => setBookings(data))
       .finally(() => setLoading(false))
   }, [user])
+
+  const handleNewBookingSuccess = async () => {
+    setIsNewBookingOpen(false)
+    if (!user) return
+    setLoading(true)
+    try {
+      const latest = await getBookingsForClient(user.id)
+      setBookings(latest)
+    } catch (err) {
+      console.error('Error refreshing bookings:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   if (!isLoaded || !isAuthorized || loading) {
     return (
@@ -48,6 +66,12 @@ export default function BookingsPage() {
                 </p>
               </div>
               <div className="flex items-center space-x-3">
+                <Button 
+                  onClick={() => setIsNewBookingOpen(true)}
+                  className="bg-primary hover:bg-primary/90 text-white px-6 py-2 rounded-xl font-semibold shadow-sm hover:shadow-md transition-all duration-200"
+                >
+                  New Booking
+                </Button>
                 <div className="hidden sm:flex items-center space-x-2 text-sm text-slate-500">
                   <div className="w-2 h-2 bg-green-400 rounded-full"></div>
                   <span>{bookings.length} total bookings</span>
@@ -62,6 +86,29 @@ export default function BookingsPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <BookingList bookings={bookings} />
       </div>
+
+      {/* New Booking Modal */}
+      {isNewBookingOpen && (
+        <Dialog open={isNewBookingOpen} onOpenChange={setIsNewBookingOpen}>
+          <DialogContent 
+            className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto rounded-2xl"
+            aria-labelledby="newBookingTitle"
+          >
+            <DialogHeader>
+              <DialogTitle id="newBookingTitle" className="text-2xl font-bold">New Booking Request</DialogTitle>
+              <DialogDescription id="newBookingDescription" className="sr-only">
+                Create a new booking request for pet care services.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="overflow-y-auto max-h-[calc(90vh-8rem)]">
+              <BookingRequestForm 
+                  onSuccess={handleNewBookingSuccess} 
+                  preselectedContractorId={null} 
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   )
 } 

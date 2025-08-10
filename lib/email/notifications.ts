@@ -231,13 +231,10 @@ export async function sendClientCancelledBookingNotification(
   contractor: Contractor,
   services: PlatformService[]
 ): Promise<void> {
-  console.log('[DEBUG] sendClientCancelledBookingNotification called for booking:', booking.id)
   const transporter = createTransporter()
 
   try {
-    console.log('[DEBUG] Creating email template for contractor:', contractor.email)
     const email = createGigCancelledContractorEmail(booking, client, contractor, services)
-    console.log('[DEBUG] Email template created, sending email...')
     await transporter.sendMail({
       from: `"${process.env.SMTP_FROM_NAME}" <${process.env.SMTP_FROM}>`,
       to: contractor.email,

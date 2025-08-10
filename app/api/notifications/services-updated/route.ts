@@ -38,16 +38,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Contractor email not found' }, { status: 400 })
     }
 
-    // Debug logging for dates
-    console.log('=== BOOKING UPDATE NOTIFICATION DEBUG ===')
-    console.log('Current booking dates from DB:', {
-      startDate: booking.startDate,
-      endDate: booking.endDate,
-      endTime: booking.time?.endTime
-    })
-    console.log('Previous booking data from UI:', previousBookingData)
-    console.log('==========================================')
-
     // Send the email notification
     await sendServicesUpdatedNotification(booking, client, contractor, services, previousServices, previousBookingData)
     

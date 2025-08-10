@@ -358,9 +358,7 @@ export async function getMessagesForChat(
     // Now explicitly cast, as we've checked the necessary fields
     const typedChatData = chatData as Chat;
 
-    console.log("[getMessagesForChat] Debugging userIdentity check:");
-    console.log("[getMessagesForChat] currentUserId:", currentUserId, "Type:", typeof currentUserId);
-    console.log("[getMessagesForChat] chatClientUserId:", typedChatData.client.userId, "Type:", typeof typedChatData.client.userId);
+
     console.log("[getMessagesForChat] chatContractorUserId:", typedChatData.contractor.userId, "Type:", typeof typedChatData.contractor.userId);
 
     if (currentUserId !== typedChatData.client.userId && currentUserId !== typedChatData.contractor.userId) {

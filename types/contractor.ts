@@ -12,11 +12,30 @@ export interface ContractorApplication {
   references: string[]
 }
 
+export interface TimeSlot {
+  startTime: string // HH:MM format (24-hour)
+  endTime: string // HH:MM format (24-hour)
+}
+
+export interface DayAvailability {
+  date: string // YYYY-MM-DD format
+  isFullyUnavailable?: boolean // If true, entire day is blocked
+  unavailableSlots?: TimeSlot[] // Specific time periods that are unavailable
+  availableSlots?: TimeSlot[] // Specific time periods that are available (optional, for explicit availability)
+}
+
 export interface Availability {
-  // ISO date strings for available days/times
+  // Legacy fields for backward compatibility
   availableSlots: string[]
   unavailableDates?: string[]
   ranges?: { start: string; end: string; type: 'available' | 'unavailable' }[]
+  
+  // New time-based availability system
+  dailyAvailability?: DayAvailability[] // Per-day availability with time slots
+  defaultDaySchedule?: {
+    // Default available hours for each day of the week (0 = Sunday, 6 = Saturday)
+    [dayOfWeek: number]: TimeSlot[]
+  }
 }
 
 export interface PaymentInfo {

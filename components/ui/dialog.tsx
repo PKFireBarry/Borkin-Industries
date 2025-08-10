@@ -22,7 +22,7 @@ const DialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.C
       <DialogOverlay />
       <DialogPrimitive.Content
         ref={ref}
-        className={cn('fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 sm:rounded-lg', className)}
+        className={cn('fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 sm:rounded-lg max-h-[90vh] overflow-y-auto', className)}
         {...props}
       />
     </DialogPortal>

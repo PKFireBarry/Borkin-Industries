@@ -2,7 +2,7 @@ import Image from "next/image";
 import { currentUser } from '@clerk/nextjs/server';
 import { getUserRole } from '@/lib/auth/role-helpers';
 import { redirect } from 'next/navigation';
-import { GenerateTestDataButton } from './generate-test-data-button';
+
 import About from "@/components/About";
 import HeroSection from "@/components/HeroSection";
 import TeamSection from "@/components/TeamSection";
@@ -28,8 +28,7 @@ export default async function Home() {
     <div className="flex flex-col min-h-screen w-full overflow-x-hidden">
       <Header />
       <main className="flex-1 flex flex-col w-full overflow-x-hidden">
-        {/* Admin-only: Generate test data button */}
-        {user && role === 'admin' && <div className="container mx-auto px-4 py-8"><GenerateTestDataButton /></div>}
+
         
         <HeroSection />
         <div id='about'><About /></div>

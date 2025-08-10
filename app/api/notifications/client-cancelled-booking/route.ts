@@ -6,13 +6,10 @@ import { getAllPlatformServices } from '@/lib/firebase/services'
 import type { Booking } from '@/types/booking'
 
 export async function POST(request: NextRequest) {
-  console.log('[DEBUG] Client cancelled booking notification API called')
   try {
     const { booking }: { booking: Booking } = await request.json()
-    console.log('[DEBUG] Booking data received:', { id: booking?.id, clientId: booking?.clientId, contractorId: booking?.contractorId })
 
     if (!booking) {
-      console.log('[DEBUG] No booking data provided')
       return NextResponse.json({ error: 'Booking data is required' }, { status: 400 })
     }
 
@@ -36,9 +33,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Send notification to contractor
-    console.log('[DEBUG] About to send notification to contractor:', contractor.email)
     await sendClientCancelledBookingNotification(booking, client, contractor, services)
-    console.log('[DEBUG] Notification sent successfully')
 
     return NextResponse.json({ success: true })
   } catch (error) {

@@ -48,15 +48,15 @@ export function PhotoUpload({
 
   const previewSizeClasses = {
     sm: 'w-16 h-16',
-    md: 'w-32 h-32',
-    lg: 'w-48 h-48',
-    xl: 'w-64 h-64'
+    md: 'w-24 h-24 sm:w-32 sm:h-32',
+    lg: 'w-32 h-32 sm:w-48 sm:h-48 lg:w-56 lg:h-56',
+    xl: 'w-40 h-40 sm:w-56 sm:h-56 md:w-64 md:h-64 lg:w-80 lg:h-80 xl:w-96 xl:h-96'
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
     if (f) {
-      console.log('File selected:', f.name, 'Cropping enabled:', enableCropping)
+      console.log('File selected:', f.name, 'enableCropping:', enableCropping)
       setFile(f)
       const url = URL.createObjectURL(f)
       setTempImageUrl(url)
@@ -88,24 +88,32 @@ export function PhotoUpload({
     }
   }
 
-  const handleCrop = (croppedImageUrl: string) => {
+  const handleCrop = async (croppedImageUrl: string) => {
     setPreview(croppedImageUrl)
     setTempImageUrl(croppedImageUrl)
     setShowCropper(false)
     
-    // Convert the cropped image URL back to a File object for upload
-    fetch(croppedImageUrl)
-      .then(res => res.blob())
-      .then(blob => {
-        const croppedFile = new File([blob], file?.name || 'cropped-image.jpg', {
-          type: 'image/jpeg'
-        })
-        setFile(croppedFile)
+    // Convert the cropped image URL back to a File object and upload immediately
+    try {
+      const res = await fetch(croppedImageUrl)
+      const blob = await res.blob()
+      const croppedFile = new File([blob], file?.name || 'cropped-image.jpg', {
+        type: 'image/jpeg'
       })
-      .catch(err => {
-        console.error('Error converting cropped image to file:', err)
-        setError('Failed to process cropped image')
-      })
+      setFile(croppedFile)
+      
+      // Auto-upload the cropped image
+      setIsUploading(true)
+      setError(null)
+      const url = await uploadFileToStorage(croppedFile, storagePath)
+      setPreview(url)
+      onUpload(url)
+    } catch (err) {
+      console.error('Error processing and uploading cropped image:', err)
+      setError('Failed to process and upload cropped image')
+    } finally {
+      setIsUploading(false)
+    }
   }
 
   const handleUpload = async () => {
@@ -223,40 +231,11 @@ export function PhotoUpload({
             
             <div className="text-center space-y-2">
               <p className="text-sm text-gray-600">
-                {file ? 'Click to change or drag a new image' : 'Click to upload or drag a new image'}
+                {isUploading ? 'Uploading...' : 'Click to change or drag a new image'}
               </p>
-              {file && (
-                <div className="flex gap-2 justify-center">
-                  <Button
-                    type="button"
-                    className="px-3 py-1 text-sm"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleUpload()
-                    }}
-                    disabled={disabled || isUploading}
-                  >
-                    {isUploading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Uploading...
-                      </>
-                    ) : (
-                      'Upload'
-                    )}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="px-3 py-1 text-sm"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleRemove()
-                    }}
-                    disabled={disabled || isUploading}
-                  >
-                    Remove
-                  </Button>
+              {isUploading && (
+                <div className="flex justify-center">
+                  <Loader2 className="w-4 h-4 animate-spin text-primary" />
                 </div>
               )}
             </div>

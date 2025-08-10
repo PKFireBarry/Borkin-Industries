@@ -1,9 +1,15 @@
 import { db } from '../../firebase'
 import { collection, query, where, getDocs, doc, setDoc, deleteDoc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore'
 import type { Booking } from '@/types/booking'
+import type { Contractor, DayAvailability, TimeSlot } from '@/types/contractor'
 import type { ContractorServiceOffering } from '@/types/service'
 import { getAllPlatformServices } from './services'
-import { addGigDatesToContractorCalendar, removeGigDatesFromContractorCalendar } from './contractors'
+import { 
+  addGigDatesToContractorCalendar, 
+  removeGigDatesFromContractorCalendar,
+  addGigTimeToContractorCalendar,
+  removeGigTimeFromContractorCalendar,
+} from './contractors'
 import { calculatePlatformFee, calculateStripeFee } from '@/lib/utils'
 import { recordCouponUsage } from './coupons'
 
@@ -89,10 +95,7 @@ export async function getBookingsForClient(clientId: string): Promise<Booking[]>
   }
 }
 
-export async function addTestBooking(booking: Booking): Promise<void> {
-  const bookingRef = doc(db, 'bookings', booking.id)
-  await setDoc(bookingRef, booking)
-}
+
 
 // Fields determined INTERNALLY by addBooking: 
 // id, numberOfDays, paymentAmount, platformFee, paymentIntentId, paymentClientSecret, status, paymentStatus, createdAt, updatedAt
@@ -415,9 +418,18 @@ export async function updateBookingStatus(bookingId: string, status: Booking['st
       }
     }
     
-    // Remove gig dates from contractor's calendar when cancelled
+    // Remove gig time/dates from contractor's calendar when cancelled
     try {
-      await removeGigDatesFromContractorCalendar(booking.contractorId, booking.startDate, booking.endDate)
+      if (booking.time) {
+        await removeGigTimeFromContractorCalendar(
+          booking.contractorId,
+          booking.startDate,
+          booking.endDate,
+          { startTime: booking.time.startTime, endTime: booking.time.endTime }
+        )
+      } else {
+        await removeGigDatesFromContractorCalendar(booking.contractorId, booking.startDate, booking.endDate)
+      }
       console.log(`Removed gig dates from contractor ${booking.contractorId}'s calendar for cancelled booking ${bookingId}`)
     } catch (error) {
       console.error('Failed to remove gig dates from contractor calendar:', error)
@@ -428,11 +440,56 @@ export async function updateBookingStatus(bookingId: string, status: Booking['st
     return;
   }
   
-  // Handle approval - add dates to contractor's calendar
+  // Handle approval - add time/dates to contractor's calendar
   if (status === 'approved') {
     try {
-      // Add gig dates to contractor's unavailable dates
-      await addGigDatesToContractorCalendar(booking.contractorId, booking.startDate, booking.endDate)
+      // Validate there is no conflict with contractor's existing availability blocks
+      const contractorRef = doc(db, 'contractors', booking.contractorId)
+      const contractorSnap = await getDoc(contractorRef)
+      if (!contractorSnap.exists()) {
+        throw new Error('Contractor not found for approval')
+      }
+      const contractor = contractorSnap.data() as Contractor
+      const availability = contractor.availability || {}
+      const unavailableDates: string[] = availability.unavailableDates || []
+      const dailyAvailability: DayAvailability[] = availability.dailyAvailability || []
+
+      const start = new Date(booking.startDate)
+      const end = new Date(booking.endDate)
+      start.setUTCHours(0,0,0,0)
+      end.setUTCHours(0,0,0,0)
+
+      const overlaps = (a: TimeSlot, b: TimeSlot) => a.startTime < b.endTime && a.endTime > b.startTime
+
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const iso = d.toISOString().slice(0,10)
+        // Full-day legacy blocks
+        if (unavailableDates.includes(iso)) {
+          throw new Error('Contractor is unavailable for one or more selected days')
+        }
+        const day = dailyAvailability.find(x => x.date === iso)
+        if (day?.isFullyUnavailable) {
+          throw new Error('Contractor is fully unavailable on one or more selected days')
+        }
+        if (booking.time && day?.unavailableSlots?.length) {
+          const req: TimeSlot = { startTime: booking.time.startTime, endTime: booking.time.endTime }
+          if (day.unavailableSlots.some(s => overlaps(req, s))) {
+            throw new Error('Selected time overlaps with contractor unavailability')
+          }
+        }
+      }
+
+      // Add gig time-based block if provided, otherwise full-day
+      if (booking.time) {
+        await addGigTimeToContractorCalendar(
+          booking.contractorId,
+          booking.startDate,
+          booking.endDate,
+          { startTime: booking.time.startTime, endTime: booking.time.endTime }
+        )
+      } else {
+        await addGigDatesToContractorCalendar(booking.contractorId, booking.startDate, booking.endDate)
+      }
       console.log(`Added gig dates to contractor ${booking.contractorId}'s calendar for booking ${bookingId}`)
     } catch (error) {
       console.error('Failed to add gig dates to contractor calendar:', error)

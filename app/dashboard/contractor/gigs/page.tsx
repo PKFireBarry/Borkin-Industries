@@ -274,10 +274,8 @@ export default function ContractorGigsPage() {
         return;
       }
       
-      console.log('[Debug] useEffect fetchClientAndGeocode: Running for gig ID:', (detailGig as any).id);
       const gigClientId = (detailGig as any).clientId;
       const gigPetIds = (detailGig as any).petIds;
-      console.log('[Debug] useEffect fetchClientAndGeocode: Attempting to fetch client with clientId:', gigClientId);
 
       // Reset states for new gig details
       setClientProfile(null);
@@ -291,15 +289,11 @@ export default function ContractorGigsPage() {
       if (gigClientId) {
         try {
           clientData = await getClientById(gigClientId);
-          console.log('[Debug] useEffect fetchClientAndGeocode: Fetched client profile:', clientData);
           setClientProfile(clientData);
 
           if (clientData && clientData.pets && gigPetIds && gigPetIds.length > 0) {
             const petsForThisGig = clientData.pets.filter((p: Pet) => gigPetIds.includes(p.id));
             setBookedPetsDetails(petsForThisGig);
-            console.log("[Debug] Fetched full pet details for gig:", petsForThisGig);
-          } else {
-            console.log("[Debug] No pet IDs in gig or no pets on client profile to filter.");
           }
         } catch (err) {
           console.error('[Debug] useEffect fetchClientAndGeocode: Error fetching client profile:', err);
@@ -308,15 +302,12 @@ export default function ContractorGigsPage() {
 
       if (clientData) {
         const clientQuery = [clientData.address, clientData.city, clientData.state, clientData.postalCode].filter(Boolean).join(', ');
-        console.log('[Debug] useEffect fetchClientAndGeocode: Client geocoding query:', clientQuery);
         if (clientQuery) {
           try {
             const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(clientQuery)}`);
             const data = await res.json();
-            console.log('[Debug] useEffect fetchClientAndGeocode: Client geocoding API response data:', data);
             if (data && data[0]) {
               const latLng = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
-              console.log('[Debug] useEffect fetchClientAndGeocode: Setting clientLatLng:', latLng);
               setClientLatLng(latLng);
             } else {
               console.warn('[Debug] useEffect fetchClientAndGeocode: No client geocoding results.');
@@ -338,27 +329,21 @@ export default function ContractorGigsPage() {
       if (user.id) {
         try {
           const contractorProfile = await getContractorProfile(user.id);
-          console.log('[Debug] useEffect fetchClientAndGeocode: Fetched contractor profile:', contractorProfile);
           if (contractorProfile) {
             // Set driving range from contractor's profile - extract numeric value from string
             const drivingRangeStr = contractorProfile.drivingRange || '';
             const drivingRangeMatch = drivingRangeStr.match(/(\d+(?:\.\d+)?)/);
             const drivingRange = drivingRangeMatch ? parseFloat(drivingRangeMatch[1]) : 0;
-            console.log('[Debug] useEffect fetchClientAndGeocode: Contractor driving range string:', drivingRangeStr);
-            console.log('[Debug] useEffect fetchClientAndGeocode: Parsed contractor driving range:', drivingRange);
             setContractorDrivingRange(drivingRange);
 
             if (contractorProfile.address && contractorProfile.city && contractorProfile.state && contractorProfile.postalCode) {
               const contractorQuery = [contractorProfile.address, contractorProfile.city, contractorProfile.state, contractorProfile.postalCode].filter(Boolean).join(', ');
-              console.log('[Debug] useEffect fetchClientAndGeocode: Contractor geocoding query:', contractorQuery);
               if (contractorQuery) {
                 try {
                   const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(contractorQuery)}`);
                   const data = await res.json();
-                  console.log('[Debug] useEffect fetchClientAndGeocode: Contractor geocoding API response data:', data);
                   if (data && data[0]) {
                     const latLng = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
-                    console.log('[Debug] useEffect fetchClientAndGeocode: Setting contractorLatLng:', latLng);
                     setContractorLatLng(latLng);
                   } else {
                     console.warn('[Debug] useEffect fetchClientAndGeocode: No contractor geocoding results.');

@@ -112,10 +112,10 @@ export function ContractorProfileModal({ contractor, open, onClose, onBookNow, c
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent 
-        className="max-w-4xl w-[95vw] md:w-full rounded-2xl shadow-2xl border-0"
+        className="max-w-4xl w-[95vw] md:w-full rounded-2xl shadow-2xl border-0 max-h-[90vh] overflow-hidden"
         aria-labelledby="contractorProfileTitle"
       >
-        <div className="overflow-y-auto max-h-[calc(100vh_-_5rem)]">
+        <div className="overflow-y-auto max-h-[calc(90vh-2rem)]">
           {/* Hero Section */}
           <div className="relative bg-gradient-to-br from-primary/5 via-primary/10 to-primary/5 p-8 -m-6 mb-0 rounded-t-2xl">
             <div className="flex flex-col md:flex-row items-center md:items-start gap-6">

@@ -42,6 +42,7 @@ export function ContractorProfileServiceManager({
   const [showBulkAddForm, setShowBulkAddForm] = useState(false);
   const [editingOffering, setEditingOffering] = useState<ContractorServiceOffering | null>(null);
   const [servicesToAdd, setServicesToAdd] = useState<ServiceToAdd[]>([]);
+  const [editFormKey, setEditFormKey] = useState(0); // Force form reset
 
   useEffect(() => {
     setLocalOfferings(currentOfferings);
@@ -91,6 +92,7 @@ export function ContractorProfileServiceManager({
         setLocalOfferings(prev => prev.map((po: ContractorServiceOffering) => po.serviceId === editingOffering.serviceId ? updatedItem : po));
       }
       setEditingOffering(null);
+      setEditFormKey(prev => prev + 1); // Reset form for next edit
     }
     if (editFormState?.error) console.error("Service Edit Error:", editFormState.error);
   }, [editFormState, editingOffering]);
@@ -269,7 +271,11 @@ export function ContractorProfileServiceManager({
                             <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">
                               <Button 
                                 variant="outline" 
-                                onClick={() => { setEditingOffering(offering); setShowBulkAddForm(false); }} 
+                                onClick={() => { 
+                                  setEditingOffering(offering); 
+                                  setShowBulkAddForm(false);
+                                  setEditFormKey(prev => prev + 1); // Force form reset
+                                }} 
                                 disabled={isEditPending || isDeletePending || isBulkAddPending}
                                 className="border-slate-300 hover:bg-slate-50 text-sm px-3 py-2 sm:px-3 sm:py-1 w-full sm:w-auto"
                               >
@@ -385,33 +391,51 @@ export function ContractorProfileServiceManager({
       )}
 
       {editingOffering && (
-        <Card className="border-primary border-2">
+        <Card className="border-primary border-2" key={`edit-${editingOffering.serviceId}-${editFormKey}`}>
           <CardHeader>
             <CardTitle>Edit {getServiceName(editingOffering.serviceId)}</CardTitle>
             {editFormState?.message && <p className="text-sm text-green-600 mt-1">{editFormState.message}</p>}
           </CardHeader>
-          <form action={handleUpdateServiceSubmit}>
+          <form action={handleUpdateServiceSubmit} key={`form-${editingOffering.serviceId}-${editFormKey}`}>
             <CardContent className="space-y-4">
               <div>
-                <Label htmlFor="price">Price (USD)</Label>
-                <Input name="price" type="number" step="0.01" min="0.01" defaultValue={(editingOffering.price / 100).toFixed(2)} required />
+                <Label htmlFor={`edit-price-${editingOffering.serviceId}-${editFormKey}`}>Price (USD)</Label>
+                <Input 
+                  id={`edit-price-${editingOffering.serviceId}-${editFormKey}`}
+                  name="price" 
+                  type="number" 
+                  step="0.01" 
+                  min="0.01" 
+                  defaultValue={(editingOffering.price / 100).toFixed(2)} 
+                  required 
+                />
               </div>
               <div>
                 <Label>Payment Type</Label>
-                <RadioGroup name="paymentType" defaultValue={editingOffering.paymentType || 'daily'} className="mt-2">
+                <RadioGroup name="paymentType" defaultValue={editingOffering.paymentType || 'daily'} className="mt-2" key={`payment-${editFormKey}`}>
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="daily" id="edit-daily" />
-                    <Label htmlFor="edit-daily" className="cursor-pointer">Daily Rate (charged per day)</Label>
+                    <RadioGroupItem value="daily" id={`edit-daily-${editingOffering.serviceId}-${editFormKey}`} />
+                    <Label htmlFor={`edit-daily-${editingOffering.serviceId}-${editFormKey}`} className="cursor-pointer">Daily Rate (charged per day)</Label>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="one_time" id="edit-one_time" />
-                    <Label htmlFor="edit-one_time" className="cursor-pointer">One-time Fee (flat rate)</Label>
+                    <RadioGroupItem value="one_time" id={`edit-one_time-${editingOffering.serviceId}-${editFormKey}`} />
+                    <Label htmlFor={`edit-one_time-${editingOffering.serviceId}-${editFormKey}`} className="cursor-pointer">One-time Fee (flat rate)</Label>
                   </div>
                 </RadioGroup>
               </div>
             </CardContent>
             <div className="flex justify-end space-x-2 p-6 pt-0">
-                <Button type="button" variant="outline" onClick={() => setEditingOffering(null)} disabled={isEditPending}>Cancel</Button>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => {
+                    setEditingOffering(null);
+                    setEditFormKey(prev => prev + 1);
+                  }} 
+                  disabled={isEditPending}
+                >
+                  Cancel
+                </Button>
                 <Button type="submit" disabled={isEditPending}>{isEditPending ? 'Saving Changes...' : 'Save Changes'}</Button>
             </div>
           </form>

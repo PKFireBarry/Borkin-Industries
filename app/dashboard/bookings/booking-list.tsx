@@ -459,9 +459,7 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
       }
       
       // Send contractor notification for approved/completed bookings
-      console.log(`[DEBUG] Checking notification condition for booking ${booking.id}: status=${booking.status}`)
       if (booking.status === 'approved' || booking.status === 'completed') {
-        console.log(`[DEBUG] Sending contractor notification for cancelled booking ${booking.id}`)
         try {
           const response = await fetch('/api/notifications/client-cancelled-booking', {
             method: 'POST',
@@ -502,8 +500,6 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
           console.error('Error sending contractor notification for client cancellation:', emailError)
           // Don't throw - we don't want email failures to break the cancellation process
         }
-      } else {
-        console.log(`[DEBUG] Skipping contractor notification for booking ${booking.id} with status ${booking.status}`)
       }
       
       await removeBooking(cancelId)
@@ -523,7 +519,6 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
     try {
       const latest = await getBookingsForClient(user.id)
       setBookings(latest)
-      console.log('Bookings after edit:', latest.map(b => ({ id: b.id, startDate: b.startDate, endDate: b.endDate })));
     } catch (err) {
       // Optionally handle error
     } finally {
@@ -855,7 +850,6 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
         if (user) {
           const latest = await getBookingsForClient(user.id)
           setBookings(latest)
-          console.log('Bookings after edit:', latest.map(b => ({ id: b.id, startDate: b.startDate, endDate: b.endDate })));
         }
       }
     } catch (err: any) {
@@ -1949,7 +1943,6 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
                         if (user) {
                           const latest = await getBookingsForClient(user.id)
                           setBookings(latest)
-                          console.log('Bookings after edit:', latest.map(b => ({ id: b.id, startDate: b.startDate, endDate: b.endDate })));
                         }
                       }}
                       onError={msg => setEditServicesError(msg)}

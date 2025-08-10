@@ -2,11 +2,134 @@ import { db } from '../../firebase'
 import { collection, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, arrayUnion, arrayRemove } from 'firebase/firestore'
 import type { Contractor } from '@/types/contractor'
 import type { ContractorServiceOffering } from '@/types/service'
+import type { DayAvailability, TimeSlot } from '@/types/contractor'
 
 export async function getAllContractors(): Promise<Contractor[]> {
   const contractorsRef = collection(db, 'contractors')
   const snapshot = await getDocs(contractorsRef)
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Contractor))
+}
+
+/**
+ * Add a time-range block to the contractor's calendar for each day in [startDate, endDate].
+ * Uses the new time-based availability system: writes to availability.dailyAvailability[].unavailableSlots.
+ * If dailyAvailability for a date does not exist, it will be created.
+ */
+export async function addGigTimeToContractorCalendar(
+  contractorId: string,
+  startDate: string,
+  endDate: string,
+  time: { startTime: string; endTime: string }
+): Promise<void> {
+  try {
+    const contractorRef = doc(db, 'contractors', contractorId)
+    const contractorSnap = await getDoc(contractorRef)
+    if (!contractorSnap.exists()) {
+      throw new Error(`Contractor ${contractorId} not found`)
+    }
+
+    const contractor = contractorSnap.data() as Contractor
+    const dailyAvailability: DayAvailability[] = contractor.availability?.dailyAvailability || []
+
+    // Build list of dates (YYYY-MM-DD) between start and end inclusive
+    const dates: string[] = []
+    const start = new Date(startDate)
+    const end = new Date(endDate)
+    start.setUTCHours(0, 0, 0, 0)
+    end.setUTCHours(0, 0, 0, 0)
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      dates.push(d.toISOString().slice(0, 10))
+    }
+
+    // Helper: check overlap between two time slots (HH:MM strings)
+    const overlaps = (a: TimeSlot, b: TimeSlot) => a.startTime < b.endTime && a.endTime > b.startTime
+
+    // Update per date
+    const updated: DayAvailability[] = [...dailyAvailability]
+    for (const iso of dates) {
+      const idx = updated.findIndex(d => d.date === iso)
+      if (idx === -1) {
+        updated.push({ date: iso, isFullyUnavailable: false, unavailableSlots: [time] })
+      } else {
+        // If day is fully unavailable, keep as-is (already blocked all day)
+        const day = updated[idx]
+        if (day.isFullyUnavailable) continue
+        const slots = [...(day.unavailableSlots || [])]
+        // Avoid inserting overlapping duplicates
+        const hasOverlap = slots.some(s => overlaps(s, time))
+        if (!hasOverlap) {
+          slots.push(time)
+          slots.sort((a, b) => a.startTime.localeCompare(b.startTime))
+          updated[idx] = { ...day, unavailableSlots: slots }
+        }
+      }
+    }
+
+    await updateDoc(contractorRef, {
+      'availability.dailyAvailability': updated,
+      updatedAt: serverTimestamp(),
+    })
+  } catch (error) {
+    console.error('Error adding gig time to contractor calendar:', error)
+    throw new Error('Failed to update contractor calendar (time-based)')
+  }
+}
+
+/**
+ * Remove a time-range block from the contractor's calendar for each day in [startDate, endDate].
+ * If a day's unavailableSlots becomes empty, the day entry is removed (cleanup).
+ */
+export async function removeGigTimeFromContractorCalendar(
+  contractorId: string,
+  startDate: string,
+  endDate: string,
+  time: { startTime: string; endTime: string }
+): Promise<void> {
+  try {
+    const contractorRef = doc(db, 'contractors', contractorId)
+    const contractorSnap = await getDoc(contractorRef)
+    if (!contractorSnap.exists()) {
+      throw new Error(`Contractor ${contractorId} not found`)
+    }
+
+    const contractor = contractorSnap.data() as Contractor
+    const dailyAvailability: DayAvailability[] = contractor.availability?.dailyAvailability || []
+
+    // Build list of dates (YYYY-MM-DD) between start and end inclusive
+    const dates: string[] = []
+    const start = new Date(startDate)
+    const end = new Date(endDate)
+    start.setUTCHours(0, 0, 0, 0)
+    end.setUTCHours(0, 0, 0, 0)
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      dates.push(d.toISOString().slice(0, 10))
+    }
+
+    const updated: DayAvailability[] = [...dailyAvailability]
+    for (const iso of dates) {
+      const idx = updated.findIndex(d => d.date === iso)
+      if (idx === -1) continue
+      const day = updated[idx]
+      if (day.isFullyUnavailable) continue
+      const filtered = (day.unavailableSlots || []).filter(
+        s => !(s.startTime === time.startTime && s.endTime === time.endTime)
+      )
+      if (filtered.length === 0) {
+        // Remove the day entry if no slots and not fully unavailable
+        updated.splice(idx, 1)
+      } else {
+        updated[idx] = { ...day, unavailableSlots: filtered }
+      }
+    }
+
+    await updateDoc(contractorRef, {
+      'availability.dailyAvailability': updated,
+      updatedAt: serverTimestamp(),
+    })
+  } catch (error) {
+    console.error('Error removing gig time from contractor calendar:', error)
+    throw new Error('Failed to update contractor calendar (time-based)')
+  }
 }
 
 export async function getApprovedContractors(): Promise<Contractor[]> {

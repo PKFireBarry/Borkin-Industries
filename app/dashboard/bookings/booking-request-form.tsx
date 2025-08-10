@@ -8,7 +8,7 @@ import { DateRangePicker } from '@/components/ui/date-range-picker'
 import { useUser } from '@clerk/nextjs'
 import { getClientProfile } from '@/lib/firebase/client'
 import { addBooking } from '@/lib/firebase/bookings' // This now expects startDate, endDate, serviceId
-import { getAllContractors, getContractorServiceOfferings } from '@/lib/firebase/contractors'
+import { getAllContractors, getContractorServiceOfferings, getContractorProfile } from '@/lib/firebase/contractors'
 import { getAllPlatformServices } from '@/lib/firebase/services'
 import type { Contractor } from '@/types/contractor'
 import type { ContractorServiceOffering, PlatformService } from '@/types/service'
@@ -82,6 +82,7 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
   const [selectedContractorId, setSelectedContractorId] = useState(preselectedContractorId || '')
   const [contractorServices, setContractorServices] = useState<ContractorServiceOffering[]>([])
   const [isLoadingServices, setIsLoadingServices] = useState(false)
+  const [contractorAvailability, setContractorAvailability] = useState<Contractor['availability'] | null>(null)
   
   // Updated to support multiple services
   const [selectedServices, setSelectedServices] = useState<SelectedService[]>([])
@@ -143,6 +144,7 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
     if (!selectedContractorId) {
       setContractorServices([]);
       setSelectedServices([]); // Clear selected services when contractor changes
+      setContractorAvailability(null)
       return;
     }
     
@@ -154,10 +156,14 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
         const offerings = await getContractorServiceOfferings(selectedContractorId);
         setContractorServices(offerings || []);
         setSelectedServices([]); // Clear selected services when contractor changes
+        // Fetch contractor availability for client-side conflict validation
+        const contractorProfile = await getContractorProfile(selectedContractorId)
+        setContractorAvailability(contractorProfile?.availability || null)
       } catch (err) {
         console.error("Error fetching contractor services:", err);
         setError("Could not load services for this contractor.");
         setContractorServices([]);
+        setContractorAvailability(null)
       } finally {
         setIsLoadingServices(false);
       }
@@ -360,6 +366,32 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
     const days = calculateDays(dateRange.startDate, dateRange.endDate);
     if (days <= 0) return setError('End date must be after start date, for at least one day.');
 
+    // Client-side availability validation against contractor's partial/full-day blocks
+    const hasConflict = (() => {
+      if (!contractorAvailability || !dateRange.startDate || !dateRange.endDate) return false
+      const start = new Date(dateRange.startDate)
+      const end = new Date(dateRange.endDate)
+      start.setUTCHours(0,0,0,0)
+      end.setUTCHours(0,0,0,0)
+      const unavailableDates = contractorAvailability.unavailableDates || []
+      const daily = contractorAvailability.dailyAvailability || []
+      const overlaps = (a: {startTime:string,endTime:string}, b: {startTime:string,endTime:string}) => a.startTime < b.endTime && a.endTime > b.startTime
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const iso = d.toISOString().slice(0,10)
+        if (unavailableDates.includes(iso)) return true
+        const day = daily.find(x => x.date === iso)
+        if (day?.isFullyUnavailable) return true
+        const slots = day?.unavailableSlots || []
+        if (slots.some(s => overlaps({ startTime, endTime }, { startTime: s.startTime, endTime: s.endTime }))) return true
+      }
+      return false
+    })()
+
+    if (hasConflict) {
+      setError('Selected schedule conflicts with contractor availability. Please adjust dates or times.')
+      return
+    }
+
     // Validate coupon again at submission time
     if (appliedCoupon) {
       try {
@@ -486,7 +518,8 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-8">
+    <div className="max-h-full overflow-y-auto">
+      <form onSubmit={handleSubmit} className="space-y-8">
       {/* Pet Selection Section */}
       <div className="p-6 bg-white rounded-2xl border border-slate-200/60 shadow-sm">
         <div className="flex items-center space-x-3 mb-6">
@@ -729,6 +762,12 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
             />
           </div>
         </div>
+        {/* Availability hint */}
+        {selectedContractorId && contractorAvailability && (
+          <div className="mt-4 text-sm text-slate-600">
+            <p>Contractor uses partial-day availability. If your chosen time overlaps existing blocks, you will be prompted to adjust.</p>
+          </div>
+        )}
       </div>
       
       {/* Booking Summary */}
@@ -972,5 +1011,6 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
         </Button>
       </div>
     </form>
+    </div>
   )
 } 
