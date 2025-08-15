@@ -3,6 +3,7 @@ import { currentUser } from '@clerk/nextjs/server'
 import { isAdmin } from '@/lib/auth/role-helpers'
 import { 
   getCoupon, 
+  getCouponByCode,
   updateCoupon, 
   deleteCoupon 
 } from '@/lib/firebase/coupons'
@@ -47,7 +48,25 @@ export async function PATCH(
     }
 
     const body = await request.json()
+    
+    // If code is being updated, check if it already exists
+    if (body.code) {
+      const existingCoupon = await getCoupon(params.id)
+      if (!existingCoupon) {
+        return NextResponse.json({ error: 'Coupon not found' }, { status: 404 })
+      }
+      
+      // Only check for duplicate if the code is actually changing
+      if (body.code.toUpperCase() !== existingCoupon.code) {
+        const duplicateCoupon = await getCouponByCode(body.code)
+        if (duplicateCoupon) {
+          return NextResponse.json({ error: 'Coupon code already exists' }, { status: 400 })
+        }
+      }
+    }
+    
     const updateData: UpdateCouponData = {
+      code: body.code ? body.code.toUpperCase() : undefined,
       name: body.name,
       value: body.value,
       expirationDate: body.expirationDate,
@@ -60,6 +79,12 @@ export async function PATCH(
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error in PATCH /api/admin/coupons/[id]:', error)
+    
+    // Handle specific error messages
+    if (error instanceof Error && error.message === 'Coupon code already exists') {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    
     return NextResponse.json(
       { error: 'Internal server error' }, 
       { status: 500 }

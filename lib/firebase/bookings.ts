@@ -12,6 +12,7 @@ import {
 } from './contractors'
 import { calculatePlatformFee, calculateStripeFee } from '@/lib/utils'
 import { recordCouponUsage } from './coupons'
+import { validateBookingRequest } from './booking-conflicts'
 
 // Helper function to calculate the number of days
 function calculateNumberOfDays(startDateISO: string, endDateISO: string): number {
@@ -208,6 +209,19 @@ export async function addBooking(data: AddBookingDataInput): Promise<string> {
   
   if (paymentAmountInCents <= 0 || baseServiceAmountInCents <= 0) {
     throw new Error("Calculated payment amounts are invalid.");
+  }
+
+  // Validate booking against existing bookings and contractor availability
+  const timeSlot = data.time ? { startTime: data.time.startTime, endTime: data.time.endTime } : undefined;
+  const validationResult = await validateBookingRequest(
+    data.contractorId,
+    data.startDate,
+    data.endDate,
+    timeSlot
+  );
+
+  if (!validationResult.isValid) {
+    throw new Error(validationResult.message || 'Booking conflicts with existing bookings');
   }
 
   // Calculate fees for display/tracking purposes

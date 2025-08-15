@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { DateRangePicker } from '@/components/ui/date-range-picker'
@@ -16,10 +16,13 @@ import type { Pet } from '@/types/client'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
-import { Plus, X } from 'lucide-react'
+import { Plus, X, AlertTriangle, Clock } from 'lucide-react'
 import { calculateClientFeeBreakdown } from '@/lib/utils'
 import { validateCoupon } from '@/lib/firebase/coupons'
 import { Coupon } from '@/types/coupon'
+import { checkBookingConflicts } from '@/lib/firebase/booking-conflicts'
+import type { BookingConflict } from '@/lib/firebase/booking-conflicts'
+
 
 // REMOVED Unused constant
 // const SERVICE_TYPES = [
@@ -94,6 +97,19 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
   })
   const [startTime, setStartTime] = useState('09:00')
   const [endTime, setEndTime] = useState('17:00')
+
+  
+  // Booking conflict validation state
+  const [bookingConflicts, setBookingConflicts] = useState<BookingConflict[]>([])
+  const [isValidatingBooking, setIsValidatingBooking] = useState(false)
+
+  // Check if overnight stay is selected
+  const hasOvernightStay = useMemo(() => {
+    return selectedServices.some(service => 
+      service.name.toLowerCase().includes('overnight') || 
+      service.name.toLowerCase().includes('stay')
+    );
+  }, [selectedServices]);
 
   const [numberOfDays, setNumberOfDays] = useState<number>(0);
   const [hoursPerDay, setHoursPerDay] = useState<number>(0);
@@ -248,6 +264,74 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
     }
   }, [dateRange.startDate, dateRange.endDate, startTime, endTime, selectedServices, appliedCoupon, selectedContractorId, numberOfDays]);
 
+  // Auto-handle overnight stay logic
+  useEffect(() => {
+    if (hasOvernightStay) {
+      // For overnight stays, auto-set end time to 23:59
+      setEndTime('23:59')
+    }
+  }, [hasOvernightStay]);
+
+  // Validate booking conflicts when dates/times change
+  useEffect(() => {
+    if (!selectedContractorId || !dateRange.startDate || !dateRange.endDate) {
+      setBookingConflicts([])
+      return
+    }
+
+    const validateBooking = async () => {
+      setIsValidatingBooking(true)
+      try {
+        let conflicts: BookingConflict[] = []
+        
+        if (hasOvernightStay) {
+          // For overnight stays, validate each day differently
+          const start = new Date(dateRange.startDate!)
+          const end = new Date(dateRange.endDate!)
+          start.setUTCHours(0, 0, 0, 0)
+          end.setUTCHours(0, 0, 0, 0)
+          
+          for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            const dateStr = d.toISOString().slice(0, 10)
+            const isFirstDay = dateStr === dateRange.startDate
+            
+            // First day: arrival time to end of day
+            // Other days: full day
+            const dayTimeSlot = isFirstDay 
+              ? { startTime, endTime: '23:59' }
+              : undefined // Full day for subsequent days
+            
+            const dayConflicts = await checkBookingConflicts(
+              selectedContractorId,
+              dateStr,
+              dateStr,
+              dayTimeSlot
+            )
+            conflicts.push(...dayConflicts)
+          }
+        } else {
+          // Regular bookings - use original logic
+          const timeSlot = { startTime, endTime }
+          conflicts = await checkBookingConflicts(
+            selectedContractorId,
+            dateRange.startDate!,
+            dateRange.endDate!,
+            timeSlot
+          )
+        }
+        
+        setBookingConflicts(conflicts)
+      } catch (error) {
+        console.error('Error validating booking:', error)
+      } finally {
+        setIsValidatingBooking(false)
+      }
+    }
+
+    const debounceTimer = setTimeout(validateBooking, 500)
+    return () => clearTimeout(debounceTimer)
+  }, [selectedContractorId, dateRange.startDate, dateRange.endDate, startTime, endTime, hasOvernightStay])
+
   const handlePetToggle = (petId: string) => {
     setSelectedPets(prev =>
       prev.includes(petId) ? prev.filter(id => id !== petId) : [...prev, petId]
@@ -392,6 +476,13 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
       return
     }
 
+    // Check for booking conflicts with existing bookings
+    if (bookingConflicts.length > 0) {
+      const conflictDates = [...new Set(bookingConflicts.map(c => c.conflictDate))].join(', ')
+      setError(`Booking conflicts with existing bookings on: ${conflictDates}. Please choose different dates or times.`)
+      return
+    }
+
     // Validate coupon again at submission time
     if (appliedCoupon) {
       try {
@@ -478,16 +569,22 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
         contractorPhone: selectedContractor?.phone || '',
         petIds: selectedPets,
         services: selectedServices,
-        startDate: new Date(`${dateRange.startDate}T${startTime}:00`).toISOString(),
-        endDate: new Date(`${dateRange.endDate}T${endTime}:00`).toISOString(),
+        startDate: hasOvernightStay 
+          ? new Date(`${dateRange.startDate}T${startTime}:00`).toISOString()
+          : new Date(`${dateRange.startDate}T${startTime}:00`).toISOString(),
+        endDate: hasOvernightStay 
+          ? new Date(`${dateRange.endDate}T23:59:59`).toISOString()
+          : new Date(`${dateRange.endDate}T${endTime}:00`).toISOString(),
         stripeCustomerId: profile.stripeCustomerId,
         totalAmount: totalPaymentAmount, // Total amount client pays (including fees)
         baseServiceAmount: Math.round(finalBaseAmountInDollars * 100), // Base service amount contractor receives (coupon-adjusted)
         paymentMethodId: paymentMethodId, // Include payment method ID
-        time: {
-          startTime,
-          endTime
-        },
+        ...(hasOvernightStay ? {} : {
+          time: {
+            startTime,
+            endTime
+          }
+        }),
         // Add coupon information
         ...(appliedCoupon && originalPrice && {
           couponCode: appliedCoupon.code,
@@ -516,6 +613,10 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
   const isServiceSelected = (serviceId: string) => {
     return selectedServices.some(s => s.serviceId === serviceId);
   };
+
+
+
+
 
   return (
     <div className="max-h-full overflow-y-auto">
@@ -740,29 +841,130 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-2">
-            <label htmlFor="startTime" className="block text-sm font-semibold text-slate-700">Start Time</label>
+            <label htmlFor="startTime" className="block text-sm font-semibold text-slate-700">
+              {hasOvernightStay ? 'Arrival Time' : 'Start Time'}
+            </label>
             <Input 
               id="startTime" 
               type="time" 
               value={startTime} 
-              onChange={(e) => setStartTime(e.target.value)}
+              onChange={(e) => {
+                setStartTime(e.target.value)
+                // Auto-set end time for overnight stays
+                if (hasOvernightStay) {
+                  setEndTime('23:59')
+                }
+              }}
               required
               className="bg-white border-slate-300 focus:border-purple-500 focus:ring-purple-500 rounded-xl"
             />
           </div>
-          <div className="space-y-2">
-            <label htmlFor="endTime" className="block text-sm font-semibold text-slate-700">End Time</label>
-            <Input 
-              id="endTime" 
-              type="time" 
-              value={endTime} 
-              onChange={(e) => setEndTime(e.target.value)}
-              required 
-              className="bg-white border-slate-300 focus:border-purple-500 focus:ring-purple-500 rounded-xl"
-            />
-          </div>
+          {!hasOvernightStay && (
+            <div className="space-y-2">
+              <label htmlFor="endTime" className="block text-sm font-semibold text-slate-700">End Time</label>
+              <Input 
+                id="endTime" 
+                type="time" 
+                value={endTime} 
+                onChange={(e) => setEndTime(e.target.value)}
+                required 
+                className="bg-white border-slate-300 focus:border-purple-500 focus:ring-purple-500 rounded-xl"
+              />
+            </div>
+          )}
+          {hasOvernightStay && (
+            <div className="space-y-2">
+              <label className="block text-sm font-semibold text-slate-700">Service Duration</label>
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                <p className="text-sm text-blue-800 font-medium">
+                  Until end of day (11:59 PM)
+                </p>
+                <p className="text-xs text-blue-600 mt-1">
+                  Overnight stay continues until the next morning
+                </p>
+              </div>
+            </div>
+          )}
         </div>
+
+        {/* Overnight Stay Contact Message */}
+        {hasOvernightStay && (
+          <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+            <div className="flex items-start gap-3">
+              <svg className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div>
+                <h4 className="font-semibold text-amber-800 mb-1">Overnight Stay Coordination</h4>
+                <p className="text-sm text-amber-700">
+                  Please coordinate with your contractor about specific arrival details, house rules, and any special instructions for the overnight stay. 
+                  They will contact you after booking approval to discuss logistics.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Contractor Schedule Visualization */}
+        {selectedContractorId && dateRange.startDate && !hasOvernightStay && (
+          <ContractorScheduleView
+            contractorId={selectedContractorId}
+            selectedDate={dateRange.startDate}
+            onTimeSlotSelect={(startTime, endTime) => {
+              setStartTime(startTime)
+              setEndTime(endTime)
+            }}
+          />
+        )}
+
+
+
         {/* Availability hint */}
+        {/* Booking Validation Status */}
+        {isValidatingBooking && (
+          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+            <div className="flex items-center gap-2 text-blue-700">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+              <span className="text-sm">Checking availability...</span>
+            </div>
+          </div>
+        )}
+
+        {/* Booking Conflicts */}
+        {bookingConflicts.length > 0 && (
+          <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl">
+            <div className="flex items-center gap-2 text-red-800 mb-3">
+              <AlertTriangle className="w-4 h-4" />
+              <span className="font-semibold">Booking Conflicts Detected</span>
+            </div>
+            <div className="space-y-2">
+              {bookingConflicts.map((conflict, index) => (
+                <div key={index} className="text-sm text-red-700 bg-red-100 p-2 rounded-lg">
+                  <div className="font-medium">
+                    {conflict.conflictDate} • {(() => {
+                      const [hours, minutes] = conflict.conflictTime.startTime.split(':')
+                      const hour = parseInt(hours)
+                      const ampm = hour >= 12 ? 'PM' : 'AM'
+                      const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour
+                      const startFormatted = `${displayHour}:${minutes} ${ampm}`
+                      
+                      const [endHours, endMinutes] = conflict.conflictTime.endTime.split(':')
+                      const endHour = parseInt(endHours)
+                      const endAmpm = endHour >= 12 ? 'PM' : 'AM'
+                      const endDisplayHour = endHour === 0 ? 12 : endHour > 12 ? endHour - 12 : endHour
+                      const endFormatted = `${endDisplayHour}:${endMinutes} ${endAmpm}`
+                      
+                      return `${startFormatted} - ${endFormatted}`
+                    })()}
+                  </div>
+                  <div className="text-red-600">Services: {conflict.services.join(', ')}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+
+
         {selectedContractorId && contractorAvailability && (
           <div className="mt-4 text-sm text-slate-600">
             <p>Contractor uses partial-day availability. If your chosen time overlaps existing blocks, you will be prompted to adjust.</p>
@@ -1011,6 +1213,194 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
         </Button>
       </div>
     </form>
+    </div>
+  )
+}
+
+// ContractorScheduleView component to show existing bookings and available slots
+interface ContractorScheduleViewProps {
+  contractorId: string
+  selectedDate: string
+  onTimeSlotSelect: (startTime: string, endTime: string) => void
+}
+
+function ContractorScheduleView({ contractorId, selectedDate, onTimeSlotSelect }: ContractorScheduleViewProps) {
+  const [daySchedule, setDaySchedule] = useState<{
+    bookings: any[]
+    availableSlots: any[]
+  } | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+
+  useEffect(() => {
+    if (!contractorId || !selectedDate) return
+
+    const loadDaySchedule = async () => {
+      setIsLoading(true)
+      try {
+        const { getContractorSchedule } = await import('@/lib/firebase/booking-conflicts')
+        const schedule = await getContractorSchedule(contractorId, selectedDate, selectedDate)
+        if (schedule.length > 0) {
+          setDaySchedule(schedule[0])
+        } else {
+          setDaySchedule({ bookings: [], availableSlots: [] })
+        }
+      } catch (error) {
+        console.error('Error loading contractor schedule:', error)
+        setDaySchedule({ bookings: [], availableSlots: [] })
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadDaySchedule()
+  }, [contractorId, selectedDate])
+
+  const formatTime = (time: string): string => {
+    const [hours, minutes] = time.split(':')
+    const hour = parseInt(hours)
+    const ampm = hour >= 12 ? 'PM' : 'AM'
+    const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour
+    return `${displayHour}:${minutes} ${ampm}`
+  }
+
+  const hasFullDayBooking = (bookings: any[]): boolean => {
+    return bookings.some(booking => !booking.time || 
+      (booking.time.startTime === '00:00' && booking.time.endTime === '23:59'))
+  }
+
+  const getSmartAvailableSlots = (bookings: any[]): any[] => {
+    // If there's a full day booking, no slots available
+    if (hasFullDayBooking(bookings)) return []
+
+    // Get all booked time periods
+    const bookedPeriods = bookings
+      .filter(booking => booking.time)
+      .map(booking => ({
+        start: timeToMinutes(booking.time.startTime),
+        end: timeToMinutes(booking.time.endTime)
+      }))
+      .sort((a, b) => a.start - b.start)
+
+    // Generate 3-hour time slots from 6 AM to 8 PM
+    const availableSlots = []
+    const dayStart = 6 * 60 // 6:00 AM in minutes
+    const dayEnd = 20 * 60 // 8:00 PM in minutes
+    const slotDuration = 3 * 60 // 3 hours in minutes
+
+    // Generate all possible 3-hour slots
+    for (let startMinutes = dayStart; startMinutes + slotDuration <= dayEnd; startMinutes += 60) {
+      const endMinutes = startMinutes + slotDuration
+      
+      // Check if this slot conflicts with any existing booking
+      const hasConflict = bookedPeriods.some(booking => {
+        // Check if the slot overlaps with the booking
+        return startMinutes < booking.end && endMinutes > booking.start
+      })
+
+      // Only add the slot if there's no conflict
+      if (!hasConflict) {
+        availableSlots.push({
+          startTime: minutesToTime(startMinutes),
+          endTime: minutesToTime(endMinutes)
+        })
+      }
+    }
+
+    return availableSlots
+  }
+
+  const timeToMinutes = (time: string): number => {
+    const [hours, minutes] = time.split(':').map(Number)
+    return hours * 60 + minutes
+  }
+
+  const minutesToTime = (minutes: number): string => {
+    const hours = Math.floor(minutes / 60)
+    const mins = minutes % 60
+    return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`
+  }
+
+  if (isLoading) {
+    return (
+      <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+        <div className="flex items-center gap-2 text-blue-700">
+          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+          <span className="text-sm">Loading contractor schedule...</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (!daySchedule) return null
+
+  const selectedDateObj = new Date(selectedDate + 'T00:00:00')
+  const formattedDate = selectedDateObj.toLocaleDateString('en-US', { 
+    weekday: 'long', 
+    month: 'long', 
+    day: 'numeric' 
+  })
+
+  return (
+    <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+      <h4 className="font-semibold text-slate-800 mb-3">
+        Contractor Schedule for {formattedDate}
+      </h4>
+      
+      {/* Existing Bookings */}
+      {daySchedule.bookings.length > 0 && (
+        <div className="mb-4">
+          <h5 className="text-sm font-medium text-red-700 mb-2">Existing Bookings:</h5>
+          <div className="space-y-2">
+            {daySchedule.bookings.map((booking, index) => (
+              <div key={index} className="p-2 bg-red-100 border border-red-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-medium text-red-800">
+                    {booking.time ? 
+                      `${formatTime(booking.time.startTime)} - ${formatTime(booking.time.endTime)}` :
+                      'Full Day Booking'
+                    }
+                  </div>
+                  <div className="text-xs text-red-600">
+                    {booking.services?.map((s: any) => s.name).join(', ') || booking.serviceType || 'Service'}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Available Time Slots */}
+      <div>
+        <h5 className="text-sm font-medium text-green-700 mb-2">Available Time Slots:</h5>
+        {getSmartAvailableSlots(daySchedule.bookings).length === 0 ? (
+          <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-center">
+            <p className="text-sm text-red-600">No available time slots for this date</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+
+            
+            {/* Smart Time Slots */}
+            {getSmartAvailableSlots(daySchedule.bookings).map((slot: any, index: number) => (
+              <button
+                key={index}
+                type="button"
+                onClick={() => onTimeSlotSelect(slot.startTime, slot.endTime)}
+                className="p-2 text-sm bg-green-100 hover:bg-green-200 border border-green-300 rounded-lg text-green-800 transition-colors font-medium"
+              >
+                {formatTime(slot.startTime)} - {formatTime(slot.endTime)}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {daySchedule.bookings.length === 0 && (
+        <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+          <p className="text-sm text-green-700">✅ No existing bookings - full day available</p>
+        </div>
+      )}
     </div>
   )
 } 

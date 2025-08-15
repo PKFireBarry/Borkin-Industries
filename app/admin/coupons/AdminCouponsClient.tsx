@@ -83,7 +83,8 @@ export default function AdminCouponsClient() {
       })
       
       if (!response.ok) {
-        throw new Error('Failed to update coupon')
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to update coupon')
       }
       
       toast.success('Coupon updated successfully')
@@ -91,7 +92,7 @@ export default function AdminCouponsClient() {
       loadData()
     } catch (error) {
       console.error('Error updating coupon:', error)
-      toast.error('Failed to update coupon')
+      toast.error(error instanceof Error ? error.message : 'Failed to update coupon')
     }
   }
 
@@ -442,6 +443,7 @@ interface EditCouponFormProps {
 
 function EditCouponForm({ coupon, contractors, onSubmit, onCancel }: EditCouponFormProps) {
   const [formData, setFormData] = useState({
+    code: coupon.code,
     name: coupon.name,
     value: coupon.value,
     expirationDate: coupon.expirationDate || '',
@@ -456,6 +458,7 @@ function EditCouponForm({ coupon, contractors, onSubmit, onCancel }: EditCouponF
     e.preventDefault()
     
     const data: any = {
+      code: formData.code,
       name: formData.name,
       value: formData.value,
       description: formData.description,
@@ -469,14 +472,27 @@ function EditCouponForm({ coupon, contractors, onSubmit, onCancel }: EditCouponF
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <Label htmlFor="name">Name</Label>
-        <Input
-          id="name"
-          value={formData.name}
-          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-          required
-        />
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="code">Coupon Code</Label>
+          <Input
+            id="code"
+            value={formData.code}
+            onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
+            maxLength={8}
+            placeholder="SAVE20"
+            required
+          />
+        </div>
+        <div>
+          <Label htmlFor="name">Name</Label>
+          <Input
+            id="name"
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            required
+          />
+        </div>
       </div>
 
       <div>

@@ -17,6 +17,8 @@ import {
 } from 'lucide-react'
 import { TimeBasedAvailabilityCalendar } from './components/time-based-availability-calendar'
 import type { DayAvailability } from '@/types/contractor'
+import { getGigsForContractor } from '@/lib/firebase/bookings'
+import type { Booking } from '@/types/booking'
 
 export default function ContractorAvailabilityPage() {
   const { isLoaded, isAuthorized } = useRequireRole('contractor')
@@ -28,12 +30,17 @@ export default function ContractorAvailabilityPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [existingBookings, setExistingBookings] = useState<Booking[]>([])
 
   useEffect(() => {
     if (!user) return
     setLoading(true)
-    getContractorProfile(user.id)
-      .then(profile => {
+    
+    Promise.all([
+      getContractorProfile(user.id),
+      getGigsForContractor(user.id)
+    ])
+      .then(([profile, bookings]) => {
         const availability = profile?.availability
         
         // Load time-based availability if it exists
@@ -46,6 +53,9 @@ export default function ContractorAvailabilityPage() {
           setLegacyRanges(availabilityRanges.map((r: any) => ({ start: r.start, end: r.end })))
           setUseTimeBasedSystem(false)
         }
+        
+        // Load existing bookings
+        setExistingBookings(bookings.filter(b => b.status === 'approved' || b.status === 'completed'))
       })
       .catch(() => setError('Failed to load availability'))
       .finally(() => setLoading(false))
@@ -242,6 +252,7 @@ export default function ContractorAvailabilityPage() {
           <TimeBasedAvailabilityCalendar
             dailyAvailability={dailyAvailability}
             onAvailabilityChange={handleAvailabilityChange}
+            existingBookings={existingBookings}
           />
         ) : (
           <LegacyAvailabilityCalendar

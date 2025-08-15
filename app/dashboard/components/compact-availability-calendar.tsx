@@ -4,9 +4,11 @@ import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import type { Booking } from '@/types/booking'
 
 interface CompactAvailabilityCalendarProps {
   unavailableDates?: string[] // YYYY-MM-DD format
+  bookings?: Booking[] // Optional: bookings to overlay
   initialMonth?: Date // Optional: Date object for the initial month to display
 }
 
@@ -24,6 +26,7 @@ function getDaysInMonth(year: number, month: number): Date[] {
 
 export function CompactAvailabilityCalendar({
   unavailableDates = [],
+  bookings = [],
   initialMonth,
 }: CompactAvailabilityCalendarProps) {
   const today = new Date()
@@ -53,6 +56,21 @@ export function CompactAvailabilityCalendar({
   }
 
   const uniqueUnavailableDates = useMemo(() => new Set(unavailableDates), [unavailableDates])
+
+  // Helper to get bookings for a specific date (inclusive of start/end)
+  const getDayBookings = useMemo(() => {
+    return (isoDate: string) => {
+      return bookings.filter(b => {
+        const bookingStart = new Date(b.startDate)
+        const bookingEnd = new Date(b.endDate)
+        const checkDate = new Date(isoDate)
+        bookingStart.setUTCHours(0, 0, 0, 0)
+        bookingEnd.setUTCHours(0, 0, 0, 0)
+        checkDate.setUTCHours(0, 0, 0, 0)
+        return checkDate >= bookingStart && checkDate <= bookingEnd
+      })
+    }
+  }, [bookings])
 
   return (
     <div className="w-full max-w-xs mx-auto bg-background p-3 rounded-lg shadow">
@@ -90,21 +108,44 @@ export function CompactAvailabilityCalendar({
           const dateStr = date.toISOString().slice(0, 10)
           const isDateToday = date.getTime() === today.getTime()
           const isUnavailable = uniqueUnavailableDates.has(dateStr)
+          const dayBookings = getDayBookings(dateStr)
+          const hasBookings = dayBookings.length > 0
+          const hasFullDayBooking = hasBookings && dayBookings.some(b => !b.time)
+
+          const titleText = isUnavailable
+            ? `${date.toLocaleDateString()}: Unavailable`
+            : hasBookings
+            ? `${date.toLocaleDateString()}: ${hasFullDayBooking ? 'Booked' : 'Partially booked'}`
+            : date.toLocaleDateString()
 
           return (
             <div
               key={dateStr}
               className={cn(
-                "p-1 flex items-center justify-center aspect-square text-xs rounded-sm",
-                isUnavailable 
-                  ? "bg-destructive/20 text-destructive line-through cursor-not-allowed" 
+                "p-1 flex items-center justify-center aspect-square text-xs rounded-sm relative",
+                isUnavailable
+                  ? "bg-destructive/20 text-destructive line-through cursor-not-allowed"
+                  : hasBookings
+                  ? hasFullDayBooking
+                    ? "bg-purple-200 text-purple-800"
+                    : "bg-purple-50 text-purple-700 border border-purple-200"
                   : "text-foreground",
                 isDateToday && "bg-primary/10 border border-primary text-primary font-semibold",
                 !isUnavailable && !isDateToday && "hover:bg-accent cursor-default" 
               )}
-              title={isUnavailable ? `${date.toLocaleDateString()}: Unavailable` : date.toLocaleDateString()}
+              title={titleText}
             >
               {date.getDate()}
+              {hasBookings && (
+                <div className="absolute bottom-0.5 right-0.5 flex gap-0.5">
+                  {dayBookings.slice(0, 3).map((_, i) => (
+                    <span key={i} className="w-1.5 h-1.5 bg-purple-500 rounded-full" />
+                  ))}
+                  {dayBookings.length > 3 && (
+                    <span className="text-[10px] font-bold text-purple-700">+</span>
+                  )}
+                </div>
+              )}
             </div>
           )
         })}
@@ -113,9 +154,12 @@ export function CompactAvailabilityCalendar({
             <div key={`empty-end-${i}`} className="p-1"></div>
         ))}
       </div>
-      <div className="mt-3 flex items-center justify-end gap-2 text-xs">
-         <div className="flex items-center gap-1">
-            <span className="w-2.5 h-2.5 bg-destructive/20 rounded-xs inline-block"></span> Unavailable
+      <div className="mt-3 flex items-center justify-end gap-3 text-xs">
+        <div className="flex items-center gap-1">
+          <span className="w-2.5 h-2.5 bg-purple-200 rounded-xs inline-block"></span> Booked
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="w-2.5 h-2.5 bg-destructive/20 rounded-xs inline-block"></span> Unavailable
         </div>
       </div>
     </div>

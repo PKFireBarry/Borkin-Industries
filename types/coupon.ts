@@ -46,6 +46,7 @@ export interface CreateCouponData {
 }
 
 export interface UpdateCouponData {
+  code?: string
   name?: string
   value?: number
   expirationDate?: string

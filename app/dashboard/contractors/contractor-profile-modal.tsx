@@ -13,6 +13,8 @@ import type { ContractorServiceOffering, PlatformService } from "@/types/service
 import { CompactAvailabilityCalendar } from '../components/compact-availability-calendar';
 import { Badge } from '@/components/ui/badge'
 import { MapPin, Star, Calendar, Mail, DollarSign, Clock, Award } from 'lucide-react'
+import { getGigsForContractor } from "@/lib/firebase/bookings";
+import type { Booking } from '@/types/booking'
 
 interface ContractorProfileModalProps {
   contractor: Contractor | null
@@ -29,6 +31,8 @@ export function ContractorProfileModal({ contractor, open, onClose, onBookNow, c
   const [serviceOfferings, setServiceOfferings] = useState<ContractorServiceOffering[]>([])
   const [platformServices, setPlatformServices] = useState<PlatformService[]>([])
   const [isLoadingServices, setIsLoadingServices] = useState(false)
+  const [bookings, setBookings] = useState<Booking[]>([])
+  const [isLoadingBookings, setIsLoadingBookings] = useState(false)
 
   useEffect(() => {
     if (!contractor || !clientLocation) return
@@ -45,25 +49,32 @@ export function ContractorProfileModal({ contractor, open, onClose, onBookNow, c
   useEffect(() => {
     if (open && contractor) {
       setIsLoadingServices(true)
+      setIsLoadingBookings(true)
       async function fetchData() {
         try {
-          const [offerings, services] = await Promise.all([
+          const [offerings, services, gigs] = await Promise.all([
             getContractorServiceOfferings(contractor!.id),
-            getAllPlatformServices()
+            getAllPlatformServices(),
+            getGigsForContractor(contractor!.id)
           ]);
           setServiceOfferings(offerings);
           setPlatformServices(services);
+          setBookings(gigs.filter(b => b.status === 'approved' || b.status === 'completed'))
         } catch (err) {
           console.error("Error fetching data:", err);
           setServiceOfferings([]);
+          setBookings([])
         } finally {
           setIsLoadingServices(false);
+          setIsLoadingBookings(false)
         }
       }
       fetchData();
     } else {
       setServiceOfferings([]);
       setIsLoadingServices(false);
+      setBookings([])
+      setIsLoadingBookings(false)
     }
   }, [open, contractor])
 
@@ -178,24 +189,24 @@ export function ContractorProfileModal({ contractor, open, onClose, onBookNow, c
                   </div>
                 )}
 
-                {/* Skills Preview */}
-                {validContractor.veterinarySkills && validContractor.veterinarySkills.length > 0 && (
+                {/* Services Preview */}
+                {serviceOfferings && serviceOfferings.length > 0 && (
                   <div className="flex flex-wrap gap-2 justify-center md:justify-start">
-                    {validContractor.veterinarySkills.slice(0, 4).map((skill, index) => (
+                    {serviceOfferings.slice(0, 4).map((offering, index) => (
                       <Badge 
                         key={index} 
                         variant="secondary" 
                         className="bg-white/80 text-primary border border-primary/20 rounded-full px-3 py-1"
                       >
-                        {skill}
+                        {getServiceName(offering.serviceId)}
                       </Badge>
                     ))}
-                    {validContractor.veterinarySkills.length > 4 && (
+                    {serviceOfferings.length > 4 && (
                       <Badge 
                         variant="secondary" 
                         className="bg-white/80 text-slate-600 border border-slate-200 rounded-full px-3 py-1"
                       >
-                        +{validContractor.veterinarySkills.length - 4} more
+                        +{serviceOfferings.length - 4} more
                       </Badge>
                     )}
                   </div>
@@ -270,13 +281,20 @@ export function ContractorProfileModal({ contractor, open, onClose, onBookNow, c
                     <Calendar className="w-5 h-5" />
                     Availability
                   </h3>
-                  <CompactAvailabilityCalendar unavailableDates={unavailableDates} />
+                  {isLoadingBookings ? (
+                    <div className="flex items-center gap-2 text-slate-600">
+                      <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+                      <span>Loading booked dates...</span>
+                    </div>
+                  ) : (
+                    <CompactAvailabilityCalendar unavailableDates={unavailableDates} bookings={bookings} />
+                  )}
                   <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
                     <p className="text-xs text-blue-700 text-center font-medium">
-                      📅 Dates in red are unavailable. All other dates are generally open for booking.
+                      📅 Purple = booked (may be full-day or partial). Red = unavailable. Others are generally open.
                     </p>
                     <p className="text-xs text-blue-600 text-center mt-1">
-                      Specific times will be confirmed during the booking process.
+                      Specific times are confirmed during the booking process.
                     </p>
                   </div>
                 </div>

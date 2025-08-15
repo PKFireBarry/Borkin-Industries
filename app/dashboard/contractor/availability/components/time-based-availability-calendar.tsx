@@ -18,12 +18,14 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { DayAvailability, TimeSlot } from '@/types/contractor'
+import type { Booking } from '@/types/booking'
 
 interface TimeBasedAvailabilityCalendarProps {
   dailyAvailability: DayAvailability[]
   onAvailabilityChange: (availability: DayAvailability[]) => void
   defaultDaySchedule?: { [dayOfWeek: number]: TimeSlot[] }
   onDefaultScheduleChange?: (schedule: { [dayOfWeek: number]: TimeSlot[] }) => void
+  existingBookings?: Booking[]
 }
 
 function getDaysInMonth(year: number, month: number) {
@@ -51,7 +53,8 @@ export function TimeBasedAvailabilityCalendar({
   dailyAvailability,
   onAvailabilityChange,
   defaultDaySchedule = {},
-  onDefaultScheduleChange
+  onDefaultScheduleChange,
+  existingBookings = []
 }: TimeBasedAvailabilityCalendarProps) {
   const [calendarMonth, setCalendarMonth] = useState(() => {
     const now = new Date()
@@ -67,6 +70,21 @@ export function TimeBasedAvailabilityCalendar({
   // Get availability for a specific date
   const getDayAvailability = (date: string): DayAvailability | null => {
     return dailyAvailability.find(day => day.date === date) || null
+  }
+
+  // Get bookings for a specific date
+  const getDayBookings = (date: string): Booking[] => {
+    return existingBookings.filter(booking => {
+      const bookingStart = new Date(booking.startDate)
+      const bookingEnd = new Date(booking.endDate)
+      const checkDate = new Date(date)
+      
+      bookingStart.setUTCHours(0, 0, 0, 0)
+      bookingEnd.setUTCHours(0, 0, 0, 0)
+      checkDate.setUTCHours(0, 0, 0, 0)
+      
+      return checkDate >= bookingStart && checkDate <= bookingEnd
+    })
   }
 
   // Update availability for a specific date
@@ -128,17 +146,28 @@ export function TimeBasedAvailabilityCalendar({
     const isToday = iso === today
     const isSelected = selectedDate === iso
     const dayAvail = getDayAvailability(iso)
+    const dayBookings = getDayBookings(iso)
+    
+    if (isSelected) {
+      return `${baseClasses} bg-blue-500 text-white border-2 border-blue-600 shadow-lg ring-2 ring-blue-200`
+    }
     
     if (dayAvail?.isFullyUnavailable) {
       return `${baseClasses} bg-red-100 text-red-700 border-2 border-red-200`
     }
     
-    if (dayAvail?.unavailableSlots?.length) {
-      return `${baseClasses} bg-orange-100 text-orange-700 border-2 border-orange-200`
+    // Show bookings with higher priority than availability blocks
+    if (dayBookings.length > 0) {
+      const hasFullDayBooking = dayBookings.some(b => !b.time)
+      if (hasFullDayBooking) {
+        return `${baseClasses} bg-purple-100 text-purple-700 border-2 border-purple-200`
+      } else {
+        return `${baseClasses} bg-purple-50 text-purple-600 border-2 border-purple-200`
+      }
     }
     
-    if (isSelected) {
-      return `${baseClasses} bg-blue-500 text-white border-2 border-blue-600 shadow-lg ring-2 ring-blue-200`
+    if (dayAvail?.unavailableSlots?.length) {
+      return `${baseClasses} bg-orange-100 text-orange-700 border-2 border-orange-200`
     }
     
     if (isToday) {
@@ -226,6 +255,10 @@ export function TimeBasedAvailabilityCalendar({
                   <span className="text-slate-600">Fully Blocked</span>
                 </div>
                 <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-purple-100 rounded border-2 border-purple-200"></div>
+                  <span className="text-slate-600">Has Bookings</span>
+                </div>
+                <div className="flex items-center gap-2">
                   <div className="w-4 h-4 bg-blue-500 rounded border-2 border-blue-600"></div>
                   <span className="text-slate-600">Selected</span>
                 </div>
@@ -252,10 +285,30 @@ export function TimeBasedAvailabilityCalendar({
                   {iso === today && (
                     <div className="absolute inset-0 rounded-xl border-2 border-primary animate-pulse"></div>
                   )}
-                  {/* Show indicator for partial availability */}
-                  {getDayAvailability(iso)?.unavailableSlots?.length && !getDayAvailability(iso)?.isFullyUnavailable && (
-                    <div className="absolute bottom-1 right-1 w-2 h-2 bg-orange-500 rounded-full"></div>
-                  )}
+                  {/* Show indicators */}
+                  {(() => {
+                    const dayBookings = getDayBookings(iso)
+                    const dayAvail = getDayAvailability(iso)
+                    
+                    if (dayBookings.length > 0) {
+                      return (
+                        <div className="absolute bottom-1 right-1 flex gap-1">
+                          {dayBookings.slice(0, 3).map((_, i) => (
+                            <div key={i} className="w-1.5 h-1.5 bg-purple-500 rounded-full"></div>
+                          ))}
+                          {dayBookings.length > 3 && (
+                            <div className="text-xs font-bold text-purple-600">+</div>
+                          )}
+                        </div>
+                      )
+                    }
+                    
+                    if (dayAvail?.unavailableSlots?.length && !dayAvail?.isFullyUnavailable) {
+                      return <div className="absolute bottom-1 right-1 w-2 h-2 bg-orange-500 rounded-full"></div>
+                    }
+                    
+                    return null
+                  })()}
                 </button>
               ) : <div key={idx} className="aspect-square" />)}
             </div>
@@ -277,6 +330,7 @@ export function TimeBasedAvailabilityCalendar({
           <DayAvailabilityManager
             date={selectedDate}
             dayAvailability={getDayAvailability(selectedDate)}
+            dayBookings={getDayBookings(selectedDate)}
             onToggleFullDay={() => toggleFullDayAvailability(selectedDate)}
             onAddUnavailableSlot={(slot) => addUnavailableSlot(selectedDate, slot)}
             onRemoveUnavailableSlot={(index) => removeUnavailableSlot(selectedDate, index)}
@@ -300,6 +354,7 @@ export function TimeBasedAvailabilityCalendar({
 interface DayAvailabilityManagerProps {
   date: string
   dayAvailability: DayAvailability | null
+  dayBookings: Booking[]
   onToggleFullDay: () => void
   onAddUnavailableSlot: (slot: TimeSlot) => void
   onRemoveUnavailableSlot: (index: number) => void
@@ -308,6 +363,7 @@ interface DayAvailabilityManagerProps {
 function DayAvailabilityManager({
   date,
   dayAvailability,
+  dayBookings,
   onToggleFullDay,
   onAddUnavailableSlot,
   onRemoveUnavailableSlot
@@ -356,6 +412,44 @@ function DayAvailabilityManager({
           </Button>
         </CardContent>
       </Card>
+
+      {/* Existing Bookings */}
+      {dayBookings.length > 0 && (
+        <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-purple-500" />
+              Existing Bookings
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {dayBookings.map((booking) => (
+              <div key={booking.id} className="p-3 bg-purple-50 border border-purple-200 rounded-xl">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-purple-600" />
+                    <div className="text-sm font-semibold text-purple-800">
+                      {booking.time ? 
+                        `${formatTime(booking.time.startTime)} - ${formatTime(booking.time.endTime)}` :
+                        'Full Day'
+                      }
+                    </div>
+                  </div>
+                  <Badge variant="secondary" className="text-xs">
+                    {booking.status}
+                  </Badge>
+                </div>
+                <div className="text-xs text-purple-600 space-y-1">
+                  <div>Services: {booking.services?.map(s => s.name).join(', ') || booking.serviceType}</div>
+                  {booking.numberOfDays > 1 && (
+                    <div>Multi-day booking ({booking.numberOfDays} days)</div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Time Slots Management */}
       {!dayAvailability?.isFullyUnavailable && (

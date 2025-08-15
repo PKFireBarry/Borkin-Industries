@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { removeBooking, getBookingsForClient, setClientCompleted, saveBookingReview, updateBookingServices } from '@/lib/firebase/bookings'
-import { BookingRequestForm } from './booking-request-form'
+
 import { useUser } from '@clerk/nextjs'
 import { getAllContractors, getContractorServiceOfferings } from '@/lib/firebase/contractors'
 import type { Contractor } from '@/types/contractor'
@@ -27,6 +27,7 @@ import { toast } from 'sonner'
 
 interface BookingListProps {
   bookings: Booking[]
+  onNewBooking?: () => void
 }
 
 // Local type for payment methods
@@ -181,14 +182,14 @@ function PaymentReauthForm({ clientSecret, onSuccess, onError }: { clientSecret:
   );
 }
 
-export function BookingList({ bookings: initialBookings }: BookingListProps) {
+export function BookingList({ bookings: initialBookings, onNewBooking }: BookingListProps) {
   const { user } = useUser()
   const [bookings, setBookings] = useState<ExtendedBooking[]>(initialBookings as ExtendedBooking[])
   const [contractors, setContractors] = useState<Contractor[]>([])
   const [cancelId, setCancelId] = useState<string | null>(null)
   const [isPending, setIsPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [isRequestOpen, setIsRequestOpen] = useState(false)
+
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [detailBooking, setDetailBooking] = useState<ExtendedBooking | null>(null)
   const [petNames, setPetNames] = useState<string[]>([])
@@ -513,7 +514,6 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
   }
 
   const handleRequestSuccess = async () => {
-    setIsRequestOpen(false)
     if (!user) return
     setIsRefreshing(true)
     try {
@@ -865,7 +865,7 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
         {/* New Booking Button */}
         <div className="flex justify-center">
           <button
-            onClick={() => setIsRequestOpen(true)}
+            onClick={() => onNewBooking?.()}
             className="group relative inline-flex items-center justify-center px-8 py-4 text-lg font-semibold text-white transition-all duration-200 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl hover:from-blue-700 hover:to-indigo-700 hover:scale-105 hover:shadow-xl hover:shadow-blue-500/25 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 active:scale-95"
           >
             <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity duration-200 blur-xl"></div>
@@ -891,7 +891,7 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
             <button
-              onClick={() => setIsRequestOpen(true)}
+              onClick={() => onNewBooking?.()}
               className="inline-flex items-center px-6 py-3 text-base font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors duration-200 shadow-lg hover:shadow-xl"
             >
               Get Started
@@ -922,7 +922,7 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
       </div>
         </div>
         <button
-          onClick={() => setIsRequestOpen(true)}
+          onClick={() => onNewBooking?.()}
           className="inline-flex items-center px-6 py-3 text-base font-semibold text-white bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
         >
           <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1180,6 +1180,7 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
       <Dialog open={!!cancelId} onOpenChange={() => setCancelId(null)}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader className="text-center pb-4">
+            <DialogTitle className="text-xl font-bold text-red-600">Cancel Booking</DialogTitle>
             <div className="mx-auto w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
               <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
@@ -1577,6 +1578,7 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
       >
         <DialogContent className="w-full max-w-[95vw] sm:max-w-4xl mx-auto max-h-[95vh] overflow-y-auto bg-gradient-to-br from-white via-slate-50/50 to-blue-50/30 backdrop-blur-sm border border-slate-200/60 rounded-3xl shadow-2xl">
           <DialogHeader className="pb-6 border-b border-slate-200/60">
+            <DialogTitle className="text-2xl font-bold text-slate-900">Edit Booking Services</DialogTitle>
             <div className="flex items-center space-x-4">
               <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl flex items-center justify-center shadow-lg">
                 <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2059,25 +2061,7 @@ export function BookingList({ bookings: initialBookings }: BookingListProps) {
         </DialogContent>
       </Dialog>
       
-      {/* New Booking Modal - Placed at the end to avoid conflicts */}
-      <Dialog open={isRequestOpen} onOpenChange={setIsRequestOpen}>
-        <DialogContent className="w-full max-w-[95vw] sm:max-w-4xl lg:max-w-6xl mx-auto max-h-[95vh] overflow-y-auto p-4 sm:p-6">
-          <DialogHeader className="pb-6 border-b border-slate-200/60">
-            <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-              </div>
-              <div>
-                <DialogTitle className="text-2xl font-bold text-slate-900">Create New Booking</DialogTitle>
-                <p className="text-sm text-slate-600 mt-1">Book professional pet care services with our certified contractors</p>
-              </div>
-            </div>
-          </DialogHeader>
-          <BookingRequestForm onSuccess={handleRequestSuccess} />
-        </DialogContent>
-      </Dialog>
+
     </div>
   )
 }

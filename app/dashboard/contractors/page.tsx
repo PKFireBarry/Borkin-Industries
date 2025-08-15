@@ -1,9 +1,11 @@
 'use client'
 
 import React, { useState } from 'react'
-import { getAllContractors } from '@/lib/firebase/contractors'
+import { getAllContractors, getContractorServiceOfferings } from '@/lib/firebase/contractors'
+import { getAllPlatformServices } from '@/lib/firebase/services'
 import { Card, CardContent, CardTitle } from '@/components/ui/card'
 import type { Contractor } from '@/types/contractor'
+import type { PlatformService, ContractorServiceOffering } from '@/types/service'
 import { ContractorProfileModal } from './contractor-profile-modal'
 import { BookingRequestForm } from '../bookings/booking-request-form'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
@@ -17,6 +19,10 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { MapPin, Star, Calendar, Filter, Search, X } from 'lucide-react'
 
+interface ContractorWithServices extends Contractor {
+  serviceOfferings: ContractorServiceOffering[]
+}
+
 export default function ContractorsPageWrapper() {
   // All Hooks must be called at the top level, before any conditional returns.
   const { isLoaded, isAuthorized } = useRequireRole('client')
@@ -24,23 +30,59 @@ export default function ContractorsPageWrapper() {
 
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedContractor, setSelectedContractor] = useState<Contractor | null>(null)
-  const [contractors, setContractors] = useState<Contractor[]>([])
-  const [filterSkill, setFilterSkill] = useState('all')
+  const [contractors, setContractors] = useState<ContractorWithServices[]>([])
+  const [platformServices, setPlatformServices] = useState<PlatformService[]>([])
+  const [filterService, setFilterService] = useState('all')
   const [filterDate, setFilterDate] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [isBookingOpen, setIsBookingOpen] = useState(false)
   const [bookingForContractorId, setBookingForContractorId] = useState<string | null>(null)
   const [clientLocation, setClientLocation] = useState<{ address?: string; city?: string; state?: string; postalCode?: string } | null>(null)
   const [showFilters, setShowFilters] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   // Moved useEffect Hooks before the early return
-  // Fetch contractors on mount (client component)
+  // Fetch contractors and platform services on mount
   React.useEffect(() => {
-    // Ensure this effect only runs when authorized and user is available if needed
     if (isAuthorized && user) {
-        getAllContractors().then(setContractors)
+      const fetchData = async () => {
+        try {
+          setLoading(true)
+          
+          // Fetch platform services and contractors in parallel
+          const [servicesData, contractorsData] = await Promise.all([
+            getAllPlatformServices(),
+            getAllContractors()
+          ])
+          
+          // Filter for approved contractors only
+          const approvedContractors = contractorsData.filter(
+            contractor => contractor.application?.status === 'approved'
+          )
+          
+          // Fetch service offerings for each approved contractor
+          const contractorsWithServices = await Promise.all(
+            approvedContractors.map(async (contractor) => {
+              const serviceOfferings = await getContractorServiceOfferings(contractor.id)
+              return {
+                ...contractor,
+                serviceOfferings
+              }
+            })
+          )
+          
+          setPlatformServices(servicesData)
+          setContractors(contractorsWithServices)
+        } catch (error) {
+          console.error('Error fetching contractors and services:', error)
+        } finally {
+          setLoading(false)
+        }
+      }
+      
+      fetchData()
     }
-  }, [isAuthorized, user]) // Added dependencies
+  }, [isAuthorized, user])
 
   // Fetch client location on mount
   React.useEffect(() => {
@@ -56,7 +98,7 @@ export default function ContractorsPageWrapper() {
   }, [user, isAuthorized]) // Added isAuthorized dependency
 
   // Early return after all Hooks have been declared
-  if (!isLoaded || !isAuthorized) {
+  if (!isLoaded || !isAuthorized || loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -67,28 +109,31 @@ export default function ContractorsPageWrapper() {
     )
   }
 
-  // Get all unique skills for filter dropdown
-  const allSkills = Array.from(new Set(contractors.flatMap(c => c.veterinarySkills || [])))
+  // Get service name by ID
+  const getServiceName = (serviceId: string) => {
+    return platformServices.find(s => s.id === serviceId)?.name || 'Unknown Service'
+  }
 
   // Enhanced filtering with search
   const filteredContractors = contractors.filter(c => {
-    const matchesSkill = !filterSkill || filterSkill === 'all' || (c.veterinarySkills || []).includes(filterSkill)
+    // Filter by service - check if contractor offers the selected service
+    const matchesService = !filterService || filterService === 'all' || 
+      c.serviceOfferings.some(offering => offering.serviceId === filterService)
+    
     // Check if the selected date is NOT in the contractor's unavailable dates
     const matchesDate = !filterDate || !(c.availability?.unavailableDates || []).includes(filterDate)
+    
+    // Search in name, location, bio, and offered services
     const matchesSearch = !searchQuery || 
       (c.name?.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (c.city?.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (c.state?.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (c.bio?.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (c.veterinarySkills || []).some(skill => skill.toLowerCase().includes(searchQuery.toLowerCase()))
+      c.serviceOfferings.some(offering => 
+        getServiceName(offering.serviceId).toLowerCase().includes(searchQuery.toLowerCase())
+      )
     
-    // Debug logging for date filtering (remove this after testing)
-    if (filterDate && process.env.NODE_ENV === 'development') {
-      console.log(`Contractor ${c.name}: unavailable dates:`, c.availability?.unavailableDates, 
-                  `Selected date: ${filterDate}, Available: ${matchesDate}`)
-    }
-    
-    return matchesSkill && matchesDate && matchesSearch
+    return matchesService && matchesDate && matchesSearch
   })
 
   const handleOpenModal = (contractor: Contractor) => {
@@ -114,12 +159,12 @@ export default function ContractorsPageWrapper() {
   }
 
   const clearAllFilters = () => {
-    setFilterSkill('all')
+    setFilterService('all')
     setFilterDate('')
     setSearchQuery('')
   }
 
-  const hasActiveFilters = (filterSkill && filterSkill !== 'all') || filterDate || searchQuery
+  const hasActiveFilters = (filterService && filterService !== 'all') || filterDate || searchQuery
 
   // Calculate average rating for a contractor
   const getAverageRating = (contractor: Contractor) => {
@@ -172,7 +217,7 @@ export default function ContractorsPageWrapper() {
               Filters
               {hasActiveFilters && (
                 <Badge variant="secondary" className="ml-2 px-2 py-0.5 text-xs">
-                  {[filterSkill, filterDate, searchQuery].filter(Boolean).length}
+                  {[filterService !== 'all' ? filterService : null, filterDate, searchQuery].filter(Boolean).length}
                 </Badge>
               )}
             </Button>
@@ -187,14 +232,14 @@ export default function ContractorsPageWrapper() {
             <div className="flex flex-wrap gap-4 items-end">
               <div className="flex-1 min-w-[200px]">
                 <label className="block text-sm font-semibold text-slate-700 mb-2">Service Type</label>
-                <Select value={filterSkill} onValueChange={setFilterSkill}>
+                <Select value={filterService} onValueChange={setFilterService}>
                   <SelectTrigger className="rounded-xl border-2 border-slate-200">
-                    <SelectValue placeholder={filterSkill === 'all' ? 'All Services' : (allSkills.find(skill => skill === filterSkill) || 'All Services')} />
+                    <SelectValue placeholder="All Services" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Services</SelectItem>
-                    {allSkills.map(skill => (
-                      <SelectItem key={skill} value={skill}>{skill}</SelectItem>
+                    {platformServices.map(service => (
+                      <SelectItem key={service.id} value={service.id}>{service.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -318,25 +363,25 @@ export default function ContractorsPageWrapper() {
                       {contractor.bio || contractor.experience?.substring(0,100) || 'Experienced pet care professional dedicated to providing the best care for your furry friends.'}
                     </p>
 
-                    {/* Skills */}
-                    {contractor.veterinarySkills && contractor.veterinarySkills.length > 0 && (
+                    {/* Services */}
+                    {contractor.serviceOfferings && contractor.serviceOfferings.length > 0 && (
                       <div className="mb-4">
                         <div className="flex flex-wrap gap-1">
-                          {contractor.veterinarySkills.slice(0, 3).map((skill, index) => (
+                          {contractor.serviceOfferings.slice(0, 3).map((offering, index) => (
                             <Badge 
                               key={index} 
                               variant="secondary" 
                               className="text-xs px-2 py-1 bg-primary/10 text-primary border-0 rounded-full"
                             >
-                              {skill}
+                              {getServiceName(offering.serviceId)}
                             </Badge>
                           ))}
-                          {contractor.veterinarySkills.length > 3 && (
+                          {contractor.serviceOfferings.length > 3 && (
                             <Badge 
                               variant="secondary" 
                               className="text-xs px-2 py-1 bg-slate-100 text-slate-600 border-0 rounded-full"
                             >
-                              +{contractor.veterinarySkills.length - 3} more
+                              +{contractor.serviceOfferings.length - 3} more
                             </Badge>
                           )}
                         </div>

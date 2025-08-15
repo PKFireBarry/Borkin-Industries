@@ -66,12 +66,6 @@ export default function BookingsPage() {
                 </p>
               </div>
               <div className="flex items-center space-x-3">
-                <Button 
-                  onClick={() => setIsNewBookingOpen(true)}
-                  className="bg-primary hover:bg-primary/90 text-white px-6 py-2 rounded-xl font-semibold shadow-sm hover:shadow-md transition-all duration-200"
-                >
-                  New Booking
-                </Button>
                 <div className="hidden sm:flex items-center space-x-2 text-sm text-slate-500">
                   <div className="w-2 h-2 bg-green-400 rounded-full"></div>
                   <span>{bookings.length} total bookings</span>
@@ -84,7 +78,7 @@ export default function BookingsPage() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <BookingList bookings={bookings} />
+        <BookingList bookings={bookings} onNewBooking={() => setIsNewBookingOpen(true)} />
       </div>
 
       {/* New Booking Modal */}
