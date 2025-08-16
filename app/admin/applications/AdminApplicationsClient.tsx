@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import { Separator } from '@/components/ui/separator'
 import { 
   User, 
   Mail, 
@@ -16,7 +15,8 @@ import {
   Award, 
   Users, 
   Car,
-  Clock
+  Clock,
+  FileText
 } from 'lucide-react'
 
 export interface Application {
@@ -34,6 +34,7 @@ export interface Application {
   postalCode?: string;
   createdAt: string | Date | { seconds: number; nanoseconds: number }; // Can be string, Date, or Firestore timestamp
   status: 'pending' | 'approved' | 'rejected';
+  w9Url?: string;
   certifications?: Array<{ name?: string } | string>;
   education?: Array<{
     degree?: string;
@@ -270,6 +271,12 @@ export default function AdminApplicationsClient({ applications, onApprove, onRej
                       <Badge className={`${getStatusColor(application.status)} capitalize`}>
                         {application.status}
                       </Badge>
+                      <Badge
+                        variant="outline"
+                        className={`${application.w9Url ? 'bg-green-50 text-green-700 border-green-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}
+                      >
+                        {application.w9Url ? 'W-9 on file' : 'W-9 missing'}
+                      </Badge>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-sm text-gray-600">
                       <div className="flex items-center gap-2">
@@ -360,6 +367,28 @@ export default function AdminApplicationsClient({ applications, onApprove, onRej
                         </p>
                       </div>
                     </div>
+                  </div>
+                </div>
+
+                {/* W-9 */}
+                <div className="mb-6">
+                  <div className="flex items-center gap-2 mb-3">
+                    <FileText className="h-4 w-4 text-gray-500" />
+                    <h3 className="font-semibold text-gray-900">W-9</h3>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    {application.w9Url ? (
+                      <a
+                        href={String(application.w9Url)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 underline"
+                      >
+                        View W-9 (PDF)
+                      </a>
+                    ) : (
+                      <div className="text-amber-600">No W-9 on file</div>
+                    )}
                   </div>
                 </div>
 

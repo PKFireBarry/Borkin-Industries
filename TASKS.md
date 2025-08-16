@@ -352,6 +352,8 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
   - [x] Ensure completion summary is always visible on desktop.
 - [x] Make Experience, Education, Certifications, and References sections optional.
 - [x] Update Driving Range: change maxDistance to select (10-50 miles), remove areasServed.
+ - [x] Add secure W-9 Upload step: upload PDF to Firebase Storage, save URL in Firestore, validate before submission, and display in Review section.
+ - [x] Admin: Display W-9 link in applications review (PDF) and show W-9 status badge in header.
 
 ### 5A. Contractor Service & Pricing Management
 - [x] Define TypeScript interfaces for PlatformService and ContractorServiceOffering (`types/service.ts`)

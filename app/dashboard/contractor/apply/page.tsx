@@ -9,6 +9,7 @@ import { db } from '../../../../firebase'
 import { useUser } from '@clerk/nextjs'
 import { useRouter } from 'next/navigation'
 import { Check, ChevronRight, AlertCircle } from 'lucide-react'
+import { uploadFileToStorage } from '@/lib/firebase/storage'
 
 interface ExperienceEntry {
   employer: string
@@ -75,6 +76,7 @@ interface ContractorForm {
     maxDistance: string
     willTravelOutside: string // 'yes' | 'no'
   }
+  w9Url: string
 }
 
 const initialExperience: ExperienceEntry = {
@@ -142,6 +144,7 @@ const initialForm: ContractorForm = {
     maxDistance: '',
     willTravelOutside: '',
   },
+  w9Url: '',
 }
 
 const steps = [
@@ -151,6 +154,7 @@ const steps = [
   'Certifications',
   'References',
   'Driving Range',
+  'W-9 Upload',
   'Review & Submit',
 ] as const
 
@@ -188,6 +192,9 @@ export default function ContractorApplyPage() {
   const [appCheckError, setAppCheckError] = useState<string | null>(null)
   const [visitedSteps, setVisitedSteps] = useState<boolean[]>(steps.map((_, i) => i === 0));
   const [stepsCompleted, setStepsCompleted] = useState<boolean[]>(steps.map(() => false));
+  const [w9File, setW9File] = useState<File | null>(null)
+  const [isUploadingW9, setIsUploadingW9] = useState(false)
+  const [w9Error, setW9Error] = useState<string | null>(null)
 
   useEffect(() => {
     if (!userLoaded) return
@@ -333,6 +340,8 @@ export default function ContractorApplyPage() {
         return ['references']
       case 'Driving Range':
         return ['drivingRange']
+      case 'W-9 Upload':
+        return ['w9Url']
       default:
         return []
     }
@@ -385,6 +394,9 @@ export default function ContractorApplyPage() {
         form.drivingRange.maxDistance.trim() &&
         form.drivingRange.willTravelOutside.trim()
       )
+    }
+    if (step === 'W-9 Upload') {
+      return Boolean(form.w9Url && form.w9Url.trim())
     }
     const required: (keyof ContractorForm)[] = fieldsForStep(step)
     return required.every((field) => {
@@ -510,6 +522,42 @@ export default function ContractorApplyPage() {
 
   function handleDrivingRangeChange(field: keyof ContractorForm['drivingRange'], value: any) {
     setForm((prev) => ({ ...prev, drivingRange: { ...prev.drivingRange, [field]: value } }))
+  }
+
+  async function handleW9Upload() {
+    setW9Error(null)
+    try {
+      if (!w9File) {
+        setW9Error('Please select a W-9 PDF file to upload.')
+        return
+      }
+      const isPdf = w9File.type === 'application/pdf' || w9File.name.toLowerCase().endsWith('.pdf')
+      if (!isPdf) {
+        setW9Error('Only PDF files are accepted for the W-9.')
+        return
+      }
+      const maxSizeMB = 10
+      if (w9File.size > maxSizeMB * 1024 * 1024) {
+        setW9Error(`File must be ${maxSizeMB}MB or smaller.`)
+        return
+      }
+      setIsUploadingW9(true)
+      const path = `w9s/${user?.id}-${Date.now()}.pdf`
+      const url = await uploadFileToStorage(w9File, path)
+      setForm((prev) => ({ ...prev, w9Url: url }))
+      setW9File(null)
+    } catch (err) {
+      console.error('W-9 upload failed:', err)
+      setW9Error('Failed to upload W-9. Please try again.')
+    } finally {
+      setIsUploadingW9(false)
+    }
+  }
+
+  function handleW9Replace() {
+    setForm((prev) => ({ ...prev, w9Url: '' }))
+    setW9File(null)
+    setW9Error(null)
   }
 
   // Function to render completion summary
@@ -1371,6 +1419,52 @@ export default function ContractorApplyPage() {
             </div>
           </section>
         )
+      case 'W-9 Upload':
+        return (
+          <section className="bg-card rounded-xl shadow-md p-1 sm:p-6 mb-1 sm:mb-8">
+            <h2 className="text-sm sm:text-2xl font-bold mb-1 sm:mb-2">W-9 Form Upload</h2>
+            <div className="text-muted-foreground text-xs sm:text-sm mb-2 sm:mb-4">
+              Please upload a completed and signed IRS Form W-9 as a PDF. This is required before submitting your application.
+            </div>
+            <div className="space-y-3">
+              {form.w9Url ? (
+                <div className="bg-muted rounded-lg p-3 sm:p-4">
+                  <p className="text-xs sm:text-sm mb-2">W-9 uploaded successfully.</p>
+                  <div className="flex items-center gap-2">
+                    <a href={form.w9Url} target="_blank" rel="noopener noreferrer" className="text-primary text-xs sm:text-sm underline">
+                      View uploaded W-9 (PDF)
+                    </a>
+                    <Button type="button" variant="outline" onClick={handleW9Replace} className="h-8">
+                      Replace file
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="w9File"
+                      name="w9File"
+                      type="file"
+                      accept="application/pdf"
+                      onChange={(e) => setW9File(e.target.files?.[0] ?? null)}
+                      className="block w-full text-xs sm:text-sm text-muted-foreground file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-primary file:text-white hover:file:bg-primary/90"
+                    />
+                    <Button type="button" onClick={handleW9Upload} disabled={!w9File || isUploadingW9} className="h-8 sm:h-10">
+                      {isUploadingW9 ? 'Uploading...' : 'Upload W-9 PDF'}
+                    </Button>
+                  </div>
+                  {w9Error && (
+                    <p className="text-destructive text-xs mt-1">{w9Error}</p>
+                  )}
+                </>
+              )}
+              <p className="text-[11px] sm:text-xs text-muted-foreground">
+                Your W-9 is stored securely and only accessible to authorized administrators.
+              </p>
+            </div>
+          </section>
+        )
       case 'Review & Submit':
         return (
           <section className="bg-card rounded-xl shadow-md p-1 sm:p-6 mb-1 sm:mb-8">
@@ -1444,6 +1538,17 @@ export default function ContractorApplyPage() {
                     </li>
                   ))}
                 </ul>
+              </div>
+              
+              <div className="p-2 sm:p-4 bg-muted rounded-lg">
+                <h3 className="font-semibold text-xs sm:text-base mb-1 sm:mb-2">W-9</h3>
+                {form.w9Url ? (
+                  <a href={form.w9Url} target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                    View uploaded W-9 (PDF)
+                  </a>
+                ) : (
+                  <div className="text-amber-600">Not uploaded</div>
+                )}
               </div>
               
               <div className="p-2 sm:p-4 bg-muted rounded-lg">

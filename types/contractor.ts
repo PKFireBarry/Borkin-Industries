@@ -10,6 +10,7 @@ export interface ContractorApplication {
   drivingRange: string
   certifications: string[]
   references: string[]
+  w9Url?: string
 }
 
 export interface TimeSlot {
