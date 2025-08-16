@@ -4,7 +4,7 @@ import React, { useRef, useState, useCallback, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Slider } from '@/components/ui/slider'
-import { RotateCcw, ZoomIn, ZoomOut, Move, Check, X } from 'lucide-react'
+import { ZoomIn, ZoomOut, Move, Check, X } from 'lucide-react'
 
 interface ImageCropperProps {
   isOpen: boolean
@@ -40,14 +40,14 @@ export function ImageCropper({
 }: ImageCropperProps) {
   console.log('ImageCropper render - isOpen:', isOpen, 'imageUrl:', imageUrl?.substring(0, 50))
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const imageRef = useRef<HTMLImageElement>(null)
+  const imageRef = useRef<HTMLImageElement>(null) // hidden source image
+  const displayImageRef = useRef<HTMLImageElement>(null) // visible image for correct measurements
   const containerRef = useRef<HTMLDivElement>(null)
   
   const [isLoading, setIsLoading] = useState(true)
   const [imageLoaded, setImageLoaded] = useState(false)
   const [cropArea, setCropArea] = useState<CropArea>({ x: 50, y: 50, width: 200, height: 200 })
   const [scale, setScale] = useState(1)
-  const [rotation, setRotation] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
   const [isResizing, setIsResizing] = useState(false)
@@ -71,6 +71,8 @@ export function ImageCropper({
       setImageDimensions({ width: img.width, height: img.height })
       setImageLoaded(true)
       setIsLoading(false)
+      // Reset zoom each time a new image loads
+      setScale(1)
       
       // Initialize crop area based on container and aspect ratio
       setTimeout(() => {
@@ -233,11 +235,6 @@ export function ImageCropper({
     setScale(newScale[0])
   }, [])
 
-  // Handle rotation
-  const handleRotate = useCallback(() => {
-    setRotation(prev => (prev + 90) % 360)
-  }, [])
-
   // Generate cropped image
   const generateCroppedImage = useCallback(() => {
     if (!imageRef.current || !canvasRef.current || !imageLoaded || !containerRef.current) return
@@ -248,61 +245,30 @@ export function ImageCropper({
 
     if (!ctx) return
 
-    // Set output canvas size
-    const outputWidth = Math.min(maxWidth, Math.max(cropArea.width, minWidth))
-    const outputHeight = outputWidth / aspectRatio
-    
-    canvas.width = outputWidth
-    canvas.height = outputHeight
-
-    // Clear canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-
-    // Calculate the actual image display size in the container
+    // Compute mapping from visible image rect to natural image pixels
     const containerRect = containerRef.current.getBoundingClientRect()
-    const containerWidth = containerRect.width
-    const containerHeight = containerRect.height
-    
-    // Calculate how the image fits in the container (background-size: contain equivalent)
-    const imageAspect = imageDimensions.width / imageDimensions.height
-    const containerAspect = containerWidth / containerHeight
-    
-    let displayWidth, displayHeight, imageOffsetX, imageOffsetY
-    
-    if (imageAspect > containerAspect) {
-      // Image is wider than container
-      displayWidth = containerWidth * scale
-      displayHeight = displayWidth / imageAspect
-      imageOffsetX = 0
-      imageOffsetY = (containerHeight - displayHeight) / 2
-    } else {
-      // Image is taller than container
-      displayHeight = containerHeight * scale
-      displayWidth = displayHeight * imageAspect
-      imageOffsetX = (containerWidth - displayWidth) / 2
-      imageOffsetY = 0
-    }
-    
-    // Calculate source coordinates relative to the actual image
-    const scaleFactorX = imageDimensions.width / displayWidth
-    const scaleFactorY = imageDimensions.height / displayHeight
-    
-    const sourceX = Math.max(0, (cropArea.x - imageOffsetX) * scaleFactorX)
-    const sourceY = Math.max(0, (cropArea.y - imageOffsetY) * scaleFactorY)
+    const imgRect = displayImageRef.current?.getBoundingClientRect()
+    if (!imgRect) return
+
+    const imgLeft = imgRect.left - containerRect.left
+    const imgTop = imgRect.top - containerRect.top
+
+    const scaleFactorX = imageDimensions.width / imgRect.width
+    const scaleFactorY = imageDimensions.height / imgRect.height
+
+    const sourceX = Math.max(0, (cropArea.x - imgLeft) * scaleFactorX)
+    const sourceY = Math.max(0, (cropArea.y - imgTop) * scaleFactorY)
     const sourceWidth = Math.min(imageDimensions.width - sourceX, cropArea.width * scaleFactorX)
     const sourceHeight = Math.min(imageDimensions.height - sourceY, cropArea.height * scaleFactorY)
 
-    // Apply transformations
-    ctx.save()
-    
-    // Apply rotation if needed
-    if (rotation !== 0) {
-      ctx.translate(canvas.width / 2, canvas.height / 2)
-      ctx.rotate((rotation * Math.PI) / 180)
-      ctx.translate(-canvas.width / 2, -canvas.height / 2)
-    }
-    
-    // Draw the cropped image
+    // Set output canvas size based on source region, respecting constraints
+    const outputWidth = Math.min(maxWidth, Math.max(minWidth, sourceWidth))
+    const outputHeight = outputWidth / aspectRatio
+    canvas.width = outputWidth
+    canvas.height = outputHeight
+
+    // Clear and draw
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
     try {
       ctx.drawImage(
         img,
@@ -318,8 +284,6 @@ export function ImageCropper({
     } catch (error) {
       console.error('Error drawing image to canvas:', error)
     }
-    
-    ctx.restore()
 
     // Convert to blob and create URL
     canvas.toBlob((blob) => {
@@ -329,7 +293,7 @@ export function ImageCropper({
         onClose()
       }
     }, 'image/jpeg', quality)
-  }, [cropArea, imageDimensions, rotation, aspectRatio, maxWidth, minWidth, quality, onCrop, onClose, imageLoaded, scale])
+  }, [cropArea, imageDimensions, aspectRatio, maxWidth, minWidth, quality, onCrop, onClose, imageLoaded])
 
   // Add event listeners for both mouse and touch
   useEffect(() => {
@@ -379,7 +343,7 @@ export function ImageCropper({
               <div>
                 <h2 className="text-lg font-semibold">Crop Image</h2>
                 <p className="text-sm text-muted-foreground hidden sm:block">
-                  Drag to move, resize corners, zoom and rotate
+                  Drag to move, resize corners, and zoom
                 </p>
               </div>
               <div className="flex items-center gap-3">
@@ -398,14 +362,6 @@ export function ImageCropper({
                     {Math.round(scale * 100)}%
                   </span>
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleRotate}
-                >
-                  <RotateCcw className="w-4 h-4" />
-                </Button>
               </div>
             </div>
           </div>
@@ -439,15 +395,15 @@ export function ImageCropper({
                 onTouchStart={handlePointerDown}
                 onTouchMove={handlePointerMove}
                 onTouchEnd={handlePointerUp}
-                style={{
-                  backgroundImage: `url(${imageUrl})`,
-                  backgroundSize: `${scale * 100}%`,
-                  backgroundPosition: 'center',
-                  backgroundRepeat: 'no-repeat',
-                  transform: `rotate(${rotation}deg)`,
-                  transformOrigin: 'center'
-                }}
               >
+                {/* Visible image for accurate sizing (object-contain) */}
+                <img
+                  ref={displayImageRef}
+                  src={imageUrl}
+                  alt="Crop preview"
+                  className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+                  style={{ transform: `scale(${scale})`, transformOrigin: 'center' }}
+                />
                 {/* Overlay - everything except crop area */}
                 <div 
                   className="absolute inset-0 bg-black bg-opacity-50"
@@ -545,4 +501,4 @@ export function ImageCropper({
       </DialogContent>
     </Dialog>
   )
-} 
+}

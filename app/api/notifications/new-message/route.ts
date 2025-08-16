@@ -4,6 +4,7 @@ import { getClientProfile } from '@/lib/firebase/client'
 import { getContractorProfile } from '@/lib/firebase/contractors'
 import type { Client } from '@/types/client'
 import type { Contractor } from '@/types/contractor'
+import type { Message } from '@/types/messaging'
 
 interface MessageNotificationRequest {
   recipientId: string
@@ -50,18 +51,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Recipient email not found' }, { status: 400 })
     }
 
-    // Convert timestamp string to Date
-    const messageWithDate = {
-      ...message,
-      timestamp: new Date(message.timestamp)
+    // Build message object for email template
+    const messageForEmail: Message = {
+      id: message.id,
+      chatId: message.chatId,
+      senderId,
+      receiverId: recipientId,
+      text: message.content,
+      timestamp: new Date(message.timestamp).getTime(),
+      readBy: { [senderId]: true },
     }
 
-    // Send notification
+    // Send notification (function expects message, recipientName, senderName, recipientEmail, isContractor)
     await sendNewMessageNotification(
-      recipient as Client | Contractor, 
-      sender as Client | Contractor, 
-      messageWithDate, 
-      isRecipientClient
+      messageForEmail,
+      (recipient as Client | Contractor).name,
+      (sender as Client | Contractor).name,
+      (recipient as Client | Contractor).email,
+      !isRecipientClient
     )
 
     return NextResponse.json({ success: true })

@@ -300,6 +300,7 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
   - [x] Update all profile forms to use enhanced cropping features
   - [x] Implement fallback handling and error recovery for images
   - [x] Add loading states and progressive enhancement
+  - [x] Bugfix: make crop output match selection, preserve original for re-cropping (no forced zoomed-in state), and ensure square resizing via corner handles
 - [x] Update forms to save/display photo URLs
 
 ### 5. Contractor Application & Onboarding

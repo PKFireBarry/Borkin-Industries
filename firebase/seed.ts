@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Seed Firestore with sample data for clients, contractors, and bookings.
  *

@@ -89,8 +89,9 @@ export function PhotoUpload({
   }
 
   const handleCrop = async (croppedImageUrl: string) => {
+    // Update preview with the cropped image, but DO NOT replace tempImageUrl.
+    // Keeping tempImageUrl as the original source allows re-cropping from the original.
     setPreview(croppedImageUrl)
-    setTempImageUrl(croppedImageUrl)
     setShowCropper(false)
     
     // Convert the cropped image URL back to a File object and upload immediately

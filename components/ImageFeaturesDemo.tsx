@@ -38,7 +38,7 @@ export function ImageFeaturesDemo() {
               <PhotoUpload
                 label="Upload Profile Picture"
                 storagePath="demo/profile-picture"
-                initialUrl={profileImage}
+                initialUrl={profileImage ?? undefined}
                 onUpload={setProfileImage}
                 enableCropping={true}
                 aspectRatio={1}
@@ -54,7 +54,7 @@ export function ImageFeaturesDemo() {
               <PhotoUpload
                 label="Upload Any Image"
                 storagePath="demo/general-image"
-                initialUrl={demoImage}
+                initialUrl={demoImage ?? undefined}
                 onUpload={setDemoImage}
                 enableCropping={true}
                 aspectRatio={4/3}

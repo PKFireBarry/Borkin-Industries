@@ -210,7 +210,7 @@ export async function sendMessage(
     batch.set(newMessageRef, newMessageDataForFirestore);
 
     // Update the chat document with last message and unread counts
-    const updateData: Record<string, unknown> = {
+    const updateData: DocumentData = {
       lastMessage: {
         // Storing a snippet of the message
         id: newMessageRef.id, // Store the new message ID
