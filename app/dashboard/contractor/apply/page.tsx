@@ -1439,9 +1439,9 @@ export default function ContractorApplyPage() {
       case 'W-9 Upload':
         return (
           <section className="bg-card rounded-xl shadow-md p-1 sm:p-6 mb-1 sm:mb-8">
-            <h2 className="text-sm sm:text-2xl font-bold mb-1 sm:mb-2">W-9 Form Upload</h2>
+            <h2 className="text-sm sm:text-2xl font-bold mb-1 sm:mb-2">W-9 Form</h2>
             <div className="text-muted-foreground text-xs sm:text-sm mb-2 sm:mb-4">
-              Please upload a completed and signed IRS Form W-9 as a PDF. This is required before submitting your application.
+              You can either upload a completed W‑9 PDF <span className="font-medium text-foreground">or</span> fill one out in the app. Only one is required before submitting your application.
             </div>
             <div className="space-y-3">
               {form.w9Url ? (
@@ -1458,25 +1458,46 @@ export default function ContractorApplyPage() {
                 </div>
               ) : (
                 <>
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                    <div className="flex-1">
-                      <input
-                        id="w9File"
-                        name="w9File"
-                        type="file"
-                        accept="application/pdf"
-                        onChange={(e) => setW9File(e.target.files?.[0] ?? null)}
-                        className="block w-full text-xs sm:text-sm text-muted-foreground file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-primary file:text-white hover:file:bg-primary/90"
-                      />
-                    </div>
-                    <div className="flex gap-2">
-                      <Button type="button" onClick={handleW9Upload} disabled={!w9File || isUploadingW9} className="h-8 sm:h-10">
-                        {isUploadingW9 ? 'Uploading...' : 'Upload W-9 PDF'}
-                      </Button>
-                      <Button type="button" variant="outline" onClick={() => setW9ModalOpen(true)} disabled={isUploadingW9} className="h-8 sm:h-10">
-                        Fill W-9 in app
-                      </Button>
-                    </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Card className="border border-border">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-base">Option 1: Upload your completed W‑9 (PDF)</CardTitle>
+                        <p className="text-xs text-muted-foreground">If you already have a signed W‑9, upload it here.</p>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <input
+                          id="w9File"
+                          name="w9File"
+                          type="file"
+                          accept="application/pdf"
+                          onChange={(e) => setW9File(e.target.files?.[0] ?? null)}
+                          className="block w-full text-xs sm:text-sm text-muted-foreground file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-primary file:text-white hover:file:bg-primary/90"
+                        />
+                        <div className="flex items-center gap-2">
+                          <Button type="button" onClick={handleW9Upload} disabled={!w9File || isUploadingW9} className="h-8 sm:h-10">
+                            {isUploadingW9 ? 'Uploading…' : 'Upload selected PDF'}
+                          </Button>
+                          <div className="text-[11px] text-muted-foreground">PDF only, up to 10MB</div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card className="border border-dashed border-border">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-base">Option 2: Fill out a W‑9 in the app</CardTitle>
+                        <p className="text-xs text-muted-foreground">We’ll generate a PDF for you to review and attach.</p>
+                      </CardHeader>
+                      <CardContent>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setW9ModalOpen(true)}
+                          disabled={isUploadingW9}
+                          className="w-full sm:w-auto h-8 sm:h-10"
+                        >
+                          Open W‑9 form
+                        </Button>
+                      </CardContent>
+                    </Card>
                   </div>
                   {w9Error && (
                     <p className="text-destructive text-xs mt-1">{w9Error}</p>
@@ -1484,7 +1505,7 @@ export default function ContractorApplyPage() {
                 </>
               )}
               <p className="text-[11px] sm:text-xs text-muted-foreground">
-                Your W-9 is stored securely and only accessible to authorized administrators.
+                You only need one W‑9 attached. Your document is stored securely and only accessible to authorized administrators.
               </p>
               {/* In-app W-9 form modal */}
               <W9Form

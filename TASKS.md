@@ -365,6 +365,7 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
   - [x] Clean up W-9 upload state after submission.
   - [x] W-9 TIN privacy: mask SSN/EIN input in UI (password) and only reveal in PDF preview.
   - [x] W-9 accessibility and UX: add explicit labels for all fields; mirror required validation in both Preview and Attach flows; prevent submission when incomplete.
+  - [x] Improve W-9 Upload UI clarity: present two options (upload existing PDF or fill in app) using card layout with headings, helper text, and clear buttons.
 
 ### 5A. Contractor Service & Pricing Management
 - [x] Define TypeScript interfaces for PlatformService and ContractorServiceOffering (`types/service.ts`)
