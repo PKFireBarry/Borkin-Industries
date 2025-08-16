@@ -354,6 +354,17 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
 - [x] Update Driving Range: change maxDistance to select (10-50 miles), remove areasServed.
  - [x] Add secure W-9 Upload step: upload PDF to Firebase Storage, save URL in Firestore, validate before submission, and display in Review section.
  - [x] Admin: Display W-9 link in applications review (PDF) and show W-9 status badge in header.
+  - [x] In-app fillable W-9: add modal form UI, client-side PDF generation via pdf-lib, API route to serve template, and seamless attach/upload into application step.
+  - [x] W-9 PDF preview before attach: generate client-side preview, inline iframe viewer, typed or drawn signature, and safe cleanup of object URLs.
+  - [x] W-9 tax classification pre-filled: hide selection in UI and skip drawing marks in PDF (template handles it).
+  - [x] W-9 form validation: require all fields (except optional signature), enforce 9-digit SSN/EIN, normalize state (2-letter) and ZIP (5 digits) before PDF generation.
+  - [x] W-9 cleanup: remove Business Name and Exemption Codes from UI and PDF data flow.
+  - [x] W-9 signature input: add dual mode (Type or Draw) with a canvas-based signature pad.
+  - [x] W-9 signature now required: PDF generation enforces presence of typed or drawn signature and embeds drawn image when provided.
+  - [x] Validate W-9 form data against Firebase Firestore schema.
+  - [x] Clean up W-9 upload state after submission.
+  - [x] W-9 TIN privacy: mask SSN/EIN input in UI (password) and only reveal in PDF preview.
+  - [x] W-9 accessibility and UX: add explicit labels for all fields; mirror required validation in both Preview and Attach flows; prevent submission when incomplete.
 
 ### 5A. Contractor Service & Pricing Management
 - [x] Define TypeScript interfaces for PlatformService and ContractorServiceOffering (`types/service.ts`)

@@ -10,6 +10,7 @@ import { useUser } from '@clerk/nextjs'
 import { useRouter } from 'next/navigation'
 import { Check, ChevronRight, AlertCircle } from 'lucide-react'
 import { uploadFileToStorage } from '@/lib/firebase/storage'
+import W9Form from '@/components/forms/w9-form'
 
 interface ExperienceEntry {
   employer: string
@@ -194,6 +195,7 @@ export default function ContractorApplyPage() {
   const [stepsCompleted, setStepsCompleted] = useState<boolean[]>(steps.map(() => false));
   const [w9File, setW9File] = useState<File | null>(null)
   const [isUploadingW9, setIsUploadingW9] = useState(false)
+  const [w9ModalOpen, setW9ModalOpen] = useState(false)
   const [w9Error, setW9Error] = useState<string | null>(null)
 
   useEffect(() => {
@@ -549,6 +551,21 @@ export default function ContractorApplyPage() {
     } catch (err) {
       console.error('W-9 upload failed:', err)
       setW9Error('Failed to upload W-9. Please try again.')
+    } finally {
+      setIsUploadingW9(false)
+    }
+  }
+
+  async function handleW9GenerateAndAttach(file: File) {
+    setW9Error(null)
+    try {
+      setIsUploadingW9(true)
+      const path = `w9s/${user?.id}-${Date.now()}.pdf`
+      const url = await uploadFileToStorage(file, path)
+      setForm((prev) => ({ ...prev, w9Url: url }))
+    } catch (err) {
+      console.error('W-9 generate/upload failed:', err)
+      setW9Error('Failed to attach generated W-9. Please try again.')
     } finally {
       setIsUploadingW9(false)
     }
@@ -1441,18 +1458,25 @@ export default function ContractorApplyPage() {
                 </div>
               ) : (
                 <>
-                  <div className="flex items-center gap-2">
-                    <input
-                      id="w9File"
-                      name="w9File"
-                      type="file"
-                      accept="application/pdf"
-                      onChange={(e) => setW9File(e.target.files?.[0] ?? null)}
-                      className="block w-full text-xs sm:text-sm text-muted-foreground file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-primary file:text-white hover:file:bg-primary/90"
-                    />
-                    <Button type="button" onClick={handleW9Upload} disabled={!w9File || isUploadingW9} className="h-8 sm:h-10">
-                      {isUploadingW9 ? 'Uploading...' : 'Upload W-9 PDF'}
-                    </Button>
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                    <div className="flex-1">
+                      <input
+                        id="w9File"
+                        name="w9File"
+                        type="file"
+                        accept="application/pdf"
+                        onChange={(e) => setW9File(e.target.files?.[0] ?? null)}
+                        className="block w-full text-xs sm:text-sm text-muted-foreground file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-primary file:text-white hover:file:bg-primary/90"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button type="button" onClick={handleW9Upload} disabled={!w9File || isUploadingW9} className="h-8 sm:h-10">
+                        {isUploadingW9 ? 'Uploading...' : 'Upload W-9 PDF'}
+                      </Button>
+                      <Button type="button" variant="outline" onClick={() => setW9ModalOpen(true)} disabled={isUploadingW9} className="h-8 sm:h-10">
+                        Fill W-9 in app
+                      </Button>
+                    </div>
                   </div>
                   {w9Error && (
                     <p className="text-destructive text-xs mt-1">{w9Error}</p>
@@ -1462,6 +1486,12 @@ export default function ContractorApplyPage() {
               <p className="text-[11px] sm:text-xs text-muted-foreground">
                 Your W-9 is stored securely and only accessible to authorized administrators.
               </p>
+              {/* In-app W-9 form modal */}
+              <W9Form
+                open={w9ModalOpen}
+                onOpenChange={setW9ModalOpen}
+                onGenerated={handleW9GenerateAndAttach}
+              />
             </div>
           </section>
         )
