@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import type { Booking } from '@/types/booking'
 
 interface DateRange {
   startDate: string | null
@@ -13,6 +14,8 @@ interface DateRangePickerProps {
   onChange: (range: DateRange) => void
   minDate?: string
   className?: string
+  unavailableDates?: string[]
+  bookings?: Booking[]
 }
 
 interface EndDatePickerProps {
@@ -29,12 +32,26 @@ const MONTHS = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ]
 
-export function DateRangePicker({ value, onChange, minDate, className = '' }: DateRangePickerProps) {
+export function DateRangePicker({ value, onChange, minDate, className = '', unavailableDates = [], bookings = [] }: DateRangePickerProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth())
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
   const [hoverDate, setHoverDate] = useState<string | null>(null)
 
   const minDateObj = minDate ? new Date(minDate) : new Date()
+
+  // Precompute lookups for overlays
+  const unavailableSet = new Set(unavailableDates)
+  const getDayBookings = (isoDate: string) => {
+    return (bookings || []).filter(b => {
+      const bookingStart = new Date(b.startDate)
+      const bookingEnd = new Date(b.endDate)
+      const checkDate = new Date(isoDate)
+      bookingStart.setUTCHours(0, 0, 0, 0)
+      bookingEnd.setUTCHours(0, 0, 0, 0)
+      checkDate.setUTCHours(0, 0, 0, 0)
+      return checkDate >= bookingStart && checkDate <= bookingEnd
+    })
+  }
 
   // Get days in month
   const getDaysInMonth = (month: number, year: number) => {
@@ -222,6 +239,11 @@ export function DateRangePicker({ value, onChange, minDate, className = '' }: Da
             const isEnd = isEndDate(date)
             const inRange = isDateInRange(date)
             const isHover = hoverDate === date
+            const isUnavailable = unavailableSet.has(date)
+            const dayBookings = getDayBookings(date)
+            const hasBookings = dayBookings.length > 0
+            const hasFullDayBooking = hasBookings && dayBookings.some(b => !b.time)
+            const isSelectedOrRange = isStart || isEnd || inRange
 
             return (
               <button
@@ -249,11 +271,29 @@ export function DateRangePicker({ value, onChange, minDate, className = '' }: Da
                     ? 'bg-purple-50 text-purple-600 scale-105' 
                     : ''
                   }
+                  ${isUnavailable && !isSelectedOrRange && !disabled
+                    ? 'bg-red-50 text-red-600 line-through'
+                    : ''
+                  }
+                  ${hasFullDayBooking && !isSelectedOrRange && !disabled
+                    ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                    : ''
+                  }
                 `}
               >
                 {parseDate(date).getDate()}
                 {(isStart || isEnd) && (
                   <div className="absolute -top-1 -right-1 w-3 h-3 bg-white rounded-full border-2 border-purple-600"></div>
+                )}
+                {hasBookings && (
+                  <div className="absolute bottom-0.5 right-0.5 flex gap-0.5">
+                    {dayBookings.slice(0, 3).map((_, i) => (
+                      <span key={i} className="w-1.5 h-1.5 bg-purple-500 rounded-full" />
+                    ))}
+                    {dayBookings.length > 3 && (
+                      <span className="text-[10px] font-bold text-purple-700">+</span>
+                    )}
+                  </div>
                 )}
               </button>
             )

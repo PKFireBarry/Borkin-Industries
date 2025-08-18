@@ -23,7 +23,47 @@ export interface AvailabilitySlot {
  * Check if two time slots overlap
  */
 export function doTimeSlotsOverlap(slot1: TimeSlot, slot2: TimeSlot): boolean {
-  return slot1.startTime < slot2.endTime && slot1.endTime > slot2.startTime
+  const toMinutes = (t: string) => {
+    const [h, m] = t.split(':').map(Number)
+    return h * 60 + m
+  }
+
+  const s1 = toMinutes(slot1.startTime)
+  const e1 = toMinutes(slot1.endTime)
+  const s2 = toMinutes(slot2.startTime)
+  const e2 = toMinutes(slot2.endTime)
+
+  // Helper to check overlap of two non-wrapping intervals [aStart, aEnd) and [bStart, bEnd)
+  const rangesOverlap = (aStart: number, aEnd: number, bStart: number, bEnd: number) =>
+    aStart < bEnd && aEnd > bStart
+
+  const DAY = 24 * 60
+
+  const slot1Wraps = e1 <= s1
+  const slot2Wraps = e2 <= s2
+
+  // Expand wrapping intervals into up to two ranges within [0, DAY)
+  const expand = (start: number, end: number): Array<[number, number]> => {
+    if (end > start) return [[start, end]]
+    // Wraps across midnight: [start, DAY) U [0, end)
+    return [[start, DAY], [0, end]]
+  }
+
+  const ranges1 = expand(s1, e1)
+  const ranges2 = expand(s2, e2)
+
+  // If either wraps, compare all combinations of expanded ranges
+  if (slot1Wraps || slot2Wraps) {
+    for (const [aStart, aEnd] of ranges1) {
+      for (const [bStart, bEnd] of ranges2) {
+        if (rangesOverlap(aStart, aEnd, bStart, bEnd)) return true
+      }
+    }
+    return false
+  }
+
+  // Neither wraps: simple comparison
+  return rangesOverlap(s1, e1, s2, e2)
 }
 
 /**

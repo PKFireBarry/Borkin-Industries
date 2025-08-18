@@ -5,12 +5,20 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { DateRangePicker } from '@/components/ui/date-range-picker'
 // import { DatePicker, DateRangePicker } from '@/components/ui/date-picker'; // Future: Consider Shadcn date picker
+import { 
+  Select, 
+  SelectTrigger, 
+  SelectValue, 
+  SelectContent, 
+  SelectItem 
+} from '@/components/ui/select'
 import { useUser } from '@clerk/nextjs'
 import { getClientProfile } from '@/lib/firebase/client'
-import { addBooking } from '@/lib/firebase/bookings' // This now expects startDate, endDate, serviceId
+import { addBooking, getGigsForContractor } from '@/lib/firebase/bookings' // This now expects startDate, endDate, serviceId
 import { getAllContractors, getContractorServiceOfferings, getContractorProfile } from '@/lib/firebase/contractors'
 import { getAllPlatformServices } from '@/lib/firebase/services'
 import type { Contractor } from '@/types/contractor'
+import type { Booking } from '@/types/booking'
 import type { ContractorServiceOffering, PlatformService } from '@/types/service'
 import type { Pet } from '@/types/client'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -44,6 +52,98 @@ function calculateDays(startDateISO: string, endDateISO: string): number {
   const diffTime = Math.abs(end.getTime() - start.getTime());
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
   return diffDays > 0 ? diffDays : 0;
+}
+
+// ---- Time formatting helpers for 12-hour UI with AM/PM ----
+type AmPm = 'AM' | 'PM'
+
+const HOURS_12: string[] = Array.from({ length: 12 }, (_, i) => String(i + 1))
+const MINUTES_30: string[] = ['00', '30']
+
+function to12HourParts(time: string): { hour12: string; minute: string; ampm: AmPm } {
+  const [hh, mm] = time.split(':').map(Number)
+  const ampm: AmPm = hh >= 12 ? 'PM' : 'AM'
+  const hour12 = hh % 12 === 0 ? 12 : hh % 12
+  return { hour12: String(hour12), minute: mm.toString().padStart(2, '0'), ampm }
+}
+
+function to24HourString(hour12: string, minute: string, ampm: AmPm): string {
+  let h = parseInt(hour12, 10)
+  if (ampm === 'AM') {
+    h = h === 12 ? 0 : h
+  } else {
+    h = h === 12 ? 12 : h + 12
+  }
+  return `${h.toString().padStart(2, '0')}:${minute.padStart(2, '0')}`
+}
+
+function formatTime12(time: string): string {
+  const { hour12, minute, ampm } = to12HourParts(time)
+  return `${hour12}:${minute} ${ampm}`
+}
+
+interface TimePickerProps {
+  id: string
+  value: string // HH:mm (24-hour) internal value
+  onChange: (newValue: string) => void // HH:mm (24-hour)
+  className?: string
+  disabled?: boolean
+}
+
+function TimePicker({ id, value, onChange, className, disabled }: TimePickerProps) {
+  const parts = to12HourParts(value)
+
+  const handleChange = (next: Partial<{ hour12: string; minute: string; ampm: AmPm }>) => {
+    const merged = {
+      hour12: parts.hour12,
+      minute: parts.minute,
+      ampm: parts.ampm,
+      ...next,
+    }
+    onChange(to24HourString(merged.hour12, merged.minute, merged.ampm))
+  }
+
+  return (
+    <div id={id} className={className}>
+      <div className="grid grid-cols-3 gap-2">
+        <Select value={parts.hour12} onValueChange={(v) => handleChange({ hour12: v })} disabled={disabled}>
+          <SelectTrigger className="bg-white border-slate-300 focus:border-purple-500 focus:ring-purple-500 rounded-xl" aria-label="Hour">
+            <SelectValue placeholder="HH" />
+          </SelectTrigger>
+          <SelectContent>
+            {HOURS_12.map((h) => (
+              <SelectItem key={h} value={h}>
+                {h}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={parts.minute} onValueChange={(v) => handleChange({ minute: v })} disabled={disabled}>
+          <SelectTrigger className="bg-white border-slate-300 focus:border-purple-500 focus:ring-purple-500 rounded-xl" aria-label="Minute">
+            <SelectValue placeholder="MM" />
+          </SelectTrigger>
+          <SelectContent>
+            {MINUTES_30.map((m) => (
+              <SelectItem key={m} value={m}>
+                {m}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={parts.ampm} onValueChange={(v: AmPm) => handleChange({ ampm: v })} disabled={disabled}>
+          <SelectTrigger className="bg-white border-slate-300 focus:border-purple-500 focus:ring-purple-500 rounded-xl" aria-label="AM/PM">
+            <SelectValue placeholder="AM/PM" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="AM">AM</SelectItem>
+            <SelectItem value="PM">PM</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  )
 }
 
 // Helper function to calculate hours between start and end time
@@ -87,6 +187,7 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
   const [contractorServices, setContractorServices] = useState<ContractorServiceOffering[]>([])
   const [isLoadingServices, setIsLoadingServices] = useState(false)
   const [contractorAvailability, setContractorAvailability] = useState<Contractor['availability'] | null>(null)
+  const [contractorBookings, setContractorBookings] = useState<Booking[]>([])
   
   // Updated to support multiple services
   const [selectedServices, setSelectedServices] = useState<SelectedService[]>([])
@@ -164,6 +265,7 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
       setContractorServices([]);
       setSelectedServices([]); // Clear selected services when contractor changes
       setContractorAvailability(null)
+      setContractorBookings([])
       return;
     }
     
@@ -189,6 +291,38 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
     }
     fetchContractorServices();
   }, [selectedContractorId]);
+
+  // Fetch contractor bookings when contractor changes
+  useEffect(() => {
+    let isActive = true
+    const loadBookings = async () => {
+      if (!selectedContractorId) return
+      try {
+        const gigs = await getGigsForContractor(selectedContractorId)
+        // Filter to approved or completed for overlay
+        const filtered = (gigs || []).filter(b => b.status === 'approved' || b.status === 'completed')
+        if (isActive) setContractorBookings(filtered)
+      } catch (err) {
+        console.error('Error fetching contractor bookings:', err)
+        if (isActive) setContractorBookings([])
+      }
+    }
+    loadBookings()
+    return () => { isActive = false }
+  }, [selectedContractorId])
+
+  // Derive unavailable dates for the calendar overlay
+  const unavailableDatesForCalendar = useMemo(() => {
+    if (!contractorAvailability) return [] as string[]
+    const direct = contractorAvailability.unavailableDates || []
+    const daily = contractorAvailability.dailyAvailability || []
+    const isFullDay = (start: string, end: string) => start === '00:00' && (end === '23:59' || end === '24:00')
+    const fullDayFromDaily = daily
+      .filter(d => d.isFullyUnavailable || (d.unavailableSlots || []).some(s => isFullDay(s.startTime, s.endTime)))
+      .map(d => d.date)
+    // Deduplicate
+    return Array.from(new Set([...direct, ...fullDayFromDaily]))
+  }, [contractorAvailability])
 
   // Function to recalculate coupon when base price changes
   const recalculateCoupon = async (basePrice: number) => {
@@ -278,26 +412,17 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
       const totalDuration = calculateTotalDuration(selectedPlatformServices)
       setTotalServiceDuration(totalDuration)
       
-      // Calculate end time based on start time and total duration
-      if (!hasOvernightStay) {
-        const calculatedEnd = calculateEndTime(startTime, totalDuration)
-        setCalculatedEndTime(calculatedEnd)
-        setEndTime(calculatedEnd)
-      }
+      // Calculate end time based on start time and total duration (applies to all services)
+      const calculatedEnd = calculateEndTime(startTime, totalDuration)
+      setCalculatedEndTime(calculatedEnd)
+      setEndTime(calculatedEnd)
     } else {
       setTotalServiceDuration(0)
       setCalculatedEndTime(null)
     }
-  }, [selectedServices, platformServices, startTime, hasOvernightStay])
+  }, [selectedServices, platformServices, startTime])
 
-  // Auto-handle overnight stay logic
-  useEffect(() => {
-    if (hasOvernightStay) {
-      // For overnight stays, auto-set end time to 23:59
-      setEndTime('23:59')
-      setCalculatedEndTime(null) // Don't show calculated time for overnight stays
-    }
-  }, [hasOvernightStay]);
+  
 
   // Validate booking conflicts when dates/times change
   useEffect(() => {
@@ -310,43 +435,14 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
       setIsValidatingBooking(true)
       try {
         let conflicts: BookingConflict[] = []
-        
-        if (hasOvernightStay) {
-          // For overnight stays, validate each day differently
-          const start = new Date(dateRange.startDate!)
-          const end = new Date(dateRange.endDate!)
-          start.setUTCHours(0, 0, 0, 0)
-          end.setUTCHours(0, 0, 0, 0)
-          
-          for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-            const dateStr = d.toISOString().slice(0, 10)
-            const isFirstDay = dateStr === dateRange.startDate
-            
-            // First day: arrival time to end of day
-            // Other days: full day
-            const dayTimeSlot = isFirstDay 
-              ? { startTime, endTime: '23:59' }
-              : undefined // Full day for subsequent days
-            
-            const dayConflicts = await checkBookingConflicts(
-              selectedContractorId,
-              dateStr,
-              dateStr,
-              dayTimeSlot
-            )
-            conflicts.push(...dayConflicts)
-          }
-        } else {
-          // Regular bookings - use original logic
-          const timeSlot = { startTime, endTime }
-          conflicts = await checkBookingConflicts(
-            selectedContractorId,
-            dateRange.startDate!,
-            dateRange.endDate!,
-            timeSlot
-          )
-        }
-        
+        // Unified conflict validation for all services using selected time slot
+        const timeSlot = { startTime, endTime }
+        conflicts = await checkBookingConflicts(
+          selectedContractorId,
+          dateRange.startDate!,
+          dateRange.endDate!,
+          timeSlot
+        )
         setBookingConflicts(conflicts)
       } catch (error) {
         console.error('Error validating booking:', error)
@@ -357,7 +453,7 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
 
     const debounceTimer = setTimeout(validateBooking, 500)
     return () => clearTimeout(debounceTimer)
-  }, [selectedContractorId, dateRange.startDate, dateRange.endDate, startTime, endTime, hasOvernightStay])
+  }, [selectedContractorId, dateRange.startDate, dateRange.endDate, startTime, endTime])
 
   const handlePetToggle = (petId: string) => {
     setSelectedPets(prev =>
@@ -596,22 +692,16 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
         contractorPhone: selectedContractor?.phone || '',
         petIds: selectedPets,
         services: selectedServices,
-        startDate: hasOvernightStay 
-          ? new Date(`${dateRange.startDate}T${startTime}:00`).toISOString()
-          : new Date(`${dateRange.startDate}T${startTime}:00`).toISOString(),
-        endDate: hasOvernightStay 
-          ? new Date(`${dateRange.endDate}T23:59:59`).toISOString()
-          : new Date(`${dateRange.endDate}T${endTime}:00`).toISOString(),
+        startDate: new Date(`${dateRange.startDate}T${startTime}:00`).toISOString(),
+        endDate: new Date(`${dateRange.endDate}T${endTime}:00`).toISOString(),
         stripeCustomerId: profile.stripeCustomerId,
         totalAmount: totalPaymentAmount, // Total amount client pays (including fees)
         baseServiceAmount: Math.round(finalBaseAmountInDollars * 100), // Base service amount contractor receives (coupon-adjusted)
         paymentMethodId: paymentMethodId, // Include payment method ID
-        ...(hasOvernightStay ? {} : {
-          time: {
-            startTime,
-            endTime
-          }
-        }),
+        time: {
+          startTime,
+          endTime
+        },
         // Add coupon information
         ...(appliedCoupon && originalPrice && {
           couponCode: appliedCoupon.code,
@@ -777,7 +867,7 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
                 </div>
               ))}
             </div>
-            {totalServiceDuration > 0 && !hasOvernightStay && (
+            {totalServiceDuration > 0 && (
               <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-xl">
                 <Clock className="h-4 w-4 text-blue-600" />
                 <span className="text-sm text-blue-800">
@@ -869,84 +959,61 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
           </div>
         </div>
         
-        <div className="space-y-2 mb-6">
-          <label className="block text-sm font-semibold text-slate-700">Select Date Range</label>
+        {/* Calendar with overlays for unavailable and booked dates */}
+        <div className="mb-6">
           <DateRangePicker
             value={dateRange}
-            onChange={setDateRange}
-            minDate={new Date().toISOString().split('T')[0]}
+            onChange={(range) => setDateRange(range)}
+            minDate={new Date().toISOString().slice(0, 10)}
+            unavailableDates={unavailableDatesForCalendar}
+            bookings={contractorBookings}
             className="w-full"
           />
         </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <label htmlFor="startTime" className="block text-sm font-semibold text-slate-700">
-              {hasOvernightStay ? 'Arrival Time' : 'Start Time'}
-            </label>
-            <Input 
-              id="startTime" 
-              type="time" 
-              value={startTime} 
-              onChange={(e) => {
-                setStartTime(e.target.value)
-                // Auto-set end time for overnight stays
-                if (hasOvernightStay) {
-                  setEndTime('23:59')
-                }
-              }}
-              required
-              className="bg-white border-slate-300 focus:border-purple-500 focus:ring-purple-500 rounded-xl"
-            />
-          </div>
-          {!hasOvernightStay && (
-            <div className="space-y-2">
-              <label htmlFor="endTime" className="block text-sm font-semibold text-slate-700">
-                End Time {calculatedEndTime && <span className="text-xs font-normal text-slate-500">(Auto-calculated)</span>}
-              </label>
-              {calculatedEndTime ? (
-                <div className="relative">
-                  <Input 
-                    id="endTime" 
-                    type="time" 
-                    value={endTime} 
-                    onChange={(e) => setEndTime(e.target.value)}
-                    required 
-                    className="bg-blue-50 border-blue-300 focus:border-purple-500 focus:ring-purple-500 rounded-xl pr-10"
-                    title="End time calculated based on selected services duration"
-                  />
-                  <Clock className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-blue-500" />
-                </div>
-              ) : (
-                <Input 
-                  id="endTime" 
-                  type="time" 
-                  value={endTime} 
-                  onChange={(e) => setEndTime(e.target.value)}
-                  required 
-                  className="bg-white border-slate-300 focus:border-purple-500 focus:ring-purple-500 rounded-xl"
-                />
-              )}
-              {calculatedEndTime && (
-                <p className="text-xs text-blue-600">
-                  Based on {formatDuration(totalServiceDuration)} of selected services
-                </p>
-              )}
-            </div>
-          )}
-          {hasOvernightStay && (
-            <div className="space-y-2">
-              <label className="block text-sm font-semibold text-slate-700">Service Duration</label>
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl">
-                <p className="text-sm text-blue-800 font-medium">
-                  Until end of day (11:59 PM)
-                </p>
-                <p className="text-xs text-blue-600 mt-1">
-                  Overnight stay continues until the next morning
-                </p>
+
+        <div className="space-y-2 mb-6">
+          <label htmlFor="startTime" className="block text-sm font-semibold text-slate-700">
+            Start Time
+          </label>
+          <TimePicker
+            id="startTime"
+            value={startTime}
+            onChange={(val) => {
+              setStartTime(val)
+            }}
+            className=""
+          />
+        </div>
+        <div className="space-y-2">
+          <label htmlFor="endTime" className="block text-sm font-semibold text-slate-700">
+            End Time {calculatedEndTime && <span className="text-xs font-normal text-slate-500">(Auto-calculated)</span>}
+          </label>
+          {calculatedEndTime ? (
+            <div className="relative">
+              <div
+                id="endTime"
+                className="h-10 bg-blue-50 border border-blue-300 rounded-xl pr-10 flex items-center px-3 text-sm text-slate-700"
+                title="End time calculated based on selected services duration"
+                aria-readonly
+              >
+                {formatTime12(endTime)}
               </div>
+              <Clock className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-blue-500" />
             </div>
+          ) : (
+            <TimePicker
+              id="endTime"
+              value={endTime}
+              onChange={(val) => setEndTime(val)}
+            />
           )}
+          {calculatedEndTime && (
+            <p className="text-xs text-blue-600">
+              Based on {formatDuration(totalServiceDuration)} of selected services
+            </p>
+          )}
+        </div>
+        
         </div>
 
         {/* Overnight Stay Contact Message */}
@@ -967,7 +1034,7 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
           </div>
         )}
         {/* Contractor Schedule Visualization */}
-        {selectedContractorId && dateRange.startDate && !hasOvernightStay && (
+        {selectedContractorId && dateRange.startDate && (
           <ContractorScheduleView
             contractorId={selectedContractorId}
             selectedDate={dateRange.startDate}
@@ -1012,7 +1079,6 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
             <p>Contractor uses partial-day availability. If your chosen time overlaps existing blocks, you will be prompted to adjust.</p>
           </div>
         )}
-      </div>
       
       {/* Booking Summary */}
       {numberOfDays > 0 && selectedServices.length > 0 && calculatedTotalPrice && (

@@ -395,6 +395,7 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
 
 - [x] Build contractor availability calendar (set unavailable days)
 - [x] Display contractor calendar to clients
+- [x] Integrate DateRangePicker into booking request form with dynamic overlays for unavailable and booked dates; overlays update on contractor change; booking validation and date range selection preserved
 - [ ] Booking status updates (pending, approved, completed, cancelled)
 - [x] Booking detail view for both client and contractor
 - [x] Emergency booking cancellation for both clients and contractors after approval
@@ -405,6 +406,8 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
   - When a gig is cancelled, the dates are removed from the contractor's unavailable calendar
   - This prevents double-booking and keeps contractor availability accurate
  - [x] Hide existing booking times in client booking modal for privacy (overlap prevention retained with generic conflict message)
+- [x] Standardize manual time selection UI to 12-hour format with AM/PM using Radix Selects (kept internal HH:mm 24-hour strings)
+ - [x] Treat overnight stays like other services using duration-based end time (12h); removed end-of-day (23:59) special case and unified conflict validation/time payload handling
 
 ### 7. Payments (Stripe)
 - [x] Integrate Stripe for client payments
