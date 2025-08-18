@@ -2,6 +2,7 @@ export interface PlatformService {
   id: string;
   name: string;
   description?: string;
+  durationMinutes: number; // Duration in minutes for this service
   // Add any other fields relevant to a platform-defined service,
   // e.g., default price range, categories, etc.
 }

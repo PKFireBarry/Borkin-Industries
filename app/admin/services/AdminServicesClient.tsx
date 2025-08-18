@@ -7,6 +7,7 @@ import {
   deletePlatformService 
 } from '@/lib/firebase/services'
 import type { PlatformService } from '@/types/service'
+import { formatDuration } from '@/lib/utils/booking-duration'
 import { 
   Dialog, 
   DialogContent, 
@@ -20,7 +21,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Edit, Trash2, AlertCircle, Settings } from 'lucide-react'
+import { Plus, Edit, Trash2, AlertCircle, Settings, Clock } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface AdminServicesClientProps {
@@ -44,14 +45,20 @@ export default function AdminServicesClient({ initialServices }: AdminServicesCl
       const formData = new FormData(e.currentTarget)
       const name = formData.get('name') as string
       const description = formData.get('description') as string
+      const durationMinutes = parseInt(formData.get('durationMinutes') as string)
 
       if (!name.trim()) {
         throw new Error('Service name is required')
       }
 
+      if (!durationMinutes || durationMinutes <= 0) {
+        throw new Error('Duration must be a positive number')
+      }
+
       const serviceData: Omit<PlatformService, 'id'> = {
         name,
         description: description || undefined,
+        durationMinutes,
       }
 
       if (serviceToEdit) {
@@ -205,6 +212,10 @@ export default function AdminServicesClient({ initialServices }: AdminServicesCl
                     No description provided
                   </p>
                 )}
+                <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+                  <Clock className="h-4 w-4" />
+                  <span>{formatDuration(service.durationMinutes)}</span>
+                </div>
                 <div className="mt-4 flex items-center justify-between">
                   <Badge variant="secondary" className="text-xs">
                     Platform Service
@@ -267,6 +278,22 @@ export default function AdminServicesClient({ initialServices }: AdminServicesCl
                 defaultValue={serviceToEdit?.description || ''}
                 rows={3}
               />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="durationMinutes">Duration (minutes)</Label>
+              <Input 
+                id="durationMinutes" 
+                name="durationMinutes" 
+                type="number"
+                min="1"
+                placeholder="e.g., 60 for 1 hour" 
+                defaultValue={serviceToEdit?.durationMinutes || 60} 
+                required 
+              />
+              <p className="text-xs text-muted-foreground">
+                How long this service typically takes to complete
+              </p>
             </div>
             
             <DialogFooter>

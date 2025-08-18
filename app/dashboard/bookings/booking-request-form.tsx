@@ -22,6 +22,7 @@ import { validateCoupon } from '@/lib/firebase/coupons'
 import { Coupon } from '@/types/coupon'
 import { checkBookingConflicts } from '@/lib/firebase/booking-conflicts'
 import type { BookingConflict } from '@/lib/firebase/booking-conflicts'
+import { calculateTotalDuration, calculateEndTime, formatDuration } from '@/lib/utils/booking-duration'
 
 
 // REMOVED Unused constant
@@ -97,6 +98,8 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
   })
   const [startTime, setStartTime] = useState('09:00')
   const [endTime, setEndTime] = useState('17:00')
+  const [calculatedEndTime, setCalculatedEndTime] = useState<string | null>(null)
+  const [totalServiceDuration, setTotalServiceDuration] = useState<number>(0)
 
   
   // Booking conflict validation state
@@ -264,11 +267,35 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
     }
   }, [dateRange.startDate, dateRange.endDate, startTime, endTime, selectedServices, appliedCoupon, selectedContractorId, numberOfDays]);
 
+  // Calculate total service duration and auto-set end time
+  useEffect(() => {
+    if (selectedServices.length > 0 && platformServices.length > 0) {
+      // Get the platform services for the selected services to access duration
+      const selectedPlatformServices = selectedServices.map(selected => 
+        platformServices.find(ps => ps.id === selected.serviceId)
+      ).filter(Boolean) as PlatformService[]
+      
+      const totalDuration = calculateTotalDuration(selectedPlatformServices)
+      setTotalServiceDuration(totalDuration)
+      
+      // Calculate end time based on start time and total duration
+      if (!hasOvernightStay) {
+        const calculatedEnd = calculateEndTime(startTime, totalDuration)
+        setCalculatedEndTime(calculatedEnd)
+        setEndTime(calculatedEnd)
+      }
+    } else {
+      setTotalServiceDuration(0)
+      setCalculatedEndTime(null)
+    }
+  }, [selectedServices, platformServices, startTime, hasOvernightStay])
+
   // Auto-handle overnight stay logic
   useEffect(() => {
     if (hasOvernightStay) {
       // For overnight stays, auto-set end time to 23:59
       setEndTime('23:59')
+      setCalculatedEndTime(null) // Don't show calculated time for overnight stays
     }
   }, [hasOvernightStay]);
 
@@ -734,7 +761,7 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
         {selectedServices.length > 0 && (
           <div className="mb-6">
             <h4 className="text-sm font-semibold text-slate-700 mb-3">Selected Services:</h4>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 mb-3">
               {selectedServices.map(service => (
                 <div key={service.serviceId} className="flex items-center gap-2 bg-gradient-to-r from-emerald-50 to-emerald-100 border border-emerald-200 px-4 py-2 rounded-xl">
                   <span className="font-medium text-emerald-800">
@@ -750,6 +777,19 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
                 </div>
               ))}
             </div>
+            {totalServiceDuration > 0 && !hasOvernightStay && (
+              <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                <Clock className="h-4 w-4 text-blue-600" />
+                <span className="text-sm text-blue-800">
+                  Total service duration: <strong>{formatDuration(totalServiceDuration)}</strong>
+                  {calculatedEndTime && (
+                    <span className="ml-2">
+                      • End time will be automatically calculated based on your start time
+                    </span>
+                  )}
+                </span>
+              </div>
+            )}
           </div>
         )}
         
@@ -861,15 +901,37 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
           </div>
           {!hasOvernightStay && (
             <div className="space-y-2">
-              <label htmlFor="endTime" className="block text-sm font-semibold text-slate-700">End Time</label>
-              <Input 
-                id="endTime" 
-                type="time" 
-                value={endTime} 
-                onChange={(e) => setEndTime(e.target.value)}
-                required 
-                className="bg-white border-slate-300 focus:border-purple-500 focus:ring-purple-500 rounded-xl"
-              />
+              <label htmlFor="endTime" className="block text-sm font-semibold text-slate-700">
+                End Time {calculatedEndTime && <span className="text-xs font-normal text-slate-500">(Auto-calculated)</span>}
+              </label>
+              {calculatedEndTime ? (
+                <div className="relative">
+                  <Input 
+                    id="endTime" 
+                    type="time" 
+                    value={endTime} 
+                    onChange={(e) => setEndTime(e.target.value)}
+                    required 
+                    className="bg-blue-50 border-blue-300 focus:border-purple-500 focus:ring-purple-500 rounded-xl pr-10"
+                    title="End time calculated based on selected services duration"
+                  />
+                  <Clock className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-blue-500" />
+                </div>
+              ) : (
+                <Input 
+                  id="endTime" 
+                  type="time" 
+                  value={endTime} 
+                  onChange={(e) => setEndTime(e.target.value)}
+                  required 
+                  className="bg-white border-slate-300 focus:border-purple-500 focus:ring-purple-500 rounded-xl"
+                />
+              )}
+              {calculatedEndTime && (
+                <p className="text-xs text-blue-600">
+                  Based on {formatDuration(totalServiceDuration)} of selected services
+                </p>
+              )}
             </div>
           )}
           {hasOvernightStay && (
@@ -909,6 +971,7 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
           <ContractorScheduleView
             contractorId={selectedContractorId}
             selectedDate={dateRange.startDate}
+            serviceDurationMinutes={totalServiceDuration}
             onTimeSlotSelect={(startTime, endTime) => {
               setStartTime(startTime)
               setEndTime(endTime)
@@ -932,34 +995,13 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
         {/* Booking Conflicts */}
         {bookingConflicts.length > 0 && (
           <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl">
-            <div className="flex items-center gap-2 text-red-800 mb-3">
+            <div className="flex items-center gap-2 text-red-800 mb-1">
               <AlertTriangle className="w-4 h-4" />
-              <span className="font-semibold">Booking Conflicts Detected</span>
+              <span className="font-semibold">Time Unavailable</span>
             </div>
-            <div className="space-y-2">
-              {bookingConflicts.map((conflict, index) => (
-                <div key={index} className="text-sm text-red-700 bg-red-100 p-2 rounded-lg">
-                  <div className="font-medium">
-                    {conflict.conflictDate} • {(() => {
-                      const [hours, minutes] = conflict.conflictTime.startTime.split(':')
-                      const hour = parseInt(hours)
-                      const ampm = hour >= 12 ? 'PM' : 'AM'
-                      const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour
-                      const startFormatted = `${displayHour}:${minutes} ${ampm}`
-                      
-                      const [endHours, endMinutes] = conflict.conflictTime.endTime.split(':')
-                      const endHour = parseInt(endHours)
-                      const endAmpm = endHour >= 12 ? 'PM' : 'AM'
-                      const endDisplayHour = endHour === 0 ? 12 : endHour > 12 ? endHour - 12 : endHour
-                      const endFormatted = `${endDisplayHour}:${endMinutes} ${endAmpm}`
-                      
-                      return `${startFormatted} - ${endFormatted}`
-                    })()}
-                  </div>
-                  <div className="text-red-600">Services: {conflict.services.join(', ')}</div>
-                </div>
-              ))}
-            </div>
+            <p className="text-sm text-red-700">
+              The selected time overlaps an existing booking. Please choose a different start time or date.
+            </p>
           </div>
         )}
 
@@ -1221,10 +1263,11 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
 interface ContractorScheduleViewProps {
   contractorId: string
   selectedDate: string
+  serviceDurationMinutes: number
   onTimeSlotSelect: (startTime: string, endTime: string) => void
 }
 
-function ContractorScheduleView({ contractorId, selectedDate, onTimeSlotSelect }: ContractorScheduleViewProps) {
+function ContractorScheduleView({ contractorId, selectedDate, serviceDurationMinutes, onTimeSlotSelect }: ContractorScheduleViewProps) {
   const [daySchedule, setDaySchedule] = useState<{
     bookings: any[]
     availableSlots: any[]
@@ -1272,6 +1315,9 @@ function ContractorScheduleView({ contractorId, selectedDate, onTimeSlotSelect }
     // If there's a full day booking, no slots available
     if (hasFullDayBooking(bookings)) return []
 
+    // If no service duration is specified, fall back to 3-hour slots
+    const slotDuration = serviceDurationMinutes > 0 ? serviceDurationMinutes : 3 * 60
+
     // Get all booked time periods
     const bookedPeriods = bookings
       .filter(booking => booking.time)
@@ -1281,14 +1327,14 @@ function ContractorScheduleView({ contractorId, selectedDate, onTimeSlotSelect }
       }))
       .sort((a, b) => a.start - b.start)
 
-    // Generate 3-hour time slots from 6 AM to 8 PM
+    // Generate time slots based on service duration from 6 AM to 10 PM
     const availableSlots = []
     const dayStart = 6 * 60 // 6:00 AM in minutes
-    const dayEnd = 20 * 60 // 8:00 PM in minutes
-    const slotDuration = 3 * 60 // 3 hours in minutes
+    const dayEnd = 22 * 60 // 10:00 PM in minutes
+    const slotInterval = 30 // Check every 30 minutes for available slots
 
-    // Generate all possible 3-hour slots
-    for (let startMinutes = dayStart; startMinutes + slotDuration <= dayEnd; startMinutes += 60) {
+    // Generate all possible slots that can accommodate the service duration
+    for (let startMinutes = dayStart; startMinutes + slotDuration <= dayEnd; startMinutes += slotInterval) {
       const endMinutes = startMinutes + slotDuration
       
       // Check if this slot conflicts with any existing booking
@@ -1345,42 +1391,29 @@ function ContractorScheduleView({ contractorId, selectedDate, onTimeSlotSelect }
       <h4 className="font-semibold text-slate-800 mb-3">
         Contractor Schedule for {formattedDate}
       </h4>
-      
-      {/* Existing Bookings */}
-      {daySchedule.bookings.length > 0 && (
-        <div className="mb-4">
-          <h5 className="text-sm font-medium text-red-700 mb-2">Existing Bookings:</h5>
-          <div className="space-y-2">
-            {daySchedule.bookings.map((booking, index) => (
-              <div key={index} className="p-2 bg-red-100 border border-red-200 rounded-lg">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-medium text-red-800">
-                    {booking.time ? 
-                      `${formatTime(booking.time.startTime)} - ${formatTime(booking.time.endTime)}` :
-                      'Full Day Booking'
-                    }
-                  </div>
-                  <div className="text-xs text-red-600">
-                    {booking.services?.map((s: any) => s.name).join(', ') || booking.serviceType || 'Service'}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Existing bookings are intentionally hidden from clients to protect privacy */}
 
       {/* Available Time Slots */}
       <div>
-        <h5 className="text-sm font-medium text-green-700 mb-2">Available Time Slots:</h5>
+        <h5 className="text-sm font-medium text-green-700 mb-2">
+          Available Time Slots 
+          {serviceDurationMinutes > 0 && (
+            <span className="text-xs text-slate-600 ml-2">
+              (Based on {formatDuration(serviceDurationMinutes)} service duration)
+            </span>
+          )}
+        </h5>
         {getSmartAvailableSlots(daySchedule.bookings).length === 0 ? (
           <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-center">
-            <p className="text-sm text-red-600">No available time slots for this date</p>
+            <p className="text-sm text-red-600">
+              {serviceDurationMinutes > 0 
+                ? `No available time slots that can accommodate ${formatDuration(serviceDurationMinutes)} service duration`
+                : 'No available time slots for this date'
+              }
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-
-            
             {/* Smart Time Slots */}
             {getSmartAvailableSlots(daySchedule.bookings).map((slot: any, index: number) => (
               <button

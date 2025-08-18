@@ -404,6 +404,7 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
   - When a contractor approves a gig, the date range is automatically added to their unavailable dates
   - When a gig is cancelled, the dates are removed from the contractor's unavailable calendar
   - This prevents double-booking and keeps contractor availability accurate
+ - [x] Hide existing booking times in client booking modal for privacy (overlap prevention retained with generic conflict message)
 
 ### 7. Payments (Stripe)
 - [x] Integrate Stripe for client payments
@@ -466,6 +467,16 @@ A web platform for Borkin Industries to connect clients seeking high-quality, lu
   - [x] Added proper responsive breakpoints for all admin components
 - [ ] Add phone number filter to contractor application filters
 - [ ] Add coupon management to pricing page
+- [x] Add service durations so bookings can automatically calculate end times based on the services selected
+  - [x] Updated PlatformService interface to include durationMinutes field
+  - [x] Added duration field to admin services management UI with validation
+  - [x] Updated Firebase service operations to handle duration field properly
+  - [x] Created booking duration utility functions for calculations and formatting
+  - [x] Implemented automatic end time calculation based on selected services total duration
+  - [x] Updated booking form UI to show calculated duration and auto-set end times
+  - [x] Enhanced time slot filtering to show only slots that can accommodate service duration
+  - [x] Updated ContractorScheduleView to use service duration for intelligent slot generation
+  - [x] Added visual indicators for auto-calculated end times with duration information
 
 ### 9. Notifications & Reviews
 - [x] Set up email notifications for booking creation, updates, and completion (clients & contractors)

@@ -46,6 +46,7 @@ export async function createPlatformService(service: Omit<PlatformService, 'id'>
     const newDocRef = doc(servicesRef)
     const dataToSave: any = {
       ...service,
+      durationMinutes: service.durationMinutes || 60, // Default to 60 minutes if not provided
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     }
@@ -76,6 +77,10 @@ export async function updatePlatformService(serviceId: string, updates: Partial<
     }
     if (updates.description === undefined || updates.description?.trim() === '') {
       delete updatesToApply.description
+    }
+    // Ensure durationMinutes is a valid number
+    if (updates.durationMinutes !== undefined) {
+      updatesToApply.durationMinutes = Math.max(1, updates.durationMinutes)
     }
     await updateDoc(serviceRef, updatesToApply)
   } catch (error) {
