@@ -7,6 +7,8 @@ import { BookingRequestForm } from './booking-request-form'
 import { useRequireRole } from '../use-require-role'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { useProfileValidation } from '@/hooks/use-profile-validation'
+import { ProfileValidationModal } from '@/components/profile-validation-modal'
 
 export default function BookingsPage() {
   const { isLoaded, isAuthorized } = useRequireRole('client')
@@ -14,6 +16,7 @@ export default function BookingsPage() {
   const [bookings, setBookings] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [isNewBookingOpen, setIsNewBookingOpen] = useState(false)
+  const { validateBeforeBooking, isValidationModalOpen, validationError, closeValidationModal, isChecking } = useProfileValidation()
 
   useEffect(() => {
     if (!user) return
@@ -22,6 +25,13 @@ export default function BookingsPage() {
       .then((data) => setBookings(data))
       .finally(() => setLoading(false))
   }, [user])
+
+  const handleNewBookingClick = async () => {
+    const isValid = await validateBeforeBooking()
+    if (isValid) {
+      setIsNewBookingOpen(true)
+    }
+  }
 
   const handleNewBookingSuccess = async () => {
     setIsNewBookingOpen(false)
@@ -78,7 +88,7 @@ export default function BookingsPage() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <BookingList bookings={bookings} onNewBooking={() => setIsNewBookingOpen(true)} />
+        <BookingList bookings={bookings} onNewBooking={handleNewBookingClick} />
       </div>
 
       {/* New Booking Modal */}
@@ -102,6 +112,15 @@ export default function BookingsPage() {
             </div>
           </DialogContent>
         </Dialog>
+      )}
+
+      {/* Profile Validation Modal */}
+      {validationError && (
+        <ProfileValidationModal
+          isOpen={isValidationModalOpen}
+          onClose={closeValidationModal}
+          error={validationError}
+        />
       )}
     </div>
   )

@@ -10,6 +10,8 @@ import { ContractorProfileModal } from './contractor-profile-modal'
 import { BookingRequestForm } from '../bookings/booking-request-form'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { useRequireRole } from '../use-require-role'
+import { useProfileValidation } from '@/hooks/use-profile-validation'
+import { ProfileValidationModal } from '@/components/profile-validation-modal'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { useUser } from '@clerk/nextjs'
 import { getClientProfile } from '@/lib/firebase/client'
@@ -40,6 +42,7 @@ export default function ContractorsPageWrapper() {
   const [clientLocation, setClientLocation] = useState<{ address?: string; city?: string; state?: string; postalCode?: string } | null>(null)
   const [showFilters, setShowFilters] = useState(false)
   const [loading, setLoading] = useState(true)
+  const { validateBeforeBooking, isValidationModalOpen, validationError, closeValidationModal } = useProfileValidation()
 
   // Moved useEffect Hooks before the early return
   // Fetch contractors and platform services on mount
@@ -146,11 +149,14 @@ export default function ContractorsPageWrapper() {
     setSelectedContractor(null)
   }
 
-  const handleBookNowFromModal = (contractorId: string) => {
-    setModalOpen(false)
-    setSelectedContractor(null)
-    setBookingForContractorId(contractorId)
-    setIsBookingOpen(true)
+  const handleBookNowFromModal = async (contractorId: string) => {
+    const isValid = await validateBeforeBooking()
+    if (isValid) {
+      setModalOpen(false)
+      setSelectedContractor(null)
+      setBookingForContractorId(contractorId)
+      setIsBookingOpen(true)
+    }
   }
 
   const handleBookingClose = () => {
@@ -443,6 +449,15 @@ export default function ContractorsPageWrapper() {
             </div>
           </DialogContent>
         </Dialog>
+      )}
+
+      {/* Profile Validation Modal */}
+      {validationError && (
+        <ProfileValidationModal
+          isOpen={isValidationModalOpen}
+          onClose={closeValidationModal}
+          error={validationError}
+        />
       )}
     </div>
   )
