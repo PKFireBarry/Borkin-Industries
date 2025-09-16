@@ -233,10 +233,21 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
   useEffect(() => {
     async function fetchPetNames() {
       if (!detailBooking || !user) return
-      const profile = await getClientProfile(user.id)
-      if (!profile) return
-      const names = detailBooking.petIds?.map(pid => profile.pets?.find(p => p.id === pid)?.name || pid) || []
-      setPetNames(names)
+      try {
+        const profile = await getClientProfile(user.id)
+        if (profile?.pets) {
+          // If profile exists with pets, map pet IDs to names
+          const names = detailBooking.petIds?.map(pid => profile.pets?.find(p => p.id === pid)?.name || pid) || []
+          setPetNames(names)
+        } else {
+          // Fallback: use pet IDs as display names if profile is incomplete
+          setPetNames(detailBooking.petIds || [])
+        }
+      } catch (error) {
+        console.warn('Failed to fetch pet names, using pet IDs as fallback:', error)
+        // Fallback: use pet IDs as display names
+        setPetNames(detailBooking.petIds || [])
+      }
     }
     fetchPetNames()
   }, [detailBooking, user])
@@ -245,9 +256,12 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
   useEffect(() => {
     async function fetchDefault() {
       if (!detailBooking || !user) return
-      const profile = await getClientProfile(user.id)
-      if (!profile?.stripeCustomerId) return
       try {
+        const profile = await getClientProfile(user.id)
+        if (!profile?.stripeCustomerId) {
+          setDefaultMethod(null)
+          return
+        }
         const res = await fetch('/api/stripe/list-payment-methods', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -257,8 +271,11 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
           const { paymentMethods } = await res.json()
           const card = (paymentMethods as LocalPaymentMethod[]).find(pm => pm.isDefault) || paymentMethods[0] || null
           setDefaultMethod(card)
+        } else {
+          setDefaultMethod(null)
         }
-      } catch {
+      } catch (error) {
+        console.warn('Failed to fetch payment methods:', error)
         setDefaultMethod(null)
       }
     }
