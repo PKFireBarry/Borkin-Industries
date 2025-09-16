@@ -63,6 +63,10 @@ export function TimeBasedAvailabilityCalendar({
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [showDefaultSchedule, setShowDefaultSchedule] = useState(false)
 
+  // Range selection state
+  const [rangeStart, setRangeStart] = useState<string | null>(null)
+  const [rangeEnd, setRangeEnd] = useState<string | null>(null)
+
   const daysInMonth = getDaysInMonth(calendarMonth.year, calendarMonth.month)
   const firstDay = new Date(calendarMonth.year, calendarMonth.month, 1).getDay()
   const today = new Date().toISOString().slice(0, 10)
@@ -134,20 +138,113 @@ export function TimeBasedAvailabilityCalendar({
   const removeUnavailableSlot = (date: string, index: number) => {
     const current = getDayAvailability(date)
     if (!current?.unavailableSlots) return
-    
+
     const unavailableSlots = current.unavailableSlots.filter((_, i) => i !== index)
     updateDayAvailability(date, { ...current, unavailableSlots })
   }
 
+  // Range selection logic
+  const handleDayClick = (iso: string) => {
+    if (!rangeStart) {
+      // First click - start range selection
+      setRangeStart(iso)
+      setRangeEnd(null)
+      setSelectedDate(null) // Clear single selection when starting range
+    } else if (!rangeEnd) {
+      // Second click - complete range selection
+      const start = new Date(rangeStart)
+      const end = new Date(iso)
+
+      if (start > end) {
+        // Swap if end is before start
+        setRangeStart(iso)
+        setRangeEnd(rangeStart)
+      } else {
+        setRangeEnd(iso)
+      }
+    } else {
+      // Range already selected - check if clicking on range to clear or start new range
+      if (rangePreviewDates.includes(iso)) {
+        // Clicking within existing range - clear it
+        setRangeStart(null)
+        setRangeEnd(null)
+        setSelectedDate(iso) // Set single selection
+      } else {
+        // Start new range
+        setRangeStart(iso)
+        setRangeEnd(null)
+        setSelectedDate(null)
+      }
+    }
+  }
+
+  // Block range of days
+  const blockDateRange = () => {
+    if (!rangeStart || !rangeEnd) return
+
+    const dates = getRangePreviewDates()
+    const updated = [...dailyAvailability]
+
+    dates.forEach(date => {
+      // Remove existing availability for this date
+      const index = updated.findIndex(day => day.date === date)
+      if (index >= 0) {
+        updated[index] = { date, isFullyUnavailable: true, unavailableSlots: [], availableSlots: [] }
+      } else {
+        updated.push({ date, isFullyUnavailable: true, unavailableSlots: [], availableSlots: [] })
+      }
+    })
+
+    onAvailabilityChange(updated)
+
+    // Clear range selection
+    setRangeStart(null)
+    setRangeEnd(null)
+  }
+
+  // Clear range selection
+  const clearRangeSelection = () => {
+    setRangeStart(null)
+    setRangeEnd(null)
+  }
+
+  // Get range preview dates
+  const getRangePreviewDates = (): string[] => {
+    if (!rangeStart || !rangeEnd) return []
+
+    const start = new Date(rangeStart)
+    const end = new Date(rangeEnd)
+    const dates: string[] = []
+
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      dates.push(d.toISOString().slice(0, 10))
+    }
+
+    return dates
+  }
+
+  const rangePreviewDates = getRangePreviewDates()
+
   // Get day styling
   const getDayClassName = (iso: string) => {
     const baseClasses = "aspect-square w-full rounded-xl text-sm font-medium transition-all duration-200 hover:scale-105 hover:shadow-md relative cursor-pointer"
-    
+
     const isToday = iso === today
     const isSelected = selectedDate === iso
+    const isInRangePreview = rangePreviewDates.includes(iso)
+    const isRangeStart = rangeStart === iso
+    const isRangeEnd = rangeEnd === iso
     const dayAvail = getDayAvailability(iso)
     const dayBookings = getDayBookings(iso)
-    
+
+    // Range preview styling (highest priority after selection)
+    if (isInRangePreview) {
+      if (isRangeStart || isRangeEnd) {
+        return `${baseClasses} bg-blue-500 text-white border-2 border-blue-600 shadow-lg ring-2 ring-blue-200`
+      }
+      return `${baseClasses} bg-blue-200 text-blue-800 border-2 border-blue-300 shadow-md`
+    }
+
     if (isSelected) {
       return `${baseClasses} bg-blue-500 text-white border-2 border-blue-600 shadow-lg ring-2 ring-blue-200`
     }
@@ -276,7 +373,7 @@ export function TimeBasedAvailabilityCalendar({
                 <button
                   key={iso}
                   className={getDayClassName(iso)}
-                  onClick={() => setSelectedDate(iso)}
+                  onClick={() => handleDayClick(iso)}
                   type="button"
                 >
                   <span className="relative z-10">
@@ -326,7 +423,15 @@ export function TimeBasedAvailabilityCalendar({
 
       {/* Sidebar */}
       <div className="space-y-6">
-        {selectedDate ? (
+        {rangeStart && rangeEnd ? (
+          <RangeBlockingManager
+            rangeStart={rangeStart}
+            rangeEnd={rangeEnd}
+            rangePreviewDates={rangePreviewDates}
+            onBlockRange={blockDateRange}
+            onClearRange={clearRangeSelection}
+          />
+        ) : selectedDate ? (
           <DayAvailabilityManager
             date={selectedDate}
             dayAvailability={getDayAvailability(selectedDate)}
@@ -340,8 +445,8 @@ export function TimeBasedAvailabilityCalendar({
             <CardContent className="pt-6">
               <div className="text-center py-8">
                 <Calendar className="w-12 h-12 text-slate-400 mx-auto mb-3" />
-                <p className="text-slate-600 font-medium mb-1">Select a Date</p>
-                <p className="text-sm text-slate-500">Click on a date in the calendar to manage its availability</p>
+                <p className="text-slate-600 font-medium mb-1">Select a Date or Range</p>
+                <p className="text-sm text-slate-500">Click on a date to manage its availability, or click two dates to select a range for blocking</p>
               </div>
             </CardContent>
           </Card>
@@ -358,6 +463,92 @@ interface DayAvailabilityManagerProps {
   onToggleFullDay: () => void
   onAddUnavailableSlot: (slot: TimeSlot) => void
   onRemoveUnavailableSlot: (index: number) => void
+}
+
+interface RangeBlockingManagerProps {
+  rangeStart: string
+  rangeEnd: string
+  rangePreviewDates: string[]
+  onBlockRange: () => void
+  onClearRange: () => void
+}
+
+function RangeBlockingManager({
+  rangeStart,
+  rangeEnd,
+  rangePreviewDates,
+  onBlockRange,
+  onClearRange
+}: RangeBlockingManagerProps) {
+  const startDate = new Date(rangeStart + 'T00:00:00')
+  const endDate = new Date(rangeEnd + 'T00:00:00')
+
+  const formatDateRange = () => {
+    const startFormatted = startDate.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric'
+    })
+    const endFormatted = endDate.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric'
+    })
+
+    if (rangeStart === rangeEnd) {
+      return startFormatted
+    }
+
+    return `${startFormatted} - ${endFormatted}`
+  }
+
+  return (
+    <>
+      {/* Range Preview */}
+      <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
+        <CardHeader className="pb-4">
+          <CardTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
+            <Calendar className="w-5 h-5 text-blue-500" />
+            Range Selected
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="p-4 bg-blue-50 border-2 border-blue-200 rounded-xl">
+            <div className="text-center space-y-2">
+              <div className="text-lg font-semibold text-blue-800">
+                {formatDateRange()}
+              </div>
+              <div className="text-sm text-blue-600">
+                {rangePreviewDates.length} day{rangePreviewDates.length !== 1 ? 's' : ''} selected
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Button
+              onClick={onBlockRange}
+              className="rounded-xl py-3 bg-red-500 hover:bg-red-600 text-white font-semibold"
+            >
+              <CalendarX className="w-4 h-4 mr-2" />
+              Block {rangePreviewDates.length} Day{rangePreviewDates.length !== 1 ? 's' : ''}
+            </Button>
+            <Button
+              onClick={onClearRange}
+              variant="outline"
+              className="rounded-xl py-3 hover:bg-slate-50"
+            >
+              Clear
+            </Button>
+          </div>
+
+          <div className="p-3 bg-slate-50 rounded-xl">
+            <div className="flex items-center gap-2 text-sm text-slate-600">
+              <Info className="w-4 h-4" />
+              <span>This will block the entire selected range. Click "Clear" to select individual days instead.</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </>
+  )
 }
 
 function DayAvailabilityManager({

@@ -59,7 +59,9 @@ export function ContractorProfileModal({ contractor, open, onClose, onBookNow, c
           ]);
           setServiceOfferings(offerings);
           setPlatformServices(services);
-          setBookings(gigs.filter(b => b.status === 'approved' || b.status === 'completed'))
+          // Include pending bookings as they should also show as blocked on calendar
+          const filteredBookings = gigs.filter(b => b.status === 'pending' || b.status === 'approved' || b.status === 'completed')
+          setBookings(filteredBookings)
         } catch (err) {
           console.error("Error fetching data:", err);
           setServiceOfferings([]);
@@ -108,8 +110,11 @@ export function ContractorProfileModal({ contractor, open, onClose, onBookNow, c
     return match ? parseFloat(match[1]) : 10;
   })();
 
-  // For availability section
-  const unavailableDates = validContractor.availability?.unavailableDates || [];
+  // For availability section - extract from dailyAvailability
+  const dailyAvailability = validContractor.availability?.dailyAvailability || [];
+  const unavailableDates = dailyAvailability
+    .filter(day => day.isFullyUnavailable)
+    .map(day => day.date);
 
   // For ratings section
   const contractorRatings = validContractor.ratings || [];
