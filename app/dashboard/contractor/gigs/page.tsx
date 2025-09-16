@@ -749,17 +749,17 @@ export default function ContractorGigsPage() {
     if (detailGig) setIsDetailLoading(true)
   }, [detailGig])
 
-  // When all modal data is loaded, stop loading state
+  // When essential modal data is loaded, stop loading state
+  // Note: Geocoding (contractorLatLng, clientLatLng) is not required to show the modal
   useEffect(() => {
     if (
       detailGig &&
       clientProfile &&
-      bookedPetsDetails &&
-      (contractorLatLng && clientLatLng)
+      bookedPetsDetails
     ) {
       setIsDetailLoading(false)
     }
-  }, [detailGig, clientProfile, bookedPetsDetails, contractorLatLng, clientLatLng])
+  }, [detailGig, clientProfile, bookedPetsDetails])
 
   if (!isLoaded || !isAuthorized) return null
   if (loading) return <div className="p-8 text-center text-muted-foreground">Loading gigs...</div>
