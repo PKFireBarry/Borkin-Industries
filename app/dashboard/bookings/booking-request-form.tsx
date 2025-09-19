@@ -422,7 +422,22 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
     }
   }, [selectedServices, platformServices, startTime])
 
-  
+  // Auto-adjust times for overnight stays (PM to AM)
+  useEffect(() => {
+    if (hasOvernightStay) {
+      // Set default overnight times: 8PM to 8AM
+      if (startTime === '09:00' && endTime === '17:00') {
+        setStartTime('20:00') // 8 PM
+        setEndTime('08:00')   // 8 AM next day
+      }
+    } else {
+      // Reset to day time defaults if overnight services are removed
+      if (startTime === '20:00' && endTime === '08:00') {
+        setStartTime('09:00') // 9 AM
+        setEndTime('17:00')   // 5 PM
+      }
+    }
+  }, [hasOvernightStay, startTime, endTime])
 
   // Validate booking conflicts when dates/times change
   useEffect(() => {
@@ -1024,10 +1039,10 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <div>
-                <h4 className="font-semibold text-amber-800 mb-1">Overnight Stay Coordination</h4>
+                <h4 className="font-semibold text-amber-800 mb-1">Overnight Stay (Evening to Morning)</h4>
                 <p className="text-sm text-amber-700">
-                  Please coordinate with your contractor about specific arrival details, house rules, and any special instructions for the overnight stay. 
-                  They will contact you after booking approval to discuss logistics.
+                  Overnight stays run from evening to morning the next day. The time period has been automatically adjusted to reflect typical overnight hours (PM to AM).
+                  Please coordinate with your contractor about arrival details, house rules, and any special instructions after booking approval.
                 </p>
               </div>
             </div>

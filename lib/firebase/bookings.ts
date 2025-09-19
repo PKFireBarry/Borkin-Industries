@@ -475,8 +475,16 @@ export async function updateBookingStatus(bookingId: string, status: Booking['st
 
       const overlaps = (a: TimeSlot, b: TimeSlot) => a.startTime < b.endTime && a.endTime > b.startTime
 
+      // Build date list for validation
+      const dates: string[] = []
       for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        const iso = d.toISOString().slice(0,10)
+        dates.push(d.toISOString().slice(0,10))
+      }
+
+      // Check if this is an overnight booking (crosses midnight)
+      const isOvernightBooking = booking.time && booking.time.startTime > booking.time.endTime && dates.length > 1
+
+      dates.forEach((iso, index) => {
         // Full-day legacy blocks
         if (unavailableDates.includes(iso)) {
           throw new Error('Contractor is unavailable for one or more selected days')
@@ -485,13 +493,32 @@ export async function updateBookingStatus(bookingId: string, status: Booking['st
         if (day?.isFullyUnavailable) {
           throw new Error('Contractor is fully unavailable on one or more selected days')
         }
+
         if (booking.time && day?.unavailableSlots?.length) {
-          const req: TimeSlot = { startTime: booking.time.startTime, endTime: booking.time.endTime }
+          let req: TimeSlot
+
+          if (isOvernightBooking) {
+            // Handle overnight booking validation with proper time splits
+            if (index === 0) {
+              // First day: validate startTime to 23:59
+              req = { startTime: booking.time.startTime, endTime: "23:59" }
+            } else if (index === dates.length - 1) {
+              // Last day: validate 00:00 to endTime
+              req = { startTime: "00:00", endTime: booking.time.endTime }
+            } else {
+              // Middle days: check against full day unavailability (already handled above)
+              return
+            }
+          } else {
+            // Same-day booking: use original time slot
+            req = { startTime: booking.time.startTime, endTime: booking.time.endTime }
+          }
+
           if (day.unavailableSlots.some(s => overlaps(req, s))) {
             throw new Error('Selected time overlaps with contractor unavailability')
           }
         }
-      }
+      })
 
       // Add gig time-based block if provided, otherwise full-day
       if (booking.time) {

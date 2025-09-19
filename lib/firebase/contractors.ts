@@ -44,23 +44,68 @@ export async function addGigTimeToContractorCalendar(
     // Helper: check overlap between two time slots (HH:MM strings)
     const overlaps = (a: TimeSlot, b: TimeSlot) => a.startTime < b.endTime && a.endTime > b.startTime
 
-    // Update per date
+    // Check if this is an overnight booking (crosses midnight)
+    const isOvernight = time.startTime > time.endTime && dates.length > 1
+
     const updated: DayAvailability[] = [...dailyAvailability]
-    for (const iso of dates) {
-      const idx = updated.findIndex(d => d.date === iso)
-      if (idx === -1) {
-        updated.push({ date: iso, isFullyUnavailable: false, unavailableSlots: [time] })
-      } else {
-        // If day is fully unavailable, keep as-is (already blocked all day)
-        const day = updated[idx]
-        if (day.isFullyUnavailable) continue
-        const slots = [...(day.unavailableSlots || [])]
-        // Avoid inserting overlapping duplicates
-        const hasOverlap = slots.some(s => overlaps(s, time))
-        if (!hasOverlap) {
-          slots.push(time)
-          slots.sort((a, b) => a.startTime.localeCompare(b.startTime))
-          updated[idx] = { ...day, unavailableSlots: slots }
+
+    if (isOvernight) {
+      // Handle overnight booking spanning multiple days
+      dates.forEach((iso, index) => {
+        let timeSlot: TimeSlot
+
+        if (index === 0) {
+          // First day: startTime to end of day (23:59)
+          timeSlot = { startTime: time.startTime, endTime: "23:59" }
+        } else if (index === dates.length - 1) {
+          // Last day: start of day (00:00) to endTime
+          timeSlot = { startTime: "00:00", endTime: time.endTime }
+        } else {
+          // Middle days: mark as fully unavailable
+          const idx = updated.findIndex(d => d.date === iso)
+          if (idx === -1) {
+            updated.push({ date: iso, isFullyUnavailable: true, unavailableSlots: [] })
+          } else {
+            updated[idx] = { ...updated[idx], isFullyUnavailable: true }
+          }
+          return // Skip time slot logic for full days
+        }
+
+        // Apply time slot to this day
+        const idx = updated.findIndex(d => d.date === iso)
+        if (idx === -1) {
+          updated.push({ date: iso, isFullyUnavailable: false, unavailableSlots: [timeSlot] })
+        } else {
+          const day = updated[idx]
+          if (!day.isFullyUnavailable) {
+            const slots = [...(day.unavailableSlots || [])]
+            const hasOverlap = slots.some(s => overlaps(s, timeSlot))
+            if (!hasOverlap) {
+              slots.push(timeSlot)
+              slots.sort((a, b) => a.startTime.localeCompare(b.startTime))
+              updated[idx] = { ...day, unavailableSlots: slots }
+            }
+          }
+        }
+      })
+    } else {
+      // Handle same-day bookings or single-day bookings (existing logic)
+      for (const iso of dates) {
+        const idx = updated.findIndex(d => d.date === iso)
+        if (idx === -1) {
+          updated.push({ date: iso, isFullyUnavailable: false, unavailableSlots: [time] })
+        } else {
+          // If day is fully unavailable, keep as-is (already blocked all day)
+          const day = updated[idx]
+          if (day.isFullyUnavailable) continue
+          const slots = [...(day.unavailableSlots || [])]
+          // Avoid inserting overlapping duplicates
+          const hasOverlap = slots.some(s => overlaps(s, time))
+          if (!hasOverlap) {
+            slots.push(time)
+            slots.sort((a, b) => a.startTime.localeCompare(b.startTime))
+            updated[idx] = { ...day, unavailableSlots: slots }
+          }
         }
       }
     }
@@ -105,20 +150,68 @@ export async function removeGigTimeFromContractorCalendar(
       dates.push(d.toISOString().slice(0, 10))
     }
 
+    // Check if this is an overnight booking (crosses midnight)
+    const isOvernight = time.startTime > time.endTime && dates.length > 1
+
     const updated: DayAvailability[] = [...dailyAvailability]
-    for (const iso of dates) {
-      const idx = updated.findIndex(d => d.date === iso)
-      if (idx === -1) continue
-      const day = updated[idx]
-      if (day.isFullyUnavailable) continue
-      const filtered = (day.unavailableSlots || []).filter(
-        s => !(s.startTime === time.startTime && s.endTime === time.endTime)
-      )
-      if (filtered.length === 0) {
-        // Remove the day entry if no slots and not fully unavailable
-        updated.splice(idx, 1)
-      } else {
-        updated[idx] = { ...day, unavailableSlots: filtered }
+
+    if (isOvernight) {
+      // Handle overnight booking removal spanning multiple days
+      dates.forEach((iso, index) => {
+        const idx = updated.findIndex(d => d.date === iso)
+        if (idx === -1) return
+
+        const day = updated[idx]
+
+        if (index === 0) {
+          // First day: remove startTime to 23:59 slot
+          const targetSlot = { startTime: time.startTime, endTime: "23:59" }
+          const filtered = (day.unavailableSlots || []).filter(
+            s => !(s.startTime === targetSlot.startTime && s.endTime === targetSlot.endTime)
+          )
+          if (filtered.length === 0 && !day.isFullyUnavailable) {
+            updated.splice(idx, 1)
+          } else {
+            updated[idx] = { ...day, unavailableSlots: filtered }
+          }
+        } else if (index === dates.length - 1) {
+          // Last day: remove 00:00 to endTime slot
+          const targetSlot = { startTime: "00:00", endTime: time.endTime }
+          const filtered = (day.unavailableSlots || []).filter(
+            s => !(s.startTime === targetSlot.startTime && s.endTime === targetSlot.endTime)
+          )
+          if (filtered.length === 0 && !day.isFullyUnavailable) {
+            updated.splice(idx, 1)
+          } else {
+            updated[idx] = { ...day, unavailableSlots: filtered }
+          }
+        } else {
+          // Middle days: remove full unavailability
+          if (day.isFullyUnavailable) {
+            updated[idx] = { ...day, isFullyUnavailable: false }
+            // If no slots left, remove the day entry
+            if (!day.unavailableSlots || day.unavailableSlots.length === 0) {
+              updated.splice(idx, 1)
+            }
+          }
+        }
+      })
+    } else {
+      // Handle same-day or single-day booking removal (existing logic)
+      for (const iso of dates) {
+        const idx = updated.findIndex(d => d.date === iso)
+        if (idx === -1) continue
+        const day = updated[idx]
+        if (day.isFullyUnavailable) continue
+        const filtered = (day.unavailableSlots || []).filter(
+          s => !(s.startTime === time.startTime && s.endTime === time.endTime)
+        )
+        if (filtered.length === 0) {
+          // Remove the day entry if no slots and not fully unavailable
+          updated.splice(idx, 1)
+        } else {
+          updated[idx] = { ...day, unavailableSlots: filtered }
+        }
       }
     }
 
