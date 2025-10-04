@@ -63,6 +63,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Platform fee structure: 5% for first 3 months, 10% thereafter
 - Clients pay all fees, contractors receive full service amount
 - Coupon system with fixed price and percentage discounts
+- Payment intents use manual capture method
+- **CRITICAL**: Always use `getBaseAppUrl()` from `lib/utils.ts` for Stripe `return_url` parameters - never use `process.env.NEXT_PUBLIC_APP_URL` directly, as it ensures proper `https://` scheme formatting
 
 ### Email Notifications
 - Nodemailer-based email system in `lib/email/`
@@ -114,6 +116,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Handle real-time subscriptions properly with cleanup
 - Implement proper error handling for database operations
 - Follow Firebase security rules for data access
+
+### URL Handling
+- **Always use `getBaseAppUrl()`** from `lib/utils.ts` when constructing absolute URLs for external services (Stripe, emails, etc.)
+- `getBaseAppUrl()` automatically ensures URLs have proper `https://` scheme via `ensureUrlScheme()`
+- Never directly interpolate `process.env.NEXT_PUBLIC_APP_URL` in external API calls
+- For emails and third-party integrations, use `getBaseAppUrl()` to prevent URL scheme errors
 
 ### Task Management
 - Update TASKS.md when completing features or major changes

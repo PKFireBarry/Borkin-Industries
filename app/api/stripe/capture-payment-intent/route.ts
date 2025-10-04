@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { db } from '@/firebase'
 import { doc, updateDoc, getDoc } from 'firebase/firestore'
-import { calculateStripeFeeInDollars } from '@/lib/utils'
+import { calculateStripeFeeInDollars, getBaseAppUrl } from '@/lib/utils'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2025-03-31.basil' })
 
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
       // Try to confirm with the payment method
       try {
         paymentIntent = await stripe.paymentIntents.confirm(paymentIntentId, {
-          return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/bookings?payment_status=completed`,
+          return_url: `${getBaseAppUrl()}/dashboard/bookings?payment_status=completed`,
           use_stripe_sdk: false
         })
         
@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
       // If payment needs confirmation, confirm it first with return URL
       console.log(`[capture-payment-intent] PaymentIntent ${paymentIntentId} requires confirmation, confirming now...`)
       paymentIntent = await stripe.paymentIntents.confirm(paymentIntentId, {
-        return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/bookings?payment_status=completed`,
+        return_url: `${getBaseAppUrl()}/dashboard/bookings?payment_status=completed`,
         use_stripe_sdk: false // This ensures server-side confirmation
       })
       
