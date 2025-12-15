@@ -52,18 +52,18 @@ export default function ContractorPaymentsPage() {
 
   const handleStripeOnboarding = async () => {
     if (!user) return
-    
+
     setStripeOnboardingLoading(true)
     try {
       const response = await fetch('/api/stripe/connect-onboard', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       })
-      
+
       if (!response.ok) {
         throw new Error('Failed to create onboarding link')
       }
-      
+
       const { url } = await response.json()
       window.location.href = url
     } catch (error) {
@@ -128,7 +128,7 @@ export default function ContractorPaymentsPage() {
                   }
                 }
               } catch (fetchError) {
-                console.error('Error fetching related data for gig:', fetchError) 
+                console.error('Error fetching related data for gig:', fetchError)
               }
               return {
                 id: b.id,
@@ -183,13 +183,13 @@ export default function ContractorPaymentsPage() {
   // Monthly earnings breakdown
   const getMonthlyEarnings = (): MonthlyEarnings[] => {
     const monthlyData: Record<string, MonthlyEarnings> = {}
-    
+
     gigs.forEach(gig => {
       try {
         const date = new Date(gig.date)
         const monthYear = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
         const monthName = date.toLocaleString('default', { month: 'short', year: 'numeric' })
-        
+
         if (!monthlyData[monthYear]) {
           monthlyData[monthYear] = {
             month: monthName,
@@ -198,7 +198,7 @@ export default function ContractorPaymentsPage() {
             count: 0
           }
         }
-        
+
         monthlyData[monthYear].total += gig.amount
         // Use actual netPayout if available, otherwise calculate legacy way
         const netAmount = gig.netPayout !== undefined ? gig.netPayout : (gig.amount - (gig.platformFee ?? gig.amount * 0.05) - (gig.stripeFee ?? (gig.amount * 0.029 + 0.3)));
@@ -208,8 +208,8 @@ export default function ContractorPaymentsPage() {
         // Skip invalid dates
       }
     })
-    
-    return Object.values(monthlyData).sort((a, b) => 
+
+    return Object.values(monthlyData).sort((a, b) =>
       new Date(b.month).getTime() - new Date(a.month).getTime()
     )
   }
@@ -243,7 +243,7 @@ export default function ContractorPaymentsPage() {
     if (activeTab !== 'all' && gig.status !== activeTab) {
       return false
     }
-    
+
     // Filter by search term
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase()
@@ -253,7 +253,7 @@ export default function ContractorPaymentsPage() {
         (gig.petNames && gig.petNames.toLowerCase().includes(searchLower))
       )
     }
-    
+
     return true
   }).sort((a, b) => {
     // Sort by selected option
@@ -278,7 +278,7 @@ export default function ContractorPaymentsPage() {
   return (
     <main className="max-w-6xl mx-auto py-10 px-4">
       <h1 className="text-3xl font-bold mb-6">Payment Dashboard</h1>
-      
+
       {/* Payment Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
@@ -292,7 +292,7 @@ export default function ContractorPaymentsPage() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-green-700">Average Per Gig</CardTitle>
@@ -304,7 +304,7 @@ export default function ContractorPaymentsPage() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-purple-700">Completed Gigs</CardTitle>
@@ -316,20 +316,21 @@ export default function ContractorPaymentsPage() {
             </div>
           </CardContent>
         </Card>
-        
+
+
         <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-amber-700">Platform Fees</CardTitle>
+            <CardTitle className="text-sm font-medium text-amber-700">Paid Gigs</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center">
               <CalendarIcon className="h-5 w-5 text-amber-500 mr-2" />
-              <div className="text-2xl font-bold">${totalPlatformFees.toFixed(2)}</div>
+              <div className="text-2xl font-bold">{paidGigsCount}</div>
             </div>
           </CardContent>
         </Card>
       </div>
-      
+
       {/* Payout Method UI */}
       {!stripeAccountId ? (
         <div className="mb-6 p-4 border rounded bg-yellow-50 flex items-center gap-4">
@@ -337,8 +338,8 @@ export default function ContractorPaymentsPage() {
             <div className="font-medium mb-1">Set up payouts to receive your earnings</div>
             <div className="text-sm text-muted-foreground mb-2">Add a card or bank account to receive payments via Stripe.</div>
           </div>
-          <Button 
-            variant="default" 
+          <Button
+            variant="default"
             onClick={handleStripeOnboarding}
             disabled={stripeOnboardingLoading}
           >
@@ -351,8 +352,8 @@ export default function ContractorPaymentsPage() {
             <div className="font-medium mb-1">No payout method on file</div>
             <div className="text-sm text-muted-foreground">Add a card or bank account to receive payments via Stripe.</div>
           </div>
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={handleStripeOnboarding}
             disabled={stripeOnboardingLoading}
           >
@@ -367,8 +368,8 @@ export default function ContractorPaymentsPage() {
               {payoutMethod.brand} •••• {payoutMethod.last4}
             </div>
           </div>
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={handleStripeOnboarding}
             disabled={stripeOnboardingLoading}
           >
@@ -390,8 +391,7 @@ export default function ContractorPaymentsPage() {
                 <tr className="border-b">
                   <th className="text-left py-3 px-4">Month</th>
                   <th className="text-right py-3 px-4">Gigs</th>
-                  <th className="text-right py-3 px-4">Gross</th>
-                  <th className="text-right py-3 px-4">Net</th>
+                  <th className="text-right py-3 px-4">Earnings</th>
                 </tr>
               </thead>
               <tbody>
@@ -400,13 +400,12 @@ export default function ContractorPaymentsPage() {
                     <tr key={idx} className="border-b hover:bg-muted/50">
                       <td className="py-3 px-4 font-medium">{month.month}</td>
                       <td className="py-3 px-4 text-right">{month.count}</td>
-                      <td className="py-3 px-4 text-right">${month.total.toFixed(2)}</td>
                       <td className="py-3 px-4 text-right font-medium text-green-600">${month.net.toFixed(2)}</td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={4} className="py-4 text-center text-muted-foreground">No monthly data available</td>
+                    <td colSpan={3} className="py-4 text-center text-muted-foreground">No monthly data available</td>
                   </tr>
                 )}
               </tbody>
@@ -424,17 +423,17 @@ export default function ContractorPaymentsPage() {
             <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
           </TabsList>
         </Tabs>
-        
+
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
           <div className="flex items-center gap-2">
-            <Input 
-              placeholder="Search gigs..." 
+            <Input
+              placeholder="Search gigs..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full sm:w-[200px]"
             />
           </div>
-          
+
           <div className="flex items-center gap-2">
             <Select value={sortBy} onValueChange={setSortBy}>
               <SelectTrigger className="w-full sm:w-[180px]">
@@ -456,9 +455,9 @@ export default function ContractorPaymentsPage() {
         <div className="text-center p-8 bg-muted/20 rounded-lg">
           <div className="text-muted-foreground">No paid gigs found matching your filters.</div>
           {(searchTerm || activeTab !== 'all') && (
-            <Button 
-              variant="outline" 
-              className="mt-2" 
+            <Button
+              variant="outline"
+              className="mt-2"
               onClick={() => {
                 setSearchTerm('');
                 setActiveTab('all');
@@ -492,10 +491,9 @@ export default function ContractorPaymentsPage() {
                   <div>
                     <div className="text-xs text-muted-foreground">Your Earnings</div>
                     <div className="font-medium text-green-600">${(gig.netPayout ?? (gig.amount - (gig.platformFee ?? gig.amount * 0.05) - (gig.stripeFee ?? (gig.amount * 0.029 + 0.3)))).toFixed(2)}</div>
-                    <div className="text-xs text-muted-foreground">(Client paid: ${gig.amount.toFixed(2)})</div>
                   </div>
                 </div>
-                
+
                 {gig.review && (
                   <div className="mt-3 pt-3 border-t">
                     <div className="flex items-center">
@@ -520,7 +518,7 @@ export default function ContractorPaymentsPage() {
           ))}
         </div>
       )}
-      
+
       {/* Gig Details Modal */}
       <Dialog open={!!detailGig} onOpenChange={() => setDetailGig(null)}>
         <DialogContent className="w-full max-w-xl max-h-[90vh] overflow-y-auto">
@@ -536,15 +534,15 @@ export default function ContractorPaymentsPage() {
                   <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold shadow-sm
                     ${detailGig.status === 'completed' ? 'bg-green-100 text-green-800' :
                       detailGig.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                      detailGig.status === 'approved' ? 'bg-blue-100 text-blue-800' :
-                      'bg-gray-200 text-gray-700'}`}
+                        detailGig.status === 'approved' ? 'bg-blue-100 text-blue-800' :
+                          'bg-gray-200 text-gray-700'}`}
                   >
                     {detailGig.status?.charAt(0).toUpperCase() + detailGig.status?.slice(1)}
                   </span>
                 </div>
                 <div className="flex flex-col gap-2">
                   <span className="text-xs text-muted-foreground">Payment Status</span>
-                  <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold bg-gray-100 text-gray-800 capitalize shadow-sm${detailGig.paymentStatus === 'cancelled' ? ' bg-red-100 text-red-800' : ''}`}> 
+                  <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold bg-gray-100 text-gray-800 capitalize shadow-sm${detailGig.paymentStatus === 'cancelled' ? ' bg-red-100 text-red-800' : ''}`}>
                     {detailGig.paymentStatus}
                   </span>
                 </div>
@@ -580,24 +578,12 @@ export default function ContractorPaymentsPage() {
                 </h3>
                 <div className="space-y-3">
                   <div className="flex justify-between items-center border-t pt-3 mt-2">
-                    <span className="font-semibold text-base">Client Total Payment</span>
-                    <span className="font-bold text-primary text-xl">${(detailGig.amount || 0).toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between items-center border-t border-dashed pt-3 text-sm">
-                    <span className="text-muted-foreground">Platform Fee (paid by client)</span>
-                    <span className="text-blue-600">${detailGig?.platformFee?.toFixed(2) ?? ((detailGig?.amount || 0) * 0.05).toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-sm mb-1">
-                    <span className="text-muted-foreground">Processing Fee (paid by client)</span>
-                    <span className="text-blue-600">${detailGig?.stripeFee?.toFixed(2) ?? (((detailGig?.amount || 0) * 0.029 + 0.3).toFixed(2))}</span>
-                  </div>
-                  <div className="flex justify-between items-center border-t pt-3">
-                    <span className="font-semibold">Your Earnings</span>
-                    <span className="font-semibold text-green-600 text-lg">${detailGig?.netPayout?.toFixed(2) ?? (((detailGig?.amount || 0) - (detailGig?.platformFee || (detailGig?.amount || 0) * 0.05) - ((detailGig?.amount || 0) * 0.029 + 0.3)).toFixed(2))}</span>
+                    <span className="font-semibold text-base">Your Earnings</span>
+                    <span className="font-bold text-green-600 text-xl">${detailGig?.netPayout?.toFixed(2) ?? (((detailGig?.amount || 0) - (detailGig?.platformFee || (detailGig?.amount || 0) * 0.05) - ((detailGig?.amount || 0) * 0.029 + 0.3)).toFixed(2))}</span>
                   </div>
                   <div className="mt-2 p-3 bg-green-50 rounded-md border border-green-200">
                     <p className="text-sm text-green-800">
-                      💡 With our new fee structure, you receive the full service amount. Platform and processing fees are now paid by the client.
+                      💡 This is the amount you receive. All platform and processing fees are paid separately by the client.
                     </p>
                   </div>
                 </div>

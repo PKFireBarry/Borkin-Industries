@@ -65,24 +65,24 @@ const ContractorMap = dynamic(() => import('@/components/contractor-map'), { ssr
 // Add a helper function to calculate hours between start and end time
 function calculateHours(startTime?: string, endTime?: string): number {
   if (!startTime || !endTime) return 0;
-  
+
   const [startHour, startMinute] = startTime.split(':').map(Number);
   const [endHour, endMinute] = endTime.split(':').map(Number);
-  
+
   let hours = endHour - startHour;
   let minutes = endMinute - startMinute;
-  
+
   // Handle negative minutes by borrowing an hour
   if (minutes < 0) {
     hours -= 1;
     minutes += 60;
   }
-  
+
   // If end time is earlier than start time, assume it's for the next day
   if (hours < 0) {
     hours += 24;
   }
-  
+
   // Convert to decimal hours (e.g., 1 hour 30 minutes = 1.5 hours)
   return Math.round((hours + minutes / 60) * 10) / 10;
 }
@@ -273,7 +273,7 @@ export default function ContractorGigsPage() {
         setBookedPetsDetails([]);
         return;
       }
-      
+
       const gigClientId = (detailGig as any).clientId;
       const gigPetIds = (detailGig as any).petIds;
 
@@ -397,8 +397,8 @@ export default function ContractorGigsPage() {
     setActionLoading(gigId)
     try {
       // Update booking status to approved
-    await updateBookingStatus(gigId, 'approved')
-      
+      await updateBookingStatus(gigId, 'approved')
+
       // Get the booking data to send notification
       const approvedGig = gigs.find(g => g.id === gigId)
       if (approvedGig) {
@@ -407,7 +407,7 @@ export default function ContractorGigsPage() {
           const response = await fetch('/api/notifications/booking-approved', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
+            body: JSON.stringify({
               booking: {
                 id: approvedGig.id,
                 clientId: approvedGig.clientId,
@@ -427,7 +427,7 @@ export default function ContractorGigsPage() {
               }
             })
           })
-          
+
           if (!response.ok) {
             console.error('Failed to send booking approved notification')
           } else {
@@ -438,13 +438,13 @@ export default function ContractorGigsPage() {
           // Don't throw - we don't want email failures to break the approval process
         }
       }
-      
-    await fetchGigs()
+
+      await fetchGigs()
     } catch (error) {
       console.error('Error accepting gig:', error)
       setError('Failed to accept gig')
     } finally {
-    setActionLoading(null)
+      setActionLoading(null)
     }
   }
 
@@ -452,8 +452,8 @@ export default function ContractorGigsPage() {
     setActionLoading(gigId)
     try {
       // Update booking status to cancelled (declined)
-    await updateBookingStatus(gigId, 'cancelled')
-      
+      await updateBookingStatus(gigId, 'cancelled')
+
       // Get the booking data to send notification
       const declinedGig = gigs.find(g => g.id === gigId)
       if (declinedGig) {
@@ -462,7 +462,7 @@ export default function ContractorGigsPage() {
           const response = await fetch('/api/notifications/booking-declined', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
+            body: JSON.stringify({
               booking: {
                 id: declinedGig.id,
                 clientId: declinedGig.clientId,
@@ -482,7 +482,7 @@ export default function ContractorGigsPage() {
               }
             })
           })
-          
+
           if (!response.ok) {
             console.error('Failed to send booking declined notification')
           } else {
@@ -493,13 +493,13 @@ export default function ContractorGigsPage() {
           // Don't throw - we don't want email failures to break the decline process
         }
       }
-      
-    await fetchGigs()
+
+      await fetchGigs()
     } catch (error) {
       console.error('Error declining gig:', error)
       setError('Failed to decline gig')
     } finally {
-    setActionLoading(null)
+      setActionLoading(null)
     }
   }
 
@@ -522,7 +522,7 @@ export default function ContractorGigsPage() {
     try {
       const gigToCancel = gigs.find(g => g.id === cancelGigId)
       if (!gigToCancel) throw new Error('Gig not found')
-      
+
       // Cancel the payment intent in Stripe if it exists
       if (gigToCancel.paymentIntentId) {
         try {
@@ -540,17 +540,17 @@ export default function ContractorGigsPage() {
           // Continue with booking cancellation even if payment cancellation fails
         }
       }
-      
+
       // Update booking status to cancelled
       await updateBookingStatus(cancelGigId, 'cancelled')
-      
+
       // Send cancellation email notification to client
       if (gigToCancel) {
         try {
           const response = await fetch('/api/notifications/booking-cancelled', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
+            body: JSON.stringify({
               booking: {
                 id: gigToCancel.id,
                 clientId: gigToCancel.clientId,
@@ -570,7 +570,7 @@ export default function ContractorGigsPage() {
               }
             })
           })
-          
+
           if (!response.ok) {
             console.error('Failed to send booking cancellation notification')
           } else {
@@ -581,7 +581,7 @@ export default function ContractorGigsPage() {
           // Don't throw - we don't want email failures to break the cancellation process
         }
       }
-      
+
       setCancelGigId(null)
       await fetchGigs()
     } catch (err: any) {
@@ -599,12 +599,12 @@ export default function ContractorGigsPage() {
   }
 
   // Update the formatDateTime function to include hours calculation if time is provided
-  const formatDateTime = (date: string | undefined, time?: {startTime?: string, endTime?: string}) => {
+  const formatDateTime = (date: string | undefined, time?: { startTime?: string, endTime?: string }) => {
     if (!date) return 'N/A';
-    
+
     const formattedDate = safeDateString(date);
     if (!time) return formattedDate;
-    
+
     const { startTime, endTime } = time;
     if (startTime && endTime) {
       const hoursPerDay = calculateHours(startTime, endTime);
@@ -612,18 +612,18 @@ export default function ContractorGigsPage() {
     } else if (startTime) {
       return `${formattedDate}, ${startTime}`;
     }
-    
+
     return formattedDate;
   };
 
   // Update the getGigDisplayDate function to include time information
   const getGigDisplayDate = (g: Gig) => {
     const start = g.startDate ?? g.date ?? '';
-    
+
     if (g.time?.startTime) {
       return formatDateTime(start, g.time);
     }
-    
+
     return safeDateString(start);
   };
 
@@ -641,34 +641,34 @@ export default function ContractorGigsPage() {
   // Helper for status badge
   function StatusBadge({ status }: { status: string }) {
     const statusConfig = {
-      pending: { 
-        color: 'bg-amber-100 text-amber-700 border-amber-200', 
+      pending: {
+        color: 'bg-amber-100 text-amber-700 border-amber-200',
         icon: '⏳',
         label: 'Pending'
       },
-      approved: { 
-        color: 'bg-blue-100 text-blue-700 border-blue-200', 
+      approved: {
+        color: 'bg-blue-100 text-blue-700 border-blue-200',
         icon: '✓',
         label: 'Approved'
       },
-      completed: { 
-        color: 'bg-green-100 text-green-700 border-green-200', 
+      completed: {
+        color: 'bg-green-100 text-green-700 border-green-200',
         icon: '✅',
         label: 'Completed'
       },
-      cancelled: { 
-        color: 'bg-red-100 text-red-700 border-red-200', 
+      cancelled: {
+        color: 'bg-red-100 text-red-700 border-red-200',
         icon: '❌',
         label: 'Cancelled'
       }
     }
-    
+
     const config = statusConfig[status as keyof typeof statusConfig] || {
       color: 'bg-slate-100 text-slate-700 border-slate-200',
       icon: '•',
       label: status.charAt(0).toUpperCase() + status.slice(1)
     }
-    
+
     return (
       <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${config.color}`}>
         <span>{config.icon}</span>
@@ -680,29 +680,26 @@ export default function ContractorGigsPage() {
   // PetDetailItem helper component
   const PetDetailItem = ({ icon: Icon, label, value }: { icon: React.ElementType, label: string, value?: string | number | null }) => (
     value ? (
-        <div className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200/60">
-            <div className="flex items-center justify-center w-6 h-6 bg-white rounded-md border border-slate-200/60 flex-shrink-0 mt-0.5">
-              <Icon className="w-3.5 h-3.5 text-slate-600" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="font-medium text-slate-700 text-sm">{label}</div>
-              <div className="text-slate-900 text-sm mt-0.5 break-words">{String(value)}</div>
-            </div>
+      <div className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200/60">
+        <div className="flex items-center justify-center w-6 h-6 bg-white rounded-md border border-slate-200/60 flex-shrink-0 mt-0.5">
+          <Icon className="w-3.5 h-3.5 text-slate-600" />
         </div>
+        <div className="flex-1 min-w-0">
+          <div className="font-medium text-slate-700 text-sm">{label}</div>
+          <div className="text-slate-900 text-sm mt-0.5 break-words">{String(value)}</div>
+        </div>
+      </div>
     ) : null
   );
 
-  // Format price for display - fixing the Stripe cents formatting issue
+  // Format price for display
+  // Note: Service prices in bookings are stored in dollars (not cents)
   const formatPrice = (price: number, paymentType: 'one_time' | 'daily', numberOfDays: number = 1) => {
-    // Service prices might be stored in cents, convert to dollars
-    // If price is a whole number over 100, it's likely in cents
-    const displayPrice = price >= 100 && price % 1 === 0 ? price / 100 : price;
-
     if (paymentType === 'one_time') {
-      return `$${displayPrice.toFixed(2)}`;
+      return `$${price.toFixed(2)}`;
     } else {
       // For daily services, show total and rate
-      const dailyRate = displayPrice;
+      const dailyRate = price;
       const totalPrice = dailyRate * numberOfDays;
       return `$${dailyRate.toFixed(2)}/day × ${numberOfDays} day${numberOfDays !== 1 ? 's' : ''} = $${totalPrice.toFixed(2)}`;
     }
@@ -713,12 +710,12 @@ export default function ContractorGigsPage() {
     if (!gig.services || gig.services.length === 0) {
       return gig.serviceType || 'N/A';
     }
-    
+
     // If we have only one service, show its name
     if (gig.services.length === 1) {
       return gig.services[0].name || gig.services[0].serviceId;
     }
-    
+
     // If we have multiple services, show the first one with a +N indicator
     return `${gig.services[0].name || gig.services[0].serviceId} +${gig.services.length - 1} more`;
   };
@@ -733,7 +730,7 @@ export default function ContractorGigsPage() {
     if (!gig.services || gig.services.length === 0) {
       return gig.paymentAmount || 0;
     }
-    
+
     const numberOfDays = gig.numberOfDays || 1;
     return gig.services.reduce((total, service) => {
       if (service.paymentType === 'daily') {
@@ -806,18 +803,17 @@ export default function ContractorGigsPage() {
                   key={status}
                   variant={filter === status ? 'default' : 'outline'}
                   onClick={() => setFilter(status)}
-                  className={`capitalize text-sm rounded-xl font-medium transition-all duration-200 ${
-                    filter === status 
-                      ? 'bg-primary text-white shadow-md' 
-                      : 'border-2 border-slate-200 hover:border-primary hover:bg-primary/5'
-                  } ${status === 'cancelled' ? 'col-span-2' : ''}`}
+                  className={`capitalize text-sm rounded-xl font-medium transition-all duration-200 ${filter === status
+                    ? 'bg-primary text-white shadow-md'
+                    : 'border-2 border-slate-200 hover:border-primary hover:bg-primary/5'
+                    } ${status === 'cancelled' ? 'col-span-2' : ''}`}
                 >
                   {status === 'all' ? 'All Gigs' : statusLabels[status as keyof typeof statusLabels]}
                 </Button>
               ))}
             </div>
           </div>
-          
+
           {/* Desktop Filter - Horizontal */}
           <div className="hidden sm:flex gap-3 justify-center lg:justify-start">
             {(['all', 'pending', 'approved', 'completed', 'cancelled'] as const).map((status) => (
@@ -825,11 +821,10 @@ export default function ContractorGigsPage() {
                 key={status}
                 variant={filter === status ? 'default' : 'outline'}
                 onClick={() => setFilter(status)}
-                className={`capitalize rounded-xl px-6 py-2 font-medium transition-all duration-200 ${
-                  filter === status 
-                    ? 'bg-primary text-white shadow-md hover:bg-primary/90' 
-                    : 'border-2 border-slate-200 hover:border-primary hover:bg-primary/5'
-                }`}
+                className={`capitalize rounded-xl px-6 py-2 font-medium transition-all duration-200 ${filter === status
+                  ? 'bg-primary text-white shadow-md hover:bg-primary/90'
+                  : 'border-2 border-slate-200 hover:border-primary hover:bg-primary/5'
+                  }`}
               >
                 {status === 'all' ? 'All Gigs' : statusLabels[status as keyof typeof statusLabels]}
               </Button>
@@ -842,12 +837,12 @@ export default function ContractorGigsPage() {
           <div className="flex flex-col items-center justify-center py-20">
             <div className="bg-slate-100 rounded-full p-6 mb-6">
               <svg className="w-12 h-12 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
             </div>
             <h3 className="text-xl font-semibold text-slate-900 mb-2">No gigs found</h3>
             <p className="text-slate-600 text-center max-w-md">
-              {filter === 'all' 
+              {filter === 'all'
                 ? "You don't have any gigs yet. New booking requests will appear here."
                 : `No gigs found with "${statusLabels[filter as keyof typeof statusLabels]}" status.`
               }
@@ -863,42 +858,42 @@ export default function ContractorGigsPage() {
                   <div className="p-6 pb-4">
                     <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
                       {/* Service Info */}
-                    <div className="flex-1 min-w-0">
+                      <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-3 mb-3">
                           {hasMultipleServices(gig) && (
                             <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20 rounded-full px-3 py-1">
-                            <Package className="h-3 w-3 mr-1" />
-                            {gig.services?.length} services
-                          </Badge>
+                              <Package className="h-3 w-3 mr-1" />
+                              {gig.services?.length} services
+                            </Badge>
                           )}
                           <StatusBadge status={gig.status} />
                         </div>
-                        
+
                         <h3 className="text-xl font-semibold text-slate-900 mb-2 group-hover:text-primary transition-colors">
                           {getServiceNames(gig)}
                         </h3>
-                        
+
                         <div className="flex flex-col sm:flex-row sm:items-center gap-3 text-sm text-slate-600">
                           <div className="flex items-center gap-2">
-                          <Clock className="w-4 h-4 text-primary" />
+                            <Clock className="w-4 h-4 text-primary" />
                             <span className="font-medium">{getGigDateTimeRange(gig)}</span>
-                      </div>
+                          </div>
                           <div className="flex items-center gap-2">
                             <span className="w-2 h-2 bg-slate-300 rounded-full"></span>
                             <span>Client: <span className="font-medium text-slate-900">{gig.clientName}</span></span>
-                    </div>
-                    </div>
-                        
+                          </div>
+                        </div>
+
                         {gig.pets.length > 0 && (
                           <div className="mt-3 flex items-center gap-2">
                             <PawPrint className="w-4 h-4 text-primary" />
                             <span className="text-sm text-slate-600">
                               <span className="font-medium">{gig.pets.length} pet{gig.pets.length !== 1 ? 's' : ''}:</span> {gig.pets.join(', ')}
                             </span>
-                  </div>
+                          </div>
                         )}
-                        
-                      {gig.review && (
+
+                        {gig.review && (
                           <div className="mt-3 flex items-center gap-2">
                             <div className="flex items-center gap-1">
                               {[...Array(5)].map((_, i) => (
@@ -911,20 +906,20 @@ export default function ContractorGigsPage() {
                               {gig.review.comment && `"${gig.review.comment}"`}
                             </span>
                           </div>
-                      )}
-                    </div>
-                      
-                      {/* Payment Info */}
+                        )}
+                      </div>
+
+                      {/* Payment Info - Only show contractor's earnings */}
                       <div className="flex flex-col items-end gap-2 min-w-[140px]">
                         <div className="text-right">
-                          <div className="text-2xl font-bold text-slate-900">
-                            ${(gig.paymentAmount || 0).toFixed(2)}
+                          <div className="text-2xl font-bold text-green-600">
+                            ${getNetPayout(gig).toFixed(2)}
                           </div>
                           <div className="text-sm text-slate-500">
-                            Net: <span className="font-semibold text-green-600">${getNetPayout(gig).toFixed(2)}</span>
+                            Your Earnings
                           </div>
                         </div>
-                        
+
                         {/* Coupon Information */}
                         {gig.couponCode && (
                           <div className="mt-2 p-2 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
@@ -939,33 +934,32 @@ export default function ContractorGigsPage() {
                             </div>
                           </div>
                         )}
-                        
-                        <div className={`text-xs px-2 py-1 rounded-full font-medium ${
-                          gig.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' :
+
+                        <div className={`text-xs px-2 py-1 rounded-full font-medium ${gig.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' :
                           gig.paymentStatus === 'escrow' ? 'bg-blue-100 text-blue-700' :
-                          gig.paymentStatus === 'cancelled' ? 'bg-red-100 text-red-700' :
-                          'bg-slate-100 text-slate-700'
-                        }`}>
+                            gig.paymentStatus === 'cancelled' ? 'bg-red-100 text-red-700' :
+                              'bg-slate-100 text-slate-700'
+                          }`}>
                           {gig.paymentStatus}
                         </div>
                       </div>
                     </div>
                   </div>
-                  
+
                   {/* Actions Section */}
                   <div className="px-6 pb-6">
                     <div className="flex flex-wrap gap-3 justify-end">
-                      <Button 
-                        variant="outline" 
+                      <Button
+                        variant="outline"
                         onClick={() => setDetailGig(gig)}
                         className="rounded-xl border-2 hover:border-primary hover:bg-primary/5 transition-all duration-200"
                       >
                         View Details
                       </Button>
-                      
+
                       {canMessage && (
                         <Link href={`/dashboard/messages/${gig.id}`} passHref>
-                          <Button 
+                          <Button
                             variant="outline"
                             className="rounded-xl border-2 hover:border-primary hover:bg-primary/5 transition-all duration-200"
                           >
@@ -974,11 +968,11 @@ export default function ContractorGigsPage() {
                           </Button>
                         </Link>
                       )}
-                      
+
                       {gig.status === 'pending' && (
                         <>
-                          <Button 
-                            disabled={actionLoading === gig.id} 
+                          <Button
+                            disabled={actionLoading === gig.id}
                             onClick={() => handleAccept(gig.id)}
                             className="bg-green-600 hover:bg-green-700 text-white rounded-xl px-6 font-medium transition-all duration-200"
                           >
@@ -991,9 +985,9 @@ export default function ContractorGigsPage() {
                               'Accept'
                             )}
                           </Button>
-                          <Button 
-                            variant="destructive" 
-                            disabled={actionLoading === gig.id} 
+                          <Button
+                            variant="destructive"
+                            disabled={actionLoading === gig.id}
                             onClick={() => handleDecline(gig.id)}
                             className="rounded-xl px-6 font-medium transition-all duration-200"
                           >
@@ -1001,11 +995,11 @@ export default function ContractorGigsPage() {
                           </Button>
                         </>
                       )}
-                      
+
                       {gig.status === 'approved' && !gig.contractorCompleted && (
                         <>
-                          <Button 
-                            disabled={actionLoading === gig.id} 
+                          <Button
+                            disabled={actionLoading === gig.id}
                             onClick={() => handleMarkCompleted(gig.id)}
                             className="bg-primary hover:bg-primary/90 text-white rounded-xl px-6 font-medium transition-all duration-200"
                           >
@@ -1018,8 +1012,8 @@ export default function ContractorGigsPage() {
                               'Mark Complete'
                             )}
                           </Button>
-                          <Button 
-                            variant="outline" 
+                          <Button
+                            variant="outline"
                             onClick={() => setCancelGigId(gig.id)}
                             disabled={actionLoading === gig.id}
                             className="rounded-xl border-2 border-red-200 text-red-600 hover:border-red-300 hover:bg-red-50 transition-all duration-200"
@@ -1028,7 +1022,7 @@ export default function ContractorGigsPage() {
                           </Button>
                         </>
                       )}
-                      
+
                       {gig.status === 'approved' && gig.contractorCompleted && (
                         <div className="flex items-center gap-2 text-slate-500">
                           <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
@@ -1042,7 +1036,7 @@ export default function ContractorGigsPage() {
             })}
           </div>
         )}
-        
+
         {/* Gig Details Modal */}
         <Dialog open={!!detailGig} onOpenChange={() => setDetailGig(null)}>
           <DialogContent className="w-[95vw] max-w-[95vw] sm:max-w-2xl md:max-w-3xl lg:max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl border-0 shadow-2xl p-4 sm:p-6">
@@ -1051,12 +1045,11 @@ export default function ContractorGigsPage() {
               {detailGig && (
                 <div className="flex items-center gap-3 mt-2">
                   <StatusBadge status={detailGig.status} />
-                  <div className={`text-xs px-2 py-1 rounded-full font-medium ${
-                    detailGig.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' :
+                  <div className={`text-xs px-2 py-1 rounded-full font-medium ${detailGig.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' :
                     detailGig.paymentStatus === 'escrow' ? 'bg-blue-100 text-blue-700' :
-                    detailGig.paymentStatus === 'cancelled' ? 'bg-red-100 text-red-700' :
-                    'bg-slate-100 text-slate-700'
-                  }`}>
+                      detailGig.paymentStatus === 'cancelled' ? 'bg-red-100 text-red-700' :
+                        'bg-slate-100 text-slate-700'
+                    }`}>
                     Payment: {detailGig.paymentStatus}
                   </div>
                 </div>
@@ -1135,10 +1128,10 @@ export default function ContractorGigsPage() {
                 {/* Service Details & Payment */}
                 <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6">
                   <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
-                    <Package className="w-5 h-5 text-primary"/>
+                    <Package className="w-5 h-5 text-primary" />
                     Service Details & Payment
                   </h3>
-                  
+
                   {/* Service Overview */}
                   <div className="bg-gradient-to-r from-slate-50 to-slate-100 rounded-xl p-4 mb-4">
                     <div className="space-y-3">
@@ -1174,7 +1167,7 @@ export default function ContractorGigsPage() {
                     )) : (
                       <div className="text-slate-500 text-center py-4 text-sm">No service details available</div>
                     )}
-                    
+
                     {/* Payment Summary with Collapsible Breakdown */}
                     <div className="bg-gradient-to-r from-slate-50 to-slate-100 rounded-xl p-4">
                       {/* Coupon Information */}
@@ -1199,48 +1192,18 @@ export default function ContractorGigsPage() {
                           </div>
                         </div>
                       )}
-                      
+
                       <div className="flex justify-between items-center gap-2">
-                        <span className="font-semibold text-sm sm:text-base text-slate-900">Total Payment</span>
-                        <span className="font-bold text-primary text-lg sm:text-xl">${(detailGig.paymentAmount || 0).toFixed(2)}</span>
-                      </div>
-                      
-                      <div className="flex justify-between items-center mt-2 gap-2">
-                        <span className="font-semibold text-sm sm:text-base text-slate-900">Your Payout</span>
+                        <span className="font-semibold text-sm sm:text-base text-slate-900">Your Earnings</span>
                         <span className="font-bold text-green-600 text-lg sm:text-xl">${getNetPayout(detailGig).toFixed(2)}</span>
                       </div>
-                      
-                      {/* Collapsible Payment Breakdown */}
-                      <button
-                        onClick={() => setIsPaymentBreakdownExpanded(!isPaymentBreakdownExpanded)}
-                        className="w-full flex items-center justify-center gap-2 mt-3 pt-3 border-t border-slate-200 text-sm text-slate-600 hover:text-slate-900 transition-colors"
-                      >
-                        <span>View Payment Breakdown</span>
-                        {isPaymentBreakdownExpanded ? (
-                          <ChevronUp className="w-4 h-4" />
-                        ) : (
-                          <ChevronDown className="w-4 h-4" />
-                        )}
-                      </button>
-                      
-                      {isPaymentBreakdownExpanded && (
-                        <div className="space-y-2 pt-3 border-t border-slate-200 mt-3">
-                          <div className="flex justify-between items-center text-sm">
-                            <span className="text-slate-600">Platform Fee (paid by client)</span>
-                            <span className="text-blue-600 font-medium">${(detailGig.platformFee || (detailGig.paymentAmount || 0) * 0.05).toFixed(2)}</span>
-                          </div>
-                          <div className="flex justify-between items-center text-sm">
-                            <span className="text-slate-600">Processing Fee (paid by client)</span>
-                            <span className="text-blue-600 font-medium">${((detailGig.stripeFee && detailGig.stripeFee > 0 ? detailGig.stripeFee : ((detailGig.paymentAmount || 0) * 0.029 + 0.3)).toFixed(2))}</span>
-                          </div>
-                          <div className="mt-2 p-2 bg-green-50 rounded-md border border-green-200">
-                            <p className="text-xs text-green-800">
-                              💡 You receive the full service amount. Fees are now paid by the client.
-                            </p>
-                          </div>
-                        </div>
-                      )}
-                </div>
+
+                      <div className="mt-2 p-2 bg-green-50 rounded-md border border-green-200">
+                        <p className="text-xs text-green-800">
+                          💡 This is the amount you will receive. All fees are paid separately by the client.
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
                 {/* Pet Information */}
@@ -1252,12 +1215,12 @@ export default function ContractorGigsPage() {
                       </div>
                       <h3 className="text-lg sm:text-xl font-semibold text-slate-900">Pet Information</h3>
                     </div>
-                    
+
                     <div className="space-y-3">
                       {bookedPetsDetails.map((pet, index) => {
                         const isExpanded = expandedPetIndex === index
                         return (
-                          <div key={pet.id} className={`bg-slate-50 rounded-xl border border-slate-200/60 transition-all duration-200 ${isExpanded ? 'shadow-lg ring-2 ring-primary/10' : 'hover:shadow-md hover:border-slate-300/60'}`}> 
+                          <div key={pet.id} className={`bg-slate-50 rounded-xl border border-slate-200/60 transition-all duration-200 ${isExpanded ? 'shadow-lg ring-2 ring-primary/10' : 'hover:shadow-md hover:border-slate-300/60'}`}>
                             <button
                               type="button"
                               className="w-full flex items-center gap-3 sm:gap-4 px-3 sm:px-5 py-3 sm:py-4 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:ring-inset text-left rounded-xl transition-colors hover:bg-slate-100/50"
@@ -1275,25 +1238,25 @@ export default function ContractorGigsPage() {
                                 <div className="flex flex-wrap gap-x-2 sm:gap-x-4 gap-y-1 text-xs sm:text-sm text-slate-600 mt-1">
                                   {pet.animalType && (
                                     <span className="flex items-center gap-1">
-                                      <span className="font-medium">Type:</span> 
+                                      <span className="font-medium">Type:</span>
                                       <span className="capitalize">{pet.animalType}</span>
                                     </span>
                                   )}
                                   {pet.breed && (
                                     <span className="flex items-center gap-1">
-                                      <span className="font-medium">Breed:</span> 
+                                      <span className="font-medium">Breed:</span>
                                       <span>{pet.breed}</span>
                                     </span>
                                   )}
                                   {pet.age && (
                                     <span className="flex items-center gap-1">
-                                      <span className="font-medium">Age:</span> 
+                                      <span className="font-medium">Age:</span>
                                       <span>{pet.age} yrs</span>
                                     </span>
                                   )}
                                   {pet.weight && (
                                     <span className="flex items-center gap-1">
-                                      <span className="font-medium">Weight:</span> 
+                                      <span className="font-medium">Weight:</span>
                                       <span>{pet.weight}</span>
                                     </span>
                                   )}
@@ -1359,11 +1322,11 @@ export default function ContractorGigsPage() {
               <div className="flex w-full justify-end gap-2">
                 <Button variant="outline" onClick={() => setDetailGig(null)}>Close</Button>
                 {detailGig?.status === 'approved' && !detailGig.contractorCompleted && (
-                  <Button 
-                    variant="destructive" 
-                    onClick={() => { 
-                      setCancelGigId(detailGig.id); 
-                      setDetailGig(null); 
+                  <Button
+                    variant="destructive"
+                    onClick={() => {
+                      setCancelGigId(detailGig.id);
+                      setDetailGig(null);
                     }}
                     disabled={isCancelling}
                   >

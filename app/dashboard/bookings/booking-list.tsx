@@ -208,7 +208,7 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
   const [editNumDays, setEditNumDays] = useState<number>(1)
   const [editTotal, setEditTotal] = useState<number>(0)
   const [platformServices, setPlatformServices] = useState<PlatformService[]>([])
-  
+
   // Coupon state for edit services modal
   const [editCouponCode, setEditCouponCode] = useState('')
   const [editAppliedCoupon, setEditAppliedCoupon] = useState<Coupon | null>(null)
@@ -291,7 +291,7 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
       try {
         const offerings = await getContractorServiceOfferings(editServicesModal.booking.contractorId)
         setEditServicesOptions(offerings)
-        
+
         // Enhance existing services with platform service names if missing
         const servicesWithNames = editServicesModal.booking.services.map(service => ({
           ...service,
@@ -314,12 +314,12 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
       setEditEndDate(editServicesModal.booking.endDate)
       setEditEndTime(editServicesModal.booking.time?.endTime || '17:00')
       setEditNumDays(editServicesModal.booking.numberOfDays || 1)
-      
+
       // Calculate original total and set it
       const originalTotal = calcEditTotal(editServicesModal.booking.services, editServicesModal.booking.numberOfDays || 1)
       setEditTotal(originalTotal)
       setEditOriginalPrice(originalTotal / 100) // Convert to dollars
-      
+
       // Handle existing coupon if present
       if (editServicesModal.booking.couponCode) {
         setEditAppliedCoupon({
@@ -346,9 +346,9 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
     if (!editStartDate || !editEndDate) return
     const start = new Date(editStartDate)
     const end = new Date(editEndDate)
-    start.setUTCHours(0,0,0,0)
-    end.setUTCHours(0,0,0,0)
-    const diff = Math.ceil((end.getTime() - start.getTime()) / (1000*60*60*24)) + 1
+    start.setUTCHours(0, 0, 0, 0)
+    end.setUTCHours(0, 0, 0, 0)
+    const diff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
     const numDays = diff > 0 ? diff : 1
     setEditNumDays(numDays)
     setEditTotal(calcEditTotal(editServices, numDays))
@@ -378,6 +378,21 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
       checkEligibility();
     }
   }, [bookings]);
+
+  // Sync editServicesModal booking with latest bookings data
+  // This ensures the modal reflects updates when the page data changes
+  useEffect(() => {
+    if (editServicesModal.open && editServicesModal.booking) {
+      const updatedBooking = bookings.find(b => b.id === editServicesModal.booking?.id);
+      if (updatedBooking && updatedBooking !== editServicesModal.booking) {
+        // Update the modal's booking reference with the latest data
+        setEditServicesModal(prev => ({
+          ...prev,
+          booking: updatedBooking
+        }));
+      }
+    }
+  }, [bookings, editServicesModal.open, editServicesModal.booking?.id]);
 
   const contractorNameById = (id?: string) => {
     if (!id) return 'Unassigned'
@@ -410,7 +425,7 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
       if (result.isValid && result.coupon) {
         setEditAppliedCoupon(result.coupon);
         setEditCouponError(null);
-        
+
         // Apply coupon logic using the validation result
         if (result.coupon.type === 'fixed_price') {
           // For fixed_price coupons, result.finalPrice is the per-day price in cents
@@ -458,7 +473,7 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
       // Find the booking to cancel
       const booking = bookings.find((b) => b.id === cancelId)
       if (!booking) throw new Error('Booking not found')
-      
+
       // Whether the booking is pending or approved, attempt to cancel the payment intent
       if (booking.paymentIntentId) {
         const res = await fetch('/api/stripe/cancel-payment-intent', {
@@ -475,14 +490,14 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
           throw new Error(`Stripe PaymentIntent not canceled. Status: ${data.status}`)
         }
       }
-      
+
       // Send contractor notification for approved/completed bookings
       if (booking.status === 'approved' || booking.status === 'completed') {
         try {
           const response = await fetch('/api/notifications/client-cancelled-booking', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
+            body: JSON.stringify({
               booking: {
                 id: booking.id,
                 clientId: booking.clientId,
@@ -507,7 +522,7 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
               }
             })
           })
-          
+
           if (response.ok) {
             console.log('Contractor notification sent successfully for client cancellation')
           } else {
@@ -519,7 +534,7 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
           // Don't throw - we don't want email failures to break the cancellation process
         }
       }
-      
+
       await removeBooking(cancelId)
       setBookings((prev) => prev.filter((b) => b.id !== cancelId))
       setCancelId(null)
@@ -549,43 +564,43 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
 
     // First, try to capture payment if it's still authorized
     if (booking.paymentIntentId && booking.paymentStatus === 'pending') {
-        try {
-            const captureRes = await fetch('/api/stripe/capture-payment-intent', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    paymentIntentId: booking.paymentIntentId,
-                    bookingId: booking.id 
-                }),
-            });
-            const captureData = await captureRes.json();
+      try {
+        const captureRes = await fetch('/api/stripe/capture-payment-intent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            paymentIntentId: booking.paymentIntentId,
+            bookingId: booking.id
+          }),
+        });
+        const captureData = await captureRes.json();
 
-            if (!captureRes.ok) {
-                if (captureData.error === 'payment_intent_authentication_failure') {
-                    // Need re-authentication
-                    setPendingPaymentClientSecret(captureData.clientSecret);
-                    setPendingPaymentBookingId(booking.id);
-                    setIsActionPending(false); 
-                    return; // Stop here, user needs to re-auth
-                } 
-                throw new Error(captureData.error || 'Failed to capture payment.');
-            }
-            // Payment captured successfully, now update booking and release if needed
-            updateBookingsList(prev => prev.map(b => b.id === booking.id ? { ...b, paymentStatus: 'paid', status: 'completed' } : b));
-            toast.success('Payment captured and booking completed!');
-
-        } catch (_err: any) {
-            const message = _err.message || 'Error processing payment.';
-            setActionError(message);
-            toast.error(message);
+        if (!captureRes.ok) {
+          if (captureData.error === 'payment_intent_authentication_failure') {
+            // Need re-authentication
+            setPendingPaymentClientSecret(captureData.clientSecret);
+            setPendingPaymentBookingId(booking.id);
             setIsActionPending(false);
-            return;
+            return; // Stop here, user needs to re-auth
+          }
+          throw new Error(captureData.error || 'Failed to capture payment.');
         }
+        // Payment captured successfully, now update booking and release if needed
+        updateBookingsList(prev => prev.map(b => b.id === booking.id ? { ...b, paymentStatus: 'paid', status: 'completed' } : b));
+        toast.success('Payment captured and booking completed!');
+
+      } catch (_err: any) {
+        const message = _err.message || 'Error processing payment.';
+        setActionError(message);
+        toast.error(message);
+        setIsActionPending(false);
+        return;
+      }
     } else {
-        // If payment was already processed or no PI, just mark as completed or handle accordingly
-        // This path might be taken if payment was handled outside this flow or if it's a no-charge booking
-        updateBookingsList(prev => prev.map(b => b.id === booking.id ? { ...b, status: 'completed' } : b));
-        toast.success('Booking marked as completed!');
+      // If payment was already processed or no PI, just mark as completed or handle accordingly
+      // This path might be taken if payment was handled outside this flow or if it's a no-charge booking
+      updateBookingsList(prev => prev.map(b => b.id === booking.id ? { ...b, status: 'completed' } : b));
+      toast.success('Booking marked as completed!');
     }
 
     setIsActionPending(false);
@@ -594,7 +609,7 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
   async function handleClientComplete(bookingId: string) {
     const booking = bookings.find(b => b.id === bookingId)
     if (!booking) return
-    
+
     setIsPending(true)
     setError(null)
     try {
@@ -617,29 +632,29 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
     try {
       // Capture payment - this will confirm and capture if needed
       const captureRes = await fetch('/api/stripe/capture-payment-intent', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-              paymentIntentId: booking.paymentIntentId,
-              bookingId: booking.id 
-          }),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paymentIntentId: booking.paymentIntentId,
+          bookingId: booking.id
+        }),
       });
-      
+
       if (!captureRes.ok) {
-          const errData = await captureRes.json();
-          
-          if (errData.needsReauth) {
-            // Payment method needs re-authorization
-            setReleasePaymentError('Payment method requires re-authorization. Please update your payment method in the booking details and try again.');
-            toast.error('Payment method requires re-authorization. Please update your payment method and try again.');
-          } else {
-            setReleasePaymentError(errData.error || 'Failed to capture payment.');
-            toast.error(errData.error || 'Failed to process payment.');
-          }
+        const errData = await captureRes.json();
+
+        if (errData.needsReauth) {
+          // Payment method needs re-authorization
+          setReleasePaymentError('Payment method requires re-authorization. Please update your payment method in the booking details and try again.');
+          toast.error('Payment method requires re-authorization. Please update your payment method and try again.');
+        } else {
+          setReleasePaymentError(errData.error || 'Failed to capture payment.');
+          toast.error(errData.error || 'Failed to process payment.');
+        }
       } else {
-          setBookings(prev => prev.map(b => b.id === booking.id ? { ...b, paymentStatus: 'paid', status: 'completed' } : b));
-          toast.success('Payment released and booking completed!');
-          setReleasePaymentError(null);
+        setBookings(prev => prev.map(b => b.id === booking.id ? { ...b, paymentStatus: 'paid', status: 'completed' } : b));
+        toast.success('Payment released and booking completed!');
+        setReleasePaymentError(null);
       }
 
     } catch (_err: any) {
@@ -723,7 +738,7 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
     const totalPriceInDollars = dailyRateInDollars * (numberOfDays > 0 ? numberOfDays : 1);
 
     if (numberOfDays > 0) {
-        return `$${dailyRateInDollars.toFixed(2)}/day × ${numberOfDays} day${numberOfDays !== 1 ? 's' : ''} = $${totalPriceInDollars.toFixed(2)}`;
+      return `$${dailyRateInDollars.toFixed(2)}/day × ${numberOfDays} day${numberOfDays !== 1 ? 's' : ''} = $${totalPriceInDollars.toFixed(2)}`;
     }
     // If numberOfDays is not applicable or 0, just show base rate
     return `$${dailyRateInDollars.toFixed(2)}${service.paymentType === 'daily' ? '/day' : ''}`;
@@ -744,12 +759,12 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
     if (!booking.services || booking.services.length === 0) {
       return booking.serviceType || 'N/A';
     }
-    
+
     // If we have only one service, show its name
     if (booking.services.length === 1) {
       return booking.services[0].name || booking.services[0].serviceId;
     }
-    
+
     // If we have multiple services, show the first one with a +N indicator
     return `${booking.services[0].name || booking.services[0].serviceId} +${booking.services.length - 1} more`;
   };
@@ -764,7 +779,7 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
         createdAt: new Date().toISOString()
       };
       await saveBookingReview(bookingId, reviewWithCreatedAt, contractorId || '') // Call firebase function
-      
+
       // Update client-side state with the new review object that includes createdAt
       setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, review: reviewWithCreatedAt } : b))
       setReviewModal({ open: false, booking: null }) // Close modal
@@ -782,13 +797,13 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
     if (!editServicesModal.booking || !user || !editStartDate || !editEndDate || !editEndTime) return
     setIsEditServicesPending(true)
     setEditServicesError(null)
-    
+
     // Store previous data for notification if services or dates have changed
     const previousServices = editServicesModal.booking.services
     const previousStartDate = editServicesModal.booking.startDate
     const previousEndDate = editServicesModal.booking.endDate
     const previousEndTime = editServicesModal.booking.time?.endTime
-    
+
     console.log('=== EDIT SERVICES DEBUG ===')
     console.log('Previous dates from booking:', {
       startDate: previousStartDate,
@@ -801,15 +816,15 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
       endTime: editEndTime
     })
     console.log('============================')
-    
-    const servicesChanged = editServicesModal.booking.status === 'pending' && 
+
+    const servicesChanged = editServicesModal.booking.status === 'pending' &&
       JSON.stringify(previousServices) !== JSON.stringify(editServices)
-    const datesChanged = editStartDate !== previousStartDate || 
-      editEndDate !== previousEndDate || 
+    const datesChanged = editStartDate !== previousStartDate ||
+      editEndDate !== previousEndDate ||
       editEndTime !== previousEndTime
-    
+
     const shouldSendNotification = servicesChanged || datesChanged
-    
+
     try {
       const updated = await updateBookingServices({
         bookingId: editServicesModal.booking.id,
@@ -825,7 +840,7 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
           originalPrice: editOriginalPrice
         })
       })
-      
+
       // Send notification if services or dates were changed
       if (shouldSendNotification) {
         try {
@@ -850,7 +865,7 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
           // Don't throw - we don't want notification failures to break the booking update
         }
       }
-      
+
       if (updated.paymentRequiresAction && updated.paymentClientSecret) {
         setPendingPaymentClientSecret(updated.paymentClientSecret)
         setPendingPaymentBookingId(updated.id)
@@ -936,7 +951,7 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
           <div className="flex items-center space-x-2 text-sm text-slate-500">
             <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
             <span>{bookings.length} total</span>
-      </div>
+          </div>
         </div>
         <button
           onClick={() => onNewBooking?.()}
@@ -949,35 +964,35 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
         </button>
       </div>
 
-            {/* Modern Tabs */}
+      {/* Modern Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-5 bg-slate-100/80 backdrop-blur-sm rounded-2xl p-1 h-12 sm:h-14">
-          <TabsTrigger 
-            value="all" 
+          <TabsTrigger
+            value="all"
             className="rounded-lg sm:rounded-xl font-medium text-xs sm:text-sm transition-all duration-200 data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-slate-900 text-slate-600 hover:text-slate-900"
           >
             All
           </TabsTrigger>
-          <TabsTrigger 
-            value="pending" 
+          <TabsTrigger
+            value="pending"
             className="rounded-lg sm:rounded-xl font-medium text-xs sm:text-sm transition-all duration-200 data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-slate-900 text-slate-600 hover:text-slate-900"
           >
             Pending
           </TabsTrigger>
-          <TabsTrigger 
-            value="approved" 
+          <TabsTrigger
+            value="approved"
             className="rounded-lg sm:rounded-xl font-medium text-xs sm:text-sm transition-all duration-200 data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-slate-900 text-slate-600 hover:text-slate-900"
           >
             Approved
           </TabsTrigger>
-          <TabsTrigger 
-            value="completed" 
+          <TabsTrigger
+            value="completed"
             className="rounded-lg sm:rounded-xl font-medium text-xs sm:text-sm transition-all duration-200 data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-slate-900 text-slate-600 hover:text-slate-900"
           >
             Completed
           </TabsTrigger>
-          <TabsTrigger 
-            value="cancelled" 
+          <TabsTrigger
+            value="cancelled"
             className="rounded-lg sm:rounded-xl font-medium text-xs sm:text-sm transition-all duration-200 data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-slate-900 text-slate-600 hover:text-slate-900"
           >
             Cancelled
@@ -996,8 +1011,8 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
                   </div>
                   <h3 className="text-lg font-semibold text-slate-900 mb-2">No {tab === 'all' ? '' : tab} bookings</h3>
                   <p className="text-slate-600">
-                    {tab === 'all' 
-                      ? 'Create your first booking to get started.' 
+                    {tab === 'all'
+                      ? 'Create your first booking to get started.'
                       : `You don't have any ${tab} bookings at the moment.`
                     }
                   </p>
@@ -1005,63 +1020,61 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
               ) : (
                 <div className="grid gap-6">
                   {filterBookings(tab).map((b) => {
-                  const today = new Date();
-                  today.setHours(0, 0, 0, 0);
-                  const bookingDate = new Date(b.startDate);
-                  bookingDate.setHours(0, 0, 0, 0);
-                  const canEditServices = (b.status === 'approved') || (b.status === 'pending' && bookingDate >= today);
-                  const canMessage = bookingMessageEligibility[b.id] === true;
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const bookingDate = new Date(b.startDate);
+                    bookingDate.setHours(0, 0, 0, 0);
+                    const canEditServices = (b.status === 'approved') || (b.status === 'pending' && bookingDate >= today);
+                    const canMessage = bookingMessageEligibility[b.id] === true;
 
-                  return (
-                    <Card
-                      key={b.id}
+                    return (
+                      <Card
+                        key={b.id}
                         className="group relative bg-white/80 backdrop-blur-sm border border-slate-200/60 rounded-2xl shadow-sm hover:shadow-xl hover:shadow-slate-200/60 transition-all duration-300 hover:border-slate-300/60 overflow-hidden"
                       >
                         {/* Status Indicator Bar */}
-                        <div className={`absolute top-0 left-0 right-0 h-1 ${
-                          b.status === 'completed' ? 'bg-gradient-to-r from-green-400 to-emerald-500' :
-                          b.status === 'pending' ? 'bg-gradient-to-r from-yellow-400 to-orange-500' :
-                          b.status === 'approved' ? 'bg-gradient-to-r from-blue-400 to-indigo-500' :
-                          'bg-gradient-to-r from-slate-300 to-slate-400'
-                        }`}></div>
+                        <div className={`absolute top-0 left-0 right-0 h-1 ${b.status === 'completed' ? 'bg-gradient-to-r from-green-400 to-emerald-500' :
+                            b.status === 'pending' ? 'bg-gradient-to-r from-yellow-400 to-orange-500' :
+                              b.status === 'approved' ? 'bg-gradient-to-r from-blue-400 to-indigo-500' :
+                                'bg-gradient-to-r from-slate-300 to-slate-400'
+                          }`}></div>
 
                         <CardHeader className="pb-4">
                           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                        <div className="flex-1 min-w-0">
+                            <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-3 mb-3">
                                 {hasMultipleServices(b) && (
                                   <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-200 font-medium px-3 py-1">
-                                <Package className="h-3 w-3 mr-1" />
-                                {b.services?.length} services
-                              </Badge>
+                                    <Package className="h-3 w-3 mr-1" />
+                                    {b.services?.length} services
+                                  </Badge>
                                 )}
                                 <StatusBadge status={b.status} />
                               </div>
                               <CardTitle className="text-xl font-bold text-slate-900 mb-2 line-clamp-2">
                                 {getServiceNames(b)}
-                          </CardTitle>
+                              </CardTitle>
                               <div className="flex items-center text-slate-600 mb-3">
                                 <Clock className="w-4 h-4 mr-2 text-blue-500" />
                                 <span className="font-medium">{getBookingDateTimeRange(b)}</span>
-                          </div>
-                        </div>
+                              </div>
+                            </div>
                             <div className="flex flex-col items-end gap-2 lg:min-w-[140px]">
                               <div className="text-right">
                                 <div className="text-2xl font-bold text-slate-900">
                                   ${formatAmount(b.paymentAmount || 0)}
                                 </div>
-                                <div className={`text-sm font-medium capitalize ${
-                                  b.paymentStatus === 'paid' ? 'text-green-600' :
-                                  b.paymentStatus === 'pending' ? 'text-yellow-600' :
-                                  b.paymentStatus === 'cancelled' ? 'text-red-600' :
-                                  'text-slate-500'
-                                }`}>
+                                <div className={`text-sm font-medium capitalize ${b.paymentStatus === 'paid' ? 'text-green-600' :
+                                    b.paymentStatus === 'pending' ? 'text-yellow-600' :
+                                      b.paymentStatus === 'cancelled' ? 'text-red-600' :
+                                        'text-slate-500'
+                                  }`}>
                                   {b.paymentStatus}
                                 </div>
                               </div>
                             </div>
-                        </div>
-                      </CardHeader>
+                          </div>
+                        </CardHeader>
 
                         <CardContent className="pt-0">
                           {/* Contractor & Pet Info */}
@@ -1076,117 +1089,117 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
                             </div>
                           </div>
 
-                                                     {/* Review Display */}
+                          {/* Review Display */}
                           {b.review && (
-                             <div className="mb-6 p-4 bg-yellow-50 rounded-xl border border-yellow-200">
-                               <div className="flex items-center gap-2 mb-2">
-                                 <div className="flex items-center">
-                                   {[...Array(5)].map((_, i) => (
-                                     <svg
-                                       key={i}
-                                       className={`w-4 h-4 ${i < (b.review?.rating || 0) ? 'text-yellow-400' : 'text-slate-300'}`}
-                                       fill="currentColor"
-                                       viewBox="0 0 20 20"
-                                     >
-                                       <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                                     </svg>
-                                   ))}
-                                 </div>
-                                 <span className="text-sm font-medium text-slate-700">Your Review</span>
-                               </div>
-                               {b.review?.comment && (
-                                 <p className="text-sm text-slate-600 italic">"{b.review.comment}"</p>
+                            <div className="mb-6 p-4 bg-yellow-50 rounded-xl border border-yellow-200">
+                              <div className="flex items-center gap-2 mb-2">
+                                <div className="flex items-center">
+                                  {[...Array(5)].map((_, i) => (
+                                    <svg
+                                      key={i}
+                                      className={`w-4 h-4 ${i < (b.review?.rating || 0) ? 'text-yellow-400' : 'text-slate-300'}`}
+                                      fill="currentColor"
+                                      viewBox="0 0 20 20"
+                                    >
+                                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                    </svg>
+                                  ))}
+                                </div>
+                                <span className="text-sm font-medium text-slate-700">Your Review</span>
+                              </div>
+                              {b.review?.comment && (
+                                <p className="text-sm text-slate-600 italic">"{b.review.comment}"</p>
+                              )}
+                            </div>
                           )}
-                        </div>
-                           )}
 
                           {/* Action Buttons */}
                           <div className="flex flex-wrap gap-3">
-                            <Button 
-                              variant="outline" 
+                            <Button
+                              variant="outline"
                               onClick={() => setDetailBooking(b)}
                               className="flex-1 sm:flex-none bg-white hover:bg-slate-50 border-slate-300 text-slate-700 font-medium rounded-xl px-6 py-2.5 transition-all duration-200 hover:shadow-md"
                             >
                               View Details
-                          </Button>
-                            
-                          {canMessage && (
-                            <Link href={`/dashboard/messages/${b.id}`} passHref>
-                                <Button 
+                            </Button>
+
+                            {canMessage && (
+                              <Link href={`/dashboard/messages/${b.id}`} passHref>
+                                <Button
                                   variant="outline"
                                   className="flex-1 sm:flex-none bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700 font-medium rounded-xl px-6 py-2.5 transition-all duration-200 hover:shadow-md"
                                 >
-                                <MessageSquare className="h-4 w-4 mr-2" />
+                                  <MessageSquare className="h-4 w-4 mr-2" />
                                   Message
-                              </Button>
-                            </Link>
-                          )}
-                            
-                          {canEditServices && (
-                            <Button
-                              variant="outline"
-                              onClick={() => setEditServicesModal({ open: true, booking: b })}
+                                </Button>
+                              </Link>
+                            )}
+
+                            {canEditServices && (
+                              <Button
+                                variant="outline"
+                                onClick={() => setEditServicesModal({ open: true, booking: b })}
                                 className="flex-1 sm:flex-none bg-indigo-50 hover:bg-indigo-100 border-indigo-200 text-indigo-700 font-medium rounded-xl px-6 py-2.5 transition-all duration-200 hover:shadow-md"
-                            >
-                              Edit Services
-                            </Button>
-                          )}
-                            
+                              >
+                                Edit Services
+                              </Button>
+                            )}
+
                             {(['pending', 'approved'].includes(b.status)) && (
-                          <Button 
-                            variant="destructive" 
-                            onClick={() => setCancelId(b.id)} 
+                              <Button
+                                variant="destructive"
+                                onClick={() => setCancelId(b.id)}
                                 disabled={isPending}
                                 className="flex-1 sm:flex-none bg-red-50 hover:bg-red-100 border-red-200 text-red-700 font-medium rounded-xl px-6 py-2.5 transition-all duration-200 hover:shadow-md disabled:opacity-50"
-                          >
-                            Cancel
-                          </Button>
+                              >
+                                Cancel
+                              </Button>
                             )}
-                            
-                          {b.status === 'approved' && b.paymentStatus === 'pending' && !b.clientCompleted && (
-                            <Button
-                              onClick={() => handleClientComplete(b.id)}
-                              disabled={isPending}
+
+                            {b.status === 'approved' && b.paymentStatus === 'pending' && !b.clientCompleted && (
+                              <Button
+                                onClick={() => handleClientComplete(b.id)}
+                                disabled={isPending}
                                 className="flex-1 sm:flex-none bg-green-600 hover:bg-green-700 text-white font-medium rounded-xl px-6 py-2.5 transition-all duration-200 hover:shadow-md disabled:opacity-50"
-                            >
+                              >
                                 {isPending ? 'Marking...' : 'Mark Complete'}
-                            </Button>
-                          )}
-                            
-                          {b.status === 'approved' && b.paymentStatus === 'pending' && b.clientCompleted && !b.contractorCompleted && (
+                              </Button>
+                            )}
+
+                            {b.status === 'approved' && b.paymentStatus === 'pending' && b.clientCompleted && !b.contractorCompleted && (
                               <div className="flex-1 sm:flex-none px-6 py-2.5 bg-yellow-50 border border-yellow-200 rounded-xl">
                                 <span className="text-sm text-yellow-700 font-medium">Waiting for contractor...</span>
                               </div>
-                          )}
-                            
-                          {b.status === 'approved' && b.paymentStatus === 'pending' && b.clientCompleted && b.contractorCompleted && (
-                            <Button
-                              onClick={() => setPaymentConfirmModal({ open: true, booking: b })}
-                              disabled={isPending}
+                            )}
+
+                            {b.status === 'approved' && b.paymentStatus === 'pending' && b.clientCompleted && b.contractorCompleted && (
+                              <Button
+                                onClick={() => setPaymentConfirmModal({ open: true, booking: b })}
+                                disabled={isPending}
                                 className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl px-6 py-2.5 transition-all duration-200 hover:shadow-md disabled:opacity-50"
-                            >
-                              Release Payment
-                            </Button>
-                          )}
-                            
-                          {b.status === 'completed' && b.paymentStatus === 'paid' && !b.review && (
-                            <Button
-                              onClick={() => setReviewModal({ open: true, booking: b })}
+                              >
+                                Release Payment
+                              </Button>
+                            )}
+
+                            {b.status === 'completed' && b.paymentStatus === 'paid' && !b.review && (
+                              <Button
+                                onClick={() => setReviewModal({ open: true, booking: b })}
                                 className="flex-1 sm:flex-none bg-yellow-500 hover:bg-yellow-600 text-white font-medium rounded-xl px-6 py-2.5 transition-all duration-200 hover:shadow-md"
-                            >
-                              Leave Review
-                            </Button>
-                          )}
+                              >
+                                Leave Review
+                              </Button>
+                            )}
                           </div>
 
                           {releasePaymentError && (
                             <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-xl">
                               <p className="text-sm text-red-600 font-medium">{releasePaymentError}</p>
-                        </div>
+                            </div>
                           )}
-                      </CardContent>
-                    </Card>
-                  )
+                        </CardContent>
+                      </Card>
+                    )
                   })}
                 </div>
               )}
@@ -1210,7 +1223,7 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
             <div className="text-center">
               <p className="text-slate-700 mb-4">
                 You are about to cancel this booking. This should only be done in case of:
-            </p>
+              </p>
               <div className="grid grid-cols-1 gap-3 text-left">
                 <div className="flex items-center space-x-3 p-3 bg-slate-50 rounded-xl">
                   <div className="w-2 h-2 bg-red-400 rounded-full"></div>
@@ -1226,7 +1239,7 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
                 </div>
               </div>
             </div>
-            
+
             <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-4">
               <div className="flex items-start space-x-3">
                 <svg className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1239,11 +1252,11 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
                     <li>• The contractor will be notified immediately</li>
                     <li>• The booking will be permanently deleted</li>
                     <li>• Frequent cancellations may affect your account standing</li>
-              </ul>
+                  </ul>
+                </div>
+              </div>
             </div>
-          </div>
-            </div>
-            
+
             {error && (
               <div className="p-4 bg-red-50 border border-red-200 rounded-xl">
                 <p className="text-sm text-red-600 font-medium">{error}</p>
@@ -1251,17 +1264,17 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
             )}
           </div>
           <DialogFooter className="flex flex-col sm:flex-row gap-3 pt-6">
-            <Button 
-              variant="outline" 
-              onClick={() => setCancelId(null)} 
+            <Button
+              variant="outline"
+              onClick={() => setCancelId(null)}
               disabled={isPending}
               className="flex-1 bg-white hover:bg-slate-50 border-slate-300 text-slate-700 font-medium rounded-xl px-6 py-3"
             >
               Keep Booking
             </Button>
-            <Button 
-              variant="destructive" 
-              onClick={handleCancel} 
+            <Button
+              variant="destructive"
+              onClick={handleCancel}
               disabled={isPending}
               className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium rounded-xl px-6 py-3 disabled:opacity-50"
             >
@@ -1292,24 +1305,23 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
                     <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
-                </div>
+                  </div>
                   <div>
                     <h3 className="text-lg font-bold text-slate-900">{getServiceNames(detailBooking)}</h3>
                     <p className="text-slate-600 text-sm">Booking #{detailBooking.id.slice(-8)}</p>
-                </div>
+                  </div>
                 </div>
                 <div className="flex flex-col sm:items-end gap-2">
                   <StatusBadge status={detailBooking.status} />
-                  <span className={`text-sm font-medium capitalize ${
-                    detailBooking.paymentStatus === 'paid' ? 'text-green-600' :
-                    detailBooking.paymentStatus === 'pending' ? 'text-yellow-600' :
-                    detailBooking.paymentStatus === 'cancelled' ? 'text-red-600' :
-                    'text-slate-500'
-                  }`}>
+                  <span className={`text-sm font-medium capitalize ${detailBooking.paymentStatus === 'paid' ? 'text-green-600' :
+                      detailBooking.paymentStatus === 'pending' ? 'text-yellow-600' :
+                        detailBooking.paymentStatus === 'cancelled' ? 'text-red-600' :
+                          'text-slate-500'
+                    }`}>
                     Payment: {detailBooking.paymentStatus}
-                      </span>
-                    </div>
-                    </div>
+                  </span>
+                </div>
+              </div>
 
               {/* Date & Time Section */}
               <div className="p-6 bg-white rounded-2xl border border-slate-200/60 shadow-sm">
@@ -1323,7 +1335,7 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
                   <div>
                     <p className="text-sm font-medium text-slate-500 mb-2">Date & Time</p>
                     <p className="text-base font-semibold text-slate-900">{getBookingDateTimeRange(detailBooking)}</p>
-              </div>
+                  </div>
                   <div>
                     <p className="text-sm font-medium text-slate-500 mb-2">Duration</p>
                     <p className="text-base font-semibold text-slate-900">{detailBooking.numberOfDays} day{detailBooking.numberOfDays !== 1 ? 's' : ''}</p>
@@ -1365,10 +1377,10 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                           </svg>
                         </div>
-                      <div>
+                        <div>
                           <p className="text-sm font-medium text-slate-500">Phone</p>
                           <p className="text-base font-semibold text-slate-900">
-                          {detailBooking?.contractorPhone || (contractors.find(c => c.id === detailBooking?.contractorId)?.phone ?? 'N/A')}
+                            {detailBooking?.contractorPhone || (contractors.find(c => c.id === detailBooking?.contractorId)?.phone ?? 'N/A')}
                           </p>
                         </div>
                       </div>
@@ -1378,23 +1390,23 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                           </svg>
-                      </div>
-                      <div>
+                        </div>
+                        <div>
                           <p className="text-sm font-medium text-slate-500">Location</p>
                           <p className="text-base font-semibold text-slate-900">
-                          {(() => {
-                            const contractor = contractors.find(c => c.id === detailBooking?.contractorId)
-                            if (contractor?.city || contractor?.state) {
-                              return `${contractor.city || ''}${contractor.city && contractor.state ? ', ' : ''}${contractor.state || ''}`
-                            }
-                            return 'N/A'
-                          })()}
+                            {(() => {
+                              const contractor = contractors.find(c => c.id === detailBooking?.contractorId)
+                              if (contractor?.city || contractor?.state) {
+                                return `${contractor.city || ''}${contractor.city && contractor.state ? ', ' : ''}${contractor.state || ''}`
+                              }
+                              return 'N/A'
+                            })()}
                           </p>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
               </div>
               {/* Pets Info */}
               <div className="p-6 bg-white rounded-2xl border border-slate-200/60 shadow-sm">
@@ -1421,7 +1433,7 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
               <div className="p-6 bg-white rounded-2xl border border-slate-200/60 shadow-sm">
                 <div className="flex items-center space-x-3 mb-6">
                   <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
-                    <Package className="w-5 h-5 text-emerald-600"/>
+                    <Package className="w-5 h-5 text-emerald-600" />
                   </div>
                   <h4 className="text-lg font-semibold text-slate-900">Services & Payment</h4>
                 </div>
@@ -1439,9 +1451,9 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
                           <div>
                             <p className="font-semibold text-slate-900">{platformService?.name || service.name || service.serviceId}</p>
                             <p className="text-sm text-slate-500">
-                            {service.paymentType === 'one_time' ? 'One-time payment' : 'Daily rate'}
+                              {service.paymentType === 'one_time' ? 'One-time payment' : 'Daily rate'}
                             </p>
-                        </div>
+                          </div>
                         </div>
                         <div className="text-right mt-3 sm:mt-0">
                           <p className="text-lg font-bold text-slate-900">{formatServicePrice(service, detailBooking.numberOfDays || 1)}</p>
@@ -1479,18 +1491,18 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
                       </div>
                     </div>
                   )}
-                  
+
                   <div className="flex justify-between items-center p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border-2 border-blue-200 mt-6">
                     <div className="flex items-center space-x-3">
                       <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                         <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
                         </svg>
-                  </div>
+                      </div>
                       <span className="text-lg font-bold text-slate-900">Total Payment</span>
-                </div>
+                    </div>
                     <span className="text-2xl font-bold text-blue-600">${formatAmount(detailBooking.paymentAmount || 0)}</span>
-              </div>
+                  </div>
                 </div>
               </div>
               {/* Payment Method & Actions */}
@@ -1504,14 +1516,14 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
                   <h4 className="text-lg font-semibold text-slate-900">Payment & Actions</h4>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
+                  <div>
                     <p className="text-sm font-medium text-slate-500 mb-2">Payment Method</p>
                     <div className="flex items-center space-x-3 p-3 bg-slate-50 rounded-xl">
                       <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
                         <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                         </svg>
-                </div>
+                      </div>
                       <span className="font-semibold text-slate-900">
                         {defaultMethod ? `${defaultMethod.brand?.toUpperCase?.() ?? ''} •••• ${defaultMethod.last4 ?? ''}` : 'Not specified'}
                       </span>
@@ -1541,25 +1553,25 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
             </section>
           )}
           <DialogFooter className="flex flex-col sm:flex-row gap-3 pt-6 border-t border-slate-200">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => setDetailBooking(null)}
               className="flex-1 bg-white hover:bg-slate-50 border-slate-300 text-slate-700 font-medium rounded-xl px-6 py-3"
             >
               Close
             </Button>
             {(detailBooking?.status === 'pending' || detailBooking?.status === 'approved') && (
-                <Button 
-                  variant="destructive" 
-                  onClick={() => { 
-                    setCancelId(detailBooking.id); 
-                    setDetailBooking(null); 
-                  }} 
-                  disabled={isPending}
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  setCancelId(detailBooking.id);
+                  setDetailBooking(null);
+                }}
+                disabled={isPending}
                 className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium rounded-xl px-6 py-3 disabled:opacity-50"
-                >
-                  Cancel Booking
-                </Button>
+              >
+                Cancel Booking
+              </Button>
             )}
           </DialogFooter>
         </DialogContent>
@@ -1612,7 +1624,7 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
               </div>
             </div>
           </DialogHeader>
-          
+
           {editModalWarning && (
             <div className="mb-6 p-4 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl">
               <div className="flex items-center space-x-3">
@@ -1623,7 +1635,7 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
               </div>
             </div>
           )}
-          
+
           {editServicesModal.booking && (
             <div className="space-y-8">
               {editServicesError && (
@@ -1633,7 +1645,7 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     <span className="text-sm font-medium text-red-800">{editServicesError}</span>
-              </div>
+                  </div>
                 </div>
               )}
 
@@ -1650,7 +1662,7 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
                     <p className="text-sm text-slate-600">Adjust your service dates and times</p>
                   </div>
                 </div>
-                
+
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                   {/* Calendar Section */}
                   <div className="space-y-4">
@@ -1665,7 +1677,7 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
                         <p className="text-sm text-slate-600">Choose when your service should end</p>
                       </div>
                     </div>
-                    
+
                     {editStartDate && (
                       <EndDatePicker
                         startDate={editStartDate}
@@ -1676,7 +1688,7 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
                       />
                     )}
                   </div>
-                  
+
                   {/* Time & Summary Section */}
                   <div className="space-y-6">
                     <div className="space-y-4">
@@ -1691,18 +1703,18 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
                           <p className="text-sm text-slate-600">Set your service end time</p>
                         </div>
                       </div>
-                      
+
                       <div className="space-y-2">
                         <label className="block text-sm font-semibold text-slate-700">End Time</label>
-                        <Input 
-                          type="time" 
-                          value={editEndTime || ''} 
+                        <Input
+                          type="time"
+                          value={editEndTime || ''}
                           onChange={e => setEditEndTime(e.target.value)}
                           className="bg-white border-slate-300 focus:border-purple-500 focus:ring-purple-500 rounded-xl"
                         />
                       </div>
                     </div>
-                    
+
                     {/* Service Summary */}
                     <div className="p-6 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-2xl border border-blue-200/60">
                       <div className="flex items-center space-x-3 mb-4">
@@ -1716,30 +1728,30 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
                           <p className="text-sm text-slate-600">Updated booking details</p>
                         </div>
                       </div>
-                      
+
                       <div className="space-y-4">
                         <div className="flex justify-between items-center p-3 bg-white/80 rounded-xl">
                           <span className="text-sm font-medium text-slate-700">Duration</span>
                           <span className="font-bold text-blue-800">{editNumDays} day{editNumDays !== 1 ? 's' : ''}</span>
                         </div>
-                        
+
                         {editAppliedCoupon && editOriginalPrice && (
                           <div className="flex justify-between items-center p-3 bg-green-50 border border-green-200 rounded-xl">
                             <span className="text-sm font-medium text-green-700">Original Price</span>
                             <span className="font-bold text-green-800 line-through">${editOriginalPrice.toFixed(2)}</span>
                           </div>
                         )}
-                        
+
                         {editAppliedCoupon && (
                           <div className="flex justify-between items-center p-3 bg-green-50 border border-green-200 rounded-xl">
                             <span className="text-sm font-medium text-green-700">Coupon Discount</span>
-                            <span className="font-bold text-green-800">-${(editOriginalPrice! - (editTotal/100)).toFixed(2)}</span>
+                            <span className="font-bold text-green-800">-${(editOriginalPrice! - (editTotal / 100)).toFixed(2)}</span>
                           </div>
                         )}
-                        
+
                         <div className="flex justify-between items-center p-3 bg-white/80 rounded-xl">
                           <span className="text-sm font-medium text-slate-700">Updated Total</span>
-                          <span className="text-xl font-bold text-blue-900">${(editTotal/100).toFixed(2)}</span>
+                          <span className="text-xl font-bold text-blue-900">${(editTotal / 100).toFixed(2)}</span>
                         </div>
                       </div>
                     </div>
@@ -1840,39 +1852,37 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
                       <p className="text-sm text-slate-600">Choose the services you need</p>
                     </div>
                   </div>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {editServicesOptions.map((offering: any) => {
-                  const checked = editServices.some((s: any) => s.serviceId === offering.serviceId)
-                  const platformService = platformServices.find(ps => ps.id === offering.serviceId)
-                      
-                  return (
-                        <div 
-                          key={offering.serviceId} 
-                          className={`group relative p-4 border-2 rounded-2xl cursor-pointer transition-all duration-200 ${
-                            checked 
-                              ? 'border-emerald-300 bg-gradient-to-br from-emerald-50 to-emerald-100 shadow-lg transform scale-105' 
+                    {editServicesOptions.map((offering: any) => {
+                      const checked = editServices.some((s: any) => s.serviceId === offering.serviceId)
+                      const platformService = platformServices.find(ps => ps.id === offering.serviceId)
+
+                      return (
+                        <div
+                          key={offering.serviceId}
+                          className={`group relative p-4 border-2 rounded-2xl cursor-pointer transition-all duration-200 ${checked
+                              ? 'border-emerald-300 bg-gradient-to-br from-emerald-50 to-emerald-100 shadow-lg transform scale-105'
                               : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md hover:bg-slate-50'
-                          }`}
+                            }`}
                           onClick={() => {
                             const serviceToAdd = {
                               ...offering,
                               paymentType: offering.paymentType === 'per_day' ? 'daily' : offering.paymentType,
                               name: platformService?.name || offering.serviceId
                             };
-                            setEditServices(prev => 
-                              checked 
-                                ? prev.filter((s: any) => s.serviceId !== offering.serviceId) 
+                            setEditServices(prev =>
+                              checked
+                                ? prev.filter((s: any) => s.serviceId !== offering.serviceId)
                                 : [...prev, serviceToAdd]
                             )
                           }}
                         >
                           <div className="flex items-start space-x-3">
-                            <div className={`mt-0.5 w-5 h-5 border-2 rounded-md transition-all duration-200 flex items-center justify-center ${
-                              checked 
-                                ? 'bg-emerald-600 border-emerald-600' 
+                            <div className={`mt-0.5 w-5 h-5 border-2 rounded-md transition-all duration-200 flex items-center justify-center ${checked
+                                ? 'bg-emerald-600 border-emerald-600'
                                 : 'bg-white border-slate-300 group-hover:border-emerald-400'
-                            }`}>
+                              }`}>
                               {checked && (
                                 <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -1890,8 +1900,8 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
                                 <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-full">
                                   {(offering.paymentType === 'daily' || offering.paymentType === 'per_day') ? 'Daily rate' : 'One-time fee'}
                                 </span>
-                      </div>
-                      {platformService?.description && (
+                              </div>
+                              {platformService?.description && (
                                 <p className="text-sm text-slate-600 mt-2">{platformService.description}</p>
                               )}
                             </div>
@@ -1905,16 +1915,16 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
                           )}
                         </div>
                       );
-                })}
-              </div>
+                    })}
+                  </div>
                 </div>
               )}
 
               {/* Actions */}
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                <Button 
-                  variant="outline" 
-                  onClick={() => setEditServicesModal({ open: false, booking: null })} 
+                <Button
+                  variant="outline"
+                  onClick={() => setEditServicesModal({ open: false, booking: null })}
                   disabled={isEditServicesPending || !!pendingPaymentClientSecret || !editServicesModal.booking}
                   className="bg-white hover:bg-slate-50 border-slate-300 text-slate-700 font-medium rounded-xl px-8 py-3"
                 >
@@ -1973,7 +1983,7 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
           )}
         </DialogContent>
       </Dialog>
-      
+
       {/* Payment Confirmation Modal */}
       <Dialog open={paymentConfirmModal.open} onOpenChange={open => setPaymentConfirmModal({ open, booking: open ? paymentConfirmModal.booking : null })}>
         <DialogContent className="w-full max-w-md mx-auto">
@@ -2057,15 +2067,15 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
 
               {/* Action Buttons */}
               <div className="flex gap-3">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   className="flex-1"
                   onClick={() => setPaymentConfirmModal({ open: false, booking: null })}
                   disabled={isPending}
                 >
                   Cancel
                 </Button>
-                <Button 
+                <Button
                   className="flex-1"
                   onClick={() => handleConfirmPaymentFromModal(paymentConfirmModal.booking!)}
                   disabled={isPending}
@@ -2077,7 +2087,7 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
           )}
         </DialogContent>
       </Dialog>
-      
+
 
     </div>
   )
@@ -2107,7 +2117,7 @@ function ReviewForm({ booking, onClose, onSaved }: { booking: ExtendedBooking, o
       <div>
         <label className="block text-sm font-medium mb-1">Rating</label>
         <select value={rating} onChange={e => setRating(Number(e.target.value))} className="w-full border rounded px-2 py-1">
-          {[5,4,3,2,1].map(n => <option key={n} value={n}>{n} Star{n > 1 ? 's' : ''}</option>)}
+          {[5, 4, 3, 2, 1].map(n => <option key={n} value={n}>{n} Star{n > 1 ? 's' : ''}</option>)}
         </select>
       </div>
       <div>

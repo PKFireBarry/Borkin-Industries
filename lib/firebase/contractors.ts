@@ -153,15 +153,19 @@ export async function removeGigTimeFromContractorCalendar(
     // Check if this is an overnight booking (crosses midnight)
     const isOvernight = time.startTime > time.endTime && dates.length > 1
 
-    const updated: DayAvailability[] = [...dailyAvailability]
+    // Use a Map for efficient updates, then convert back to array
+    // This avoids index shifting issues when removing entries
+    const dayMap = new Map<string, DayAvailability>()
+    dailyAvailability.forEach(day => dayMap.set(day.date, { ...day }))
+
+    // Track dates that should be completely removed
+    const datesToRemove = new Set<string>()
 
     if (isOvernight) {
       // Handle overnight booking removal spanning multiple days
       dates.forEach((iso, index) => {
-        const idx = updated.findIndex(d => d.date === iso)
-        if (idx === -1) return
-
-        const day = updated[idx]
+        const day = dayMap.get(iso)
+        if (!day) return
 
         if (index === 0) {
           // First day: remove startTime to 23:59 slot
@@ -170,9 +174,9 @@ export async function removeGigTimeFromContractorCalendar(
             s => !(s.startTime === targetSlot.startTime && s.endTime === targetSlot.endTime)
           )
           if (filtered.length === 0 && !day.isFullyUnavailable) {
-            updated.splice(idx, 1)
+            datesToRemove.add(iso)
           } else {
-            updated[idx] = { ...day, unavailableSlots: filtered }
+            dayMap.set(iso, { ...day, unavailableSlots: filtered })
           }
         } else if (index === dates.length - 1) {
           // Last day: remove 00:00 to endTime slot
@@ -181,44 +185,57 @@ export async function removeGigTimeFromContractorCalendar(
             s => !(s.startTime === targetSlot.startTime && s.endTime === targetSlot.endTime)
           )
           if (filtered.length === 0 && !day.isFullyUnavailable) {
-            updated.splice(idx, 1)
+            datesToRemove.add(iso)
           } else {
-            updated[idx] = { ...day, unavailableSlots: filtered }
+            dayMap.set(iso, { ...day, unavailableSlots: filtered })
           }
         } else {
-          // Middle days: remove full unavailability
+          // Middle days: remove full unavailability flag
           if (day.isFullyUnavailable) {
-            updated[idx] = { ...day, isFullyUnavailable: false }
-            // If no slots left, remove the day entry
+            // If no slots, remove the entry entirely
             if (!day.unavailableSlots || day.unavailableSlots.length === 0) {
-              updated.splice(idx, 1)
+              datesToRemove.add(iso)
+            } else {
+              // Keep the entry but mark as not fully unavailable
+              dayMap.set(iso, { ...day, isFullyUnavailable: false })
             }
           }
         }
       })
     } else {
-      // Handle same-day or single-day booking removal (existing logic)
+      // Handle same-day or single-day booking removal
       for (const iso of dates) {
-        const idx = updated.findIndex(d => d.date === iso)
-        if (idx === -1) continue
-        const day = updated[idx]
+        const day = dayMap.get(iso)
+        if (!day) continue
+
+        // Skip if day is fully unavailable (blocked by something else)
         if (day.isFullyUnavailable) continue
+
         const filtered = (day.unavailableSlots || []).filter(
           s => !(s.startTime === time.startTime && s.endTime === time.endTime)
         )
+
         if (filtered.length === 0) {
-          // Remove the day entry if no slots and not fully unavailable
-          updated.splice(idx, 1)
+          // Remove the day entry if no slots remaining
+          datesToRemove.add(iso)
         } else {
-          updated[idx] = { ...day, unavailableSlots: filtered }
+          dayMap.set(iso, { ...day, unavailableSlots: filtered })
         }
       }
     }
+
+    // Remove dates marked for deletion
+    datesToRemove.forEach(iso => dayMap.delete(iso))
+
+    // Convert Map back to array
+    const updated = Array.from(dayMap.values())
 
     await updateDoc(contractorRef, {
       'availability.dailyAvailability': updated,
       updatedAt: serverTimestamp(),
     })
+
+    console.log(`Successfully removed gig time slots for contractor ${contractorId} on dates: ${dates.join(', ')}`)
   } catch (error) {
     console.error('Error removing gig time from contractor calendar:', error)
     throw new Error('Failed to update contractor calendar (time-based)')
@@ -229,7 +246,7 @@ export async function getApprovedContractors(): Promise<Contractor[]> {
   const contractorsRef = collection(db, 'contractors')
   const snapshot = await getDocs(contractorsRef)
   const allContractors = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Contractor))
-  
+
   return allContractors.filter(contractor => contractor.application?.status === 'approved')
 }
 
@@ -261,7 +278,7 @@ export async function updateContractorProfile(userId: string, data: Partial<Cont
     const contractorRef = doc(db, 'contractors', userId);
     // Create a new object without serviceOfferings to avoid TypeScript error
     const { serviceOfferings, ...updateData } = data as Partial<Contractor> & { serviceOfferings?: any };
-    
+
     // Check if contractor exists first
     const docSnap = await getDoc(contractorRef);
     if (!docSnap.exists()) {
@@ -339,39 +356,39 @@ export async function setContractorApplicationPending(userId: string): Promise<v
 export async function addGigDatesToContractorCalendar(contractorId: string, startDate: string, endDate: string): Promise<void> {
   try {
     const contractorRef = doc(db, 'contractors', contractorId)
-    
+
     // Get current contractor data
     const contractorSnap = await getDoc(contractorRef)
     if (!contractorSnap.exists()) {
       throw new Error(`Contractor ${contractorId} not found`)
     }
-    
+
     const contractor = contractorSnap.data() as Contractor
     const currentUnavailableDates = contractor.availability?.unavailableDates || []
-    
+
     // Generate all dates in the range (inclusive)
     const gigDates: string[] = []
     const start = new Date(startDate)
     const end = new Date(endDate)
-    
+
     // Reset time to midnight to ensure consistent date handling
     start.setUTCHours(0, 0, 0, 0)
     end.setUTCHours(0, 0, 0, 0)
-    
+
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       const isoDate = d.toISOString().slice(0, 10) // YYYY-MM-DD format
       gigDates.push(isoDate)
     }
-    
+
     // Merge with existing unavailable dates and remove duplicates
     const updatedUnavailableDates = [...new Set([...currentUnavailableDates, ...gigDates])]
-    
+
     // Update contractor availability
     await updateDoc(contractorRef, {
       'availability.unavailableDates': updatedUnavailableDates,
       updatedAt: serverTimestamp()
     })
-    
+
     console.log(`Added ${gigDates.length} gig dates to contractor ${contractorId}'s calendar:`, gigDates)
   } catch (error) {
     console.error('Error adding gig dates to contractor calendar:', error)
@@ -382,43 +399,64 @@ export async function addGigDatesToContractorCalendar(contractorId: string, star
 /**
  * Remove cancelled gig dates from contractor's unavailable dates
  * This function is called when a gig is cancelled to free up those dates in the contractor's calendar
+ * Also cleans up any corresponding entries in dailyAvailability for data consistency
  */
 export async function removeGigDatesFromContractorCalendar(contractorId: string, startDate: string, endDate: string): Promise<void> {
   try {
     const contractorRef = doc(db, 'contractors', contractorId)
-    
+
     // Get current contractor data
     const contractorSnap = await getDoc(contractorRef)
     if (!contractorSnap.exists()) {
       throw new Error(`Contractor ${contractorId} not found`)
     }
-    
+
     const contractor = contractorSnap.data() as Contractor
     const currentUnavailableDates = contractor.availability?.unavailableDates || []
-    
+    const currentDailyAvailability: DayAvailability[] = contractor.availability?.dailyAvailability || []
+
     // Generate all dates in the range (inclusive)
     const gigDates: string[] = []
     const start = new Date(startDate)
     const end = new Date(endDate)
-    
+
     // Reset time to midnight to ensure consistent date handling
     start.setUTCHours(0, 0, 0, 0)
     end.setUTCHours(0, 0, 0, 0)
-    
+
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       const isoDate = d.toISOString().slice(0, 10) // YYYY-MM-DD format
       gigDates.push(isoDate)
     }
-    
-    // Remove gig dates from unavailable dates
+
+    // Remove gig dates from unavailable dates (legacy array)
     const updatedUnavailableDates = currentUnavailableDates.filter(date => !gigDates.includes(date))
-    
-    // Update contractor availability
+
+    // Also remove/clean up any entries in dailyAvailability for these dates
+    // This handles cases where the date might have been added to both systems
+    const updatedDailyAvailability = currentDailyAvailability.filter(day => {
+      // If this date is in our gig date range
+      if (gigDates.includes(day.date)) {
+        // If the day was marked as fully unavailable (by this gig), remove it
+        if (day.isFullyUnavailable) {
+          return false // Remove this entry
+        }
+        // If it has no unavailable slots, also remove it
+        if (!day.unavailableSlots || day.unavailableSlots.length === 0) {
+          return false // Remove this entry
+        }
+        // Otherwise keep it (it has time slots from other bookings)
+      }
+      return true
+    })
+
+    // Update contractor availability (both arrays)
     await updateDoc(contractorRef, {
       'availability.unavailableDates': updatedUnavailableDates,
+      'availability.dailyAvailability': updatedDailyAvailability,
       updatedAt: serverTimestamp()
     })
-    
+
     console.log(`Removed ${gigDates.length} gig dates from contractor ${contractorId}'s calendar:`, gigDates)
   } catch (error) {
     console.error('Error removing gig dates from contractor calendar:', error)
@@ -433,27 +471,27 @@ export async function saveContractorFeedback(
 ): Promise<void> {
   const contractorRef = doc(db, 'contractors', contractorId)
   const contractorSnap = await getDoc(contractorRef)
-  
+
   if (!contractorSnap.exists()) {
     throw new Error('Contractor not found')
   }
-  
+
   const contractorData = contractorSnap.data()
   const ratings = contractorData.ratings || []
-  
+
   // Find the specific rating to update
   const ratingIndex = ratings.findIndex((r: any) => r.bookingId === bookingId)
   if (ratingIndex === -1) {
     throw new Error('Review not found')
   }
-  
+
   const rating = ratings[ratingIndex]
-  
+
   // Check if feedback already exists
   if (rating.contractorFeedback) {
     throw new Error('Feedback has already been provided for this review')
   }
-  
+
   // Create updated rating with feedback
   const updatedRating = {
     ...rating,
@@ -462,12 +500,12 @@ export async function saveContractorFeedback(
       date: new Date().toISOString()
     }
   }
-  
+
   // Remove old rating and add updated one
   await updateDoc(contractorRef, {
     ratings: arrayRemove(rating)
   })
-  
+
   await updateDoc(contractorRef, {
     ratings: arrayUnion(updatedRating)
   })
