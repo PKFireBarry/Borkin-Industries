@@ -4,10 +4,10 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import { 
-  Calendar, 
-  ChevronLeft, 
-  ChevronRight, 
+import {
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   Plus,
   Trash2,
@@ -45,7 +45,7 @@ function isTimeSlotOverlapping(slot1: TimeSlot, slot2: TimeSlot): boolean {
   const end1 = slot1.endTime
   const start2 = slot2.startTime
   const end2 = slot2.endTime
-  
+
   return (start1 < end2 && end1 > start2)
 }
 
@@ -82,21 +82,39 @@ export function TimeBasedAvailabilityCalendar({
       const bookingStart = new Date(booking.startDate)
       const bookingEnd = new Date(booking.endDate)
       const checkDate = new Date(date)
-      
+
       bookingStart.setUTCHours(0, 0, 0, 0)
       bookingEnd.setUTCHours(0, 0, 0, 0)
       checkDate.setUTCHours(0, 0, 0, 0)
-      
+
       return checkDate >= bookingStart && checkDate <= bookingEnd
     })
   }
 
   // Update availability for a specific date
+  // Update availability for a specific date
   const updateDayAvailability = (date: string, dayAvail: Partial<DayAvailability>) => {
     const updated = dailyAvailability.filter(day => day.date !== date)
-    if (dayAvail.isFullyUnavailable || dayAvail.unavailableSlots?.length || dayAvail.availableSlots?.length) {
-      updated.push({ date, ...dayAvail } as DayAvailability)
+
+    // Find existing data for this day to merge with
+    const current = dailyAvailability.find(day => day.date === date)
+
+    // Merge existing data with updates
+    // If no existing data, start with basic object
+    const merged: DayAvailability = {
+      ...(current || { date }),
+      ...dayAvail,
+      date // Ensure date is correct
     }
+
+    // Only keep the day in the array if it has some relevant data
+    // (is blocked, has unavailable slots, or has available slots)
+    if (merged.isFullyUnavailable ||
+      (merged.unavailableSlots && merged.unavailableSlots.length > 0) ||
+      (merged.availableSlots && merged.availableSlots.length > 0)) {
+      updated.push(merged)
+    }
+
     onAvailabilityChange(updated)
   }
 
@@ -116,21 +134,21 @@ export function TimeBasedAvailabilityCalendar({
   const addUnavailableSlot = (date: string, slot: TimeSlot) => {
     const current = getDayAvailability(date) || { date }
     const unavailableSlots = [...(current.unavailableSlots || [])]
-    
+
     // Check for overlaps
     const hasOverlap = unavailableSlots.some(existing => isTimeSlotOverlapping(slot, existing))
     if (hasOverlap) {
       alert('This time slot overlaps with an existing unavailable period.')
       return
     }
-    
+
     unavailableSlots.push(slot)
     unavailableSlots.sort((a, b) => a.startTime.localeCompare(b.startTime))
-    
-    updateDayAvailability(date, { 
-      ...current, 
+
+    updateDayAvailability(date, {
+      ...current,
       unavailableSlots,
-      isFullyUnavailable: false 
+      isFullyUnavailable: false
     })
   }
 
@@ -248,11 +266,11 @@ export function TimeBasedAvailabilityCalendar({
     if (isSelected) {
       return `${baseClasses} bg-blue-500 text-white border-2 border-blue-600 shadow-lg ring-2 ring-blue-200`
     }
-    
+
     if (dayAvail?.isFullyUnavailable) {
       return `${baseClasses} bg-red-100 text-red-700 border-2 border-red-200`
     }
-    
+
     // Show bookings with higher priority than availability blocks
     if (dayBookings.length > 0) {
       const hasFullDayBooking = dayBookings.some(b => !b.time)
@@ -262,15 +280,15 @@ export function TimeBasedAvailabilityCalendar({
         return `${baseClasses} bg-purple-50 text-purple-600 border-2 border-purple-200`
       }
     }
-    
+
     if (dayAvail?.unavailableSlots?.length) {
       return `${baseClasses} bg-orange-100 text-orange-700 border-2 border-orange-200`
     }
-    
+
     if (isToday) {
       return `${baseClasses} bg-white text-slate-900 border-2 border-primary shadow-md ring-2 ring-primary/20`
     }
-    
+
     return `${baseClasses} bg-white text-slate-700 border border-slate-200 hover:border-slate-300 hover:bg-slate-50`
   }
 
@@ -282,16 +300,16 @@ export function TimeBasedAvailabilityCalendar({
   }
 
   const goToPreviousMonth = () => {
-    setCalendarMonth(m => ({ 
-      year: m.month === 0 ? m.year - 1 : m.year, 
-      month: m.month === 0 ? 11 : m.month - 1 
+    setCalendarMonth(m => ({
+      year: m.month === 0 ? m.year - 1 : m.year,
+      month: m.month === 0 ? 11 : m.month - 1
     }))
   }
 
   const goToNextMonth = () => {
-    setCalendarMonth(m => ({ 
-      year: m.month === 11 ? m.year + 1 : m.year, 
-      month: m.month === 11 ? 0 : m.month + 1 
+    setCalendarMonth(m => ({
+      year: m.month === 11 ? m.year + 1 : m.year,
+      month: m.month === 11 ? 0 : m.month + 1
     }))
   }
 
@@ -304,29 +322,29 @@ export function TimeBasedAvailabilityCalendar({
             <div className="flex items-center justify-between">
               <CardTitle className="text-xl font-bold text-slate-900 flex items-center gap-2">
                 <Calendar className="w-5 h-5 text-primary" />
-                {new Date(calendarMonth.year, calendarMonth.month).toLocaleString('default', { 
-                  month: 'long', 
-                  year: 'numeric' 
+                {new Date(calendarMonth.year, calendarMonth.month).toLocaleString('default', {
+                  month: 'long',
+                  year: 'numeric'
                 })}
               </CardTitle>
               <div className="flex items-center gap-2">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={() => setShowDefaultSchedule(!showDefaultSchedule)}
                   className="h-8 px-3 rounded-full hover:bg-slate-100"
                 >
                   <Settings className="w-4 h-4 mr-1" />
                   Default Schedule
                 </Button>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={goToPreviousMonth}
                   className="h-8 w-8 p-0 rounded-full hover:bg-slate-100"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </Button>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={goToNextMonth}
                   className="h-8 w-8 p-0 rounded-full hover:bg-slate-100"
                 >
@@ -364,7 +382,7 @@ export function TimeBasedAvailabilityCalendar({
 
             {/* Calendar Grid */}
             <div className="grid grid-cols-7 gap-2 mb-6">
-              {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d => (
+              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(d => (
                 <div key={d} className="text-center text-xs font-semibold text-slate-500 py-2 uppercase tracking-wide">
                   {d}
                 </div>
@@ -386,7 +404,7 @@ export function TimeBasedAvailabilityCalendar({
                   {(() => {
                     const dayBookings = getDayBookings(iso)
                     const dayAvail = getDayAvailability(iso)
-                    
+
                     if (dayBookings.length > 0) {
                       return (
                         <div className="absolute bottom-1 right-1 flex gap-1">
@@ -399,11 +417,11 @@ export function TimeBasedAvailabilityCalendar({
                         </div>
                       )
                     }
-                    
+
                     if (dayAvail?.unavailableSlots?.length && !dayAvail?.isFullyUnavailable) {
                       return <div className="absolute bottom-1 right-1 w-2 h-2 bg-orange-500 rounded-full"></div>
                     }
-                    
+
                     return null
                   })()}
                 </button>
@@ -571,10 +589,10 @@ function DayAvailabilityManager({
   }
 
   const dateObj = new Date(date + 'T00:00:00')
-  const formattedDate = dateObj.toLocaleDateString('en-US', { 
-    weekday: 'long', 
-    month: 'long', 
-    day: 'numeric' 
+  const formattedDate = dateObj.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric'
   })
 
   return (
@@ -593,8 +611,8 @@ function DayAvailabilityManager({
             variant={dayAvailability?.isFullyUnavailable ? "default" : "outline"}
             className={cn(
               "w-full rounded-xl py-3 font-semibold transition-all duration-200",
-              dayAvailability?.isFullyUnavailable 
-                ? "bg-red-500 hover:bg-red-600 text-white" 
+              dayAvailability?.isFullyUnavailable
+                ? "bg-red-500 hover:bg-red-600 text-white"
                 : "hover:bg-red-50 hover:border-red-300 hover:text-red-700"
             )}
           >
@@ -620,7 +638,7 @@ function DayAvailabilityManager({
                   <div className="flex items-center gap-2">
                     <Clock className="w-4 h-4 text-purple-600" />
                     <div className="text-sm font-semibold text-purple-800">
-                      {booking.time ? 
+                      {booking.time ?
                         `${formatTime(booking.time.startTime)} - ${formatTime(booking.time.endTime)}` :
                         'Full Day'
                       }
