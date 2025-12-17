@@ -7,7 +7,7 @@ import { usePathname } from 'next/navigation'
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname()
-  
+
   const navItems = [
     { href: '/admin', label: 'Dashboard' },
     { href: '/admin/applications', label: 'Applications' },
@@ -16,6 +16,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     { href: '/admin/services', label: 'Services' },
     { href: '/admin/bookings', label: 'Bookings' },
     { href: '/admin/coupons', label: 'Coupons' },
+    { href: '/admin/preview', label: 'Preview Portal' },
   ]
 
   return (
@@ -32,18 +33,17 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`text-sm ${
-                    pathname === item.href
+                  className={`text-sm ${pathname === item.href
                       ? 'text-primary font-medium'
                       : 'text-muted-foreground hover:text-foreground'
-                  }`}
+                    }`}
                 >
                   {item.label}
                 </Link>
               ))}
             </nav>
           </div>
-          
+
           {/* User Menu & Actions */}
           <div className="flex items-center space-x-4">
             <Link href="/" className="text-sm text-muted-foreground hover:text-foreground">
@@ -61,11 +61,10 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             <Link
               key={item.href}
               href={item.href}
-              className={`text-sm px-3 py-1.5 rounded-md ${
-                pathname === item.href
+              className={`text-sm px-3 py-1.5 rounded-md ${pathname === item.href
                   ? 'bg-primary/10 text-primary font-medium'
                   : 'text-muted-foreground hover:text-foreground'
-              }`}
+                }`}
             >
               {item.label}
             </Link>

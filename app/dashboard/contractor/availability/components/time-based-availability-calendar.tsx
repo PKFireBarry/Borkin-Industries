@@ -23,8 +23,6 @@ import type { Booking } from '@/types/booking'
 interface TimeBasedAvailabilityCalendarProps {
   dailyAvailability: DayAvailability[]
   onAvailabilityChange: (availability: DayAvailability[]) => void
-  defaultDaySchedule?: { [dayOfWeek: number]: TimeSlot[] }
-  onDefaultScheduleChange?: (schedule: { [dayOfWeek: number]: TimeSlot[] }) => void
   existingBookings?: Booking[]
 }
 
@@ -52,8 +50,6 @@ function isTimeSlotOverlapping(slot1: TimeSlot, slot2: TimeSlot): boolean {
 export function TimeBasedAvailabilityCalendar({
   dailyAvailability,
   onAvailabilityChange,
-  defaultDaySchedule = {},
-  onDefaultScheduleChange,
   existingBookings = []
 }: TimeBasedAvailabilityCalendarProps) {
   const [calendarMonth, setCalendarMonth] = useState(() => {
@@ -61,7 +57,6 @@ export function TimeBasedAvailabilityCalendar({
     return { year: now.getFullYear(), month: now.getMonth() }
   })
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
-  const [showDefaultSchedule, setShowDefaultSchedule] = useState(false)
 
   // Range selection state
   const [rangeStart, setRangeStart] = useState<string | null>(null)
@@ -328,14 +323,6 @@ export function TimeBasedAvailabilityCalendar({
                 })}
               </CardTitle>
               <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setShowDefaultSchedule(!showDefaultSchedule)}
-                  className="h-8 px-3 rounded-full hover:bg-slate-100"
-                >
-                  <Settings className="w-4 h-4 mr-1" />
-                  Default Schedule
-                </Button>
                 <Button
                   variant="outline"
                   onClick={goToPreviousMonth}
