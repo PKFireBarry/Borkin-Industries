@@ -640,7 +640,7 @@ export async function updateBookingServices({ bookingId, newServices, userId, ne
   couponCode?: string,
   couponDiscount?: number,
   originalPrice?: number,
-}): Promise<Booking & { paymentRequiresAction?: boolean; paymentClientSecret?: string }> {
+}): Promise<Booking & { paymentRequiresAction?: boolean; paymentClientSecret?: string; statusReverted?: boolean }> {
   // Fetch the booking
   const bookingRef = doc(db, 'bookings', bookingId)
   const bookingSnap = await getDoc(bookingRef)
@@ -651,8 +651,18 @@ export async function updateBookingServices({ bookingId, newServices, userId, ne
   if (booking.status === 'completed' || booking.status === 'cancelled') throw new Error('Cannot edit completed or cancelled bookings')
   if (booking.clientId !== userId) throw new Error('You do not have permission to edit this booking')
 
-  // Use new dates if provided, else current (start date should never change)
-  const startDate = booking.startDate // Start date is never changed
+  // For approved bookings, enforce 48-hour edit restriction
+  if (booking.status === 'approved') {
+    const bookingStartDate = new Date(booking.startDate)
+    const now = new Date()
+    const hoursUntilBooking = (bookingStartDate.getTime() - now.getTime()) / (1000 * 60 * 60)
+    if (hoursUntilBooking < 48) {
+      throw new Error('Approved bookings can only be edited up to 48 hours before the scheduled start date')
+    }
+  }
+
+  // Use new dates if provided, else current (start date can now be changed)
+  const startDate = newStartDate || booking.startDate
   const endDate = newEndDate || booking.endDate
   const endTime = newEndTime || booking.time?.endTime
 
@@ -705,6 +715,32 @@ export async function updateBookingServices({ bookingId, newServices, userId, ne
   // Total amount client pays (final base + platform fee + stripe fee)
   const newTotal = finalBaseServiceAmount + newPlatformFee + newEstimatedStripeFee
 
+  // Check if dates have changed and if status needs to be reverted for approved bookings
+  const datesChanged = startDate !== booking.startDate || endDate !== booking.endDate
+  let statusReverted = false
+  let newStatus = booking.status
+
+  if (datesChanged && booking.status === 'approved') {
+    // Revert status to pending for re-approval
+    newStatus = 'pending'
+    statusReverted = true
+
+    // Remove gig dates from contractor calendar since booking is no longer approved
+    if (booking.time?.startTime && booking.time?.endTime) {
+      // Time-based booking
+      await removeGigTimeFromContractorCalendar(
+        booking.contractorId,
+        booking.startDate,
+        booking.endDate,
+        booking.time.startTime,
+        booking.time.endTime
+      )
+    } else {
+      // Full-day booking
+      await removeGigDatesFromContractorCalendar(booking.contractorId, booking.startDate, booking.endDate)
+    }
+  }
+
   // Update Firestore booking with new amounts (no Stripe processing during edits)
   await updateDoc(bookingRef, {
     services: servicesToSave,
@@ -715,6 +751,7 @@ export async function updateBookingServices({ bookingId, newServices, userId, ne
     startDate,
     endDate,
     numberOfDays,
+    status: newStatus,
     time: {
       ...(booking.time || {}),
       endTime,
@@ -725,7 +762,7 @@ export async function updateBookingServices({ bookingId, newServices, userId, ne
     ...(couponDiscount && { couponDiscount }),
     ...(originalPrice && { originalPrice }),
   })
-  
+
   const updatedSnap = await getDoc(bookingRef)
-  return { ...(updatedSnap.data() as Booking), id: updatedSnap.id }
+  return { ...(updatedSnap.data() as Booking), id: updatedSnap.id, statusReverted }
 } 

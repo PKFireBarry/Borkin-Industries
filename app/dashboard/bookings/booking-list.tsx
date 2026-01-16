@@ -13,7 +13,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Package, Clock, MessageSquare } from 'lucide-react'
 import { Input } from '@/components/ui/input'
-import { EndDatePicker } from '@/components/ui/date-range-picker'
+import { DateRangePicker, EndDatePicker } from '@/components/ui/date-range-picker'
 import { getAllPlatformServices } from '@/lib/firebase/services'
 import type { PlatformService } from '@/types/service'
 import { Elements } from '@stripe/react-stripe-js'
@@ -70,6 +70,15 @@ function calcEditTotal(services: any[], numDays: number) {
     }
   })
   return total
+}
+
+// Helper to check if booking can be edited (48-hour restriction for approved bookings)
+function canEditBookingDates(booking: ExtendedBooking): boolean {
+  if (booking.status !== 'approved') return true
+  const bookingStartDate = new Date(booking.startDate)
+  const now = new Date()
+  const hoursUntilBooking = (bookingStartDate.getTime() - now.getTime()) / (1000 * 60 * 60)
+  return hoursUntilBooking >= 48
 }
 
 // Update getGoogleCalendarUrl to use robust local date parsing
@@ -856,7 +865,9 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
                 startDate: previousStartDate,
                 endDate: previousEndDate,
                 endTime: previousEndTime
-              }
+              },
+              statusReverted: updated.statusReverted,
+              previousStatus: editServicesModal.booking.status
             }),
           })
           console.log('Booking updated notification sent successfully')
@@ -864,6 +875,11 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
           console.error('Failed to send booking updated notification:', notificationError)
           // Don't throw - we don't want notification failures to break the booking update
         }
+      }
+
+      // Show toast when status was reverted to pending for re-approval
+      if (updated.statusReverted) {
+        toast.info('Booking dates changed - your booking has been moved to Pending status and requires contractor re-approval.')
       }
 
       if (updated.paymentRequiresAction && updated.paymentClientSecret) {
@@ -1024,7 +1040,7 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
                     today.setHours(0, 0, 0, 0);
                     const bookingDate = new Date(b.startDate);
                     bookingDate.setHours(0, 0, 0, 0);
-                    const canEditServices = (b.status === 'approved') || (b.status === 'pending' && bookingDate >= today);
+                    const canEditServices = (b.status === 'approved' && canEditBookingDates(b)) || (b.status === 'pending' && bookingDate >= today);
                     const canMessage = bookingMessageEligibility[b.id] === true;
 
                     return (
@@ -1649,6 +1665,25 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
                 </div>
               )}
 
+              {/* Re-approval Warning for Approved Bookings with Date Changes */}
+              {editServicesModal.booking?.status === 'approved' &&
+               (editStartDate !== editServicesModal.booking?.startDate || editEndDate !== editServicesModal.booking?.endDate) && (
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                  <div className="flex items-start space-x-3">
+                    <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <div>
+                      <h4 className="font-semibold text-amber-800">Re-Approval Required</h4>
+                      <p className="text-sm text-amber-700 mt-1">
+                        Changing the dates of an approved booking will require your contractor to re-approve the booking.
+                        The booking status will be moved back to Pending until the contractor confirms the new dates.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Date & Time Section */}
               <div className="p-6 bg-white rounded-2xl border border-slate-200/60 shadow-sm">
                 <div className="flex items-center space-x-3 mb-6">
@@ -1673,20 +1708,20 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
                         </svg>
                       </div>
                       <div>
-                        <h4 className="text-lg font-semibold text-slate-900">Select End Date</h4>
-                        <p className="text-sm text-slate-600">Choose when your service should end</p>
+                        <h4 className="text-lg font-semibold text-slate-900">Select Service Dates</h4>
+                        <p className="text-sm text-slate-600">Choose your service start and end dates</p>
                       </div>
                     </div>
 
-                    {editStartDate && (
-                      <EndDatePicker
-                        startDate={editStartDate}
-                        endDate={editEndDate}
-                        onChange={setEditEndDate}
-                        minDate={new Date().toISOString().split('T')[0]}
-                        className="w-full"
-                      />
-                    )}
+                    <DateRangePicker
+                      value={{ startDate: editStartDate, endDate: editEndDate }}
+                      onChange={(range) => {
+                        if (range.startDate) setEditStartDate(range.startDate)
+                        if (range.endDate) setEditEndDate(range.endDate)
+                      }}
+                      minDate={new Date().toISOString().split('T')[0]}
+                      className="w-full"
+                    />
                   </div>
 
                   {/* Time & Summary Section */}

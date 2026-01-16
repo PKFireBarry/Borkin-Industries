@@ -7,7 +7,7 @@ import { getAllPlatformServices } from '@/lib/firebase/services'
 
 export async function POST(req: NextRequest) {
   try {
-    const { bookingId, previousServices, previousBookingData } = await req.json()
+    const { bookingId, previousServices, previousBookingData, statusReverted, previousStatus } = await req.json()
     
     if (!bookingId) {
       return NextResponse.json({ error: 'Booking ID is required' }, { status: 400 })
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Send the email notification
-    await sendServicesUpdatedNotification(booking, client, contractor, services, previousServices, previousBookingData)
+    await sendServicesUpdatedNotification(booking, client, contractor, services, previousServices, previousBookingData, statusReverted, previousStatus)
     
     return NextResponse.json({ success: true })
   } catch (error) {

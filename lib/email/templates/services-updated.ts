@@ -20,7 +20,9 @@ export function createServicesUpdatedContractorEmail(
     startDate: string
     endDate: string
     endTime?: string
-  }
+  },
+  statusReverted?: boolean,
+  previousStatus?: string
 ): { subject: string; html: string; text: string } {
   const currentServiceDetails = booking.services?.map(bookingService => {
     const platformService = services.find(s => s.id === bookingService.serviceId)
@@ -64,11 +66,20 @@ export function createServicesUpdatedContractorEmail(
     <p style="color: #374151; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
       Hi ${contractor.name},
     </p>
-    
+
+    ${statusReverted ? `
+    <div style="background: #fef2f2; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ef4444;">
+      <h3 style="color: #991b1b; margin: 0 0 15px 0; font-size: 18px;">⚠️ Re-Approval Required</h3>
+      <p style="color: #991b1b; font-size: 14px; line-height: 1.6; margin: 0;">
+        <strong>${client.name}</strong> has changed the booking dates. This booking has been moved back to <strong>Pending</strong> status and requires your re-approval. Please review the new dates below and approve or decline the updated booking.
+      </p>
+    </div>
+    ` : ''}
+
     <p style="color: #374151; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
-      ${client.name} has updated their upcoming booking with you. Please review the changes below and confirm if you can still accommodate the updated booking.
+      ${client.name} has updated their upcoming booking with you. Please review the changes below and ${statusReverted ? 'approve or decline' : 'confirm if you can still accommodate'} the updated booking.
     </p>
-    
+
     <div style="background: #fef3c7; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #f59e0b;">
       <h3 style="color: #92400e; margin: 0 0 15px 0; font-size: 18px;">🔄 Booking Updated</h3>
       
@@ -158,7 +169,12 @@ export function createServicesUpdatedContractorEmail(
   const textContent = `
 Hi ${contractor.name},
 
-${client.name} has updated their upcoming booking with you. Please review the ${datesChanged && servicesChanged ? 'changes' : datesChanged ? 'schedule update' : 'service update'} below and confirm if you can still accommodate the updated booking.
+${statusReverted ? `
+⚠️ RE-APPROVAL REQUIRED
+
+${client.name} has changed the booking dates. This booking has been moved back to Pending status and requires your re-approval. Please review the new dates below and approve or decline the updated booking.
+
+` : ''}${client.name} has updated their upcoming booking with you. Please review the ${datesChanged && servicesChanged ? 'changes' : datesChanged ? 'schedule update' : 'service update'} below and ${statusReverted ? 'approve or decline' : 'confirm if you can still accommodate'} the updated booking.
 
 BOOKING UPDATED:
 Current Booking Information:
@@ -207,9 +223,12 @@ Best regards,
 The Boorkin Industries Team
   `
 
+  const emailTitle = statusReverted ? 'Re-Approval Required' : 'Booking Updated'
+  const subjectPrefix = statusReverted ? 'Re-Approval Required' : 'Booking Updated'
+
   return {
-    subject: `Booking Updated - ${client.name} (${currentDateRange.split(' from ')[0] || currentDateRange.split(' to ')[0]})`,
-    html: createEmailTemplate(content, 'Booking Updated'),
+    subject: `${subjectPrefix} - ${client.name} (${currentDateRange.split(' from ')[0] || currentDateRange.split(' to ')[0]})`,
+    html: createEmailTemplate(content, emailTitle),
     text: textContent
   }
 } 

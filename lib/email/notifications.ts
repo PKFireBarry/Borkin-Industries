@@ -265,12 +265,14 @@ export async function sendServicesUpdatedNotification(
     startDate: string
     endDate: string
     endTime?: string
-  }
+  },
+  statusReverted?: boolean,
+  previousStatus?: string
 ): Promise<void> {
   const transporter = createTransporter()
 
   try {
-    const email = createServicesUpdatedContractorEmail(booking, client, contractor, services, previousServices, previousBookingData)
+    const email = createServicesUpdatedContractorEmail(booking, client, contractor, services, previousServices, previousBookingData, statusReverted, previousStatus)
     await transporter.sendMail({
       from: `"${process.env.SMTP_FROM_NAME}" <${process.env.SMTP_FROM}>`,
       to: contractor.email,
