@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useUser } from '@clerk/nextjs'
 import { getBookingsForClient } from '@/lib/firebase/bookings'
 import { BookingList } from './booking-list'
@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { useProfileValidation } from '@/hooks/use-profile-validation'
 import { ProfileValidationModal } from '@/components/profile-validation-modal'
 
-export default function BookingsPage() {
+function BookingsPageContent() {
   const { isLoaded, isAuthorized } = useRequireRole('client')
   const { user } = useUser()
   const [bookings, setBookings] = useState<any[]>([])
@@ -123,5 +123,26 @@ export default function BookingsPage() {
         />
       )}
     </div>
+  )
+}
+
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50">
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <p className="text-slate-600 font-medium">Loading your bookings...</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default function BookingsPage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <BookingsPageContent />
+    </Suspense>
   )
 } 
