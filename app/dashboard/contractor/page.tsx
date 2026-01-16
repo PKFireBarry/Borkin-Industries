@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { Card, CardContent, CardTitle, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -47,7 +47,7 @@ interface EnhancedBooking extends Booking {
   petNames?: string[]
 }
 
-export default function ContractorDashboardHome() {
+function ContractorDashboardHomeContent() {
   const { isLoaded, isAuthorized } = useRequireRole('contractor')
   const { user } = useUser()
   const [profile, setProfile] = useState<Contractor | null>(null)
@@ -589,5 +589,13 @@ export default function ContractorDashboardHome() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function ContractorDashboardHome() {
+  return (
+    <Suspense fallback={null}>
+      <ContractorDashboardHomeContent />
+    </Suspense>
   )
 } 

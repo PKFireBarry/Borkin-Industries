@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRequireRole } from '../../use-require-role'
 import { useUser } from '@clerk/nextjs'
 import { Button } from '@/components/ui/button'
@@ -18,7 +18,7 @@ import type { DayAvailability } from '@/types/contractor'
 import { getGigsForContractor } from '@/lib/firebase/bookings'
 import type { Booking } from '@/types/booking'
 
-export default function ContractorAvailabilityPage() {
+function ContractorAvailabilityPageContent() {
   const { isLoaded, isAuthorized } = useRequireRole('contractor')
   const { user } = useUser()
   const [dailyAvailability, setDailyAvailability] = useState<DayAvailability[]>([])
@@ -205,3 +205,10 @@ export default function ContractorAvailabilityPage() {
   )
 }
 
+export default function ContractorAvailabilityPage() {
+  return (
+    <Suspense fallback={null}>
+      <ContractorAvailabilityPageContent />
+    </Suspense>
+  )
+}

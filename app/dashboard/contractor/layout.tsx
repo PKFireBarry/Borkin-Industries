@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from 'react';
+import { Suspense } from 'react';
 // Link, cn, usePathname, UserButton are not directly used in this simplified layout,
 // but kept for potential future small additions. Re-evaluate if not needed.
 import { redirect, usePathname, useSearchParams } from 'next/navigation';
@@ -16,7 +17,7 @@ interface ContractorDashboardLayoutProps {
 
 // Removed navItems constant, as the parent dashboard layout handles navigation
 
-export default function ContractorDashboardLayout({ children }: ContractorDashboardLayoutProps) {
+function ContractorDashboardLayoutContent({ children }: ContractorDashboardLayoutProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const isPreviewMode = searchParams?.get('preview') === 'admin';
@@ -81,4 +82,20 @@ export default function ContractorDashboardLayout({ children }: ContractorDashbo
   // User is approved and on a protected contractor route.
   // The parent app/dashboard/layout.tsx will provide the sidebar and main content structure.
   return <>{children}</>;
+}
+
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-100">
+      <p>Loading contractor data...</p>
+    </div>
+  );
+}
+
+export default function ContractorDashboardLayout({ children }: ContractorDashboardLayoutProps) {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <ContractorDashboardLayoutContent>{children}</ContractorDashboardLayoutContent>
+    </Suspense>
+  );
 } 

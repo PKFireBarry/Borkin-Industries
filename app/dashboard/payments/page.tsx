@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useUser } from '@clerk/nextjs'
 import { getClientProfile } from '@/lib/firebase/client'
 import { useRequireRole } from '../use-require-role'
@@ -89,7 +89,7 @@ const getCardLogo = (brand: string) => {
   }
 };
 
-export default function PaymentsPage() {
+function PaymentsPageContent() {
   const { isLoaded, isAuthorized } = useRequireRole('client')
   const { user } = useUser()
   const [methods, setMethods] = useState<PaymentMethod[]>([])
@@ -517,4 +517,12 @@ export default function PaymentsPage() {
       )}
     </main>
   );
+}
+
+export default function PaymentsPage() {
+  return (
+    <Suspense fallback={null}>
+      <PaymentsPageContent />
+    </Suspense>
+  )
 } 

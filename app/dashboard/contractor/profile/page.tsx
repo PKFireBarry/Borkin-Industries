@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useState, useCallback } from 'react'
+import { Suspense, useEffect, useState, useCallback } from 'react'
 import { useRequireRole } from '../../use-require-role'
 import { useUser } from '@clerk/nextjs'
 import { Input } from '@/components/ui/input'
@@ -61,7 +61,7 @@ const initialContractorFormState: Omit<Contractor, 'serviceOfferings'> = {
   stripeAccountId: undefined,
 };
 
-export default function ContractorProfilePage() {
+function ContractorProfilePageContent() {
   const { isLoaded, isAuthorized } = useRequireRole('contractor')
   const { user } = useUser()
   const [form, setForm] = useState<Omit<Contractor, 'serviceOfferings'>>(initialContractorFormState);
@@ -840,5 +840,13 @@ export default function ContractorProfilePage() {
         <div className="h-8"></div>
              </div>
          </div>
+  )
+}
+
+export default function ContractorProfilePage() {
+  return (
+    <Suspense fallback={null}>
+      <ContractorProfilePageContent />
+    </Suspense>
   )
 } 

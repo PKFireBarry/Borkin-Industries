@@ -1,11 +1,11 @@
 "use client"
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useUser } from '@clerk/nextjs'
 import { getClientProfile } from '@/lib/firebase/client'
 import { ProfileForm } from './profile-form'
 import { useRequireRole } from '../use-require-role'
 
-export default function ProfilePage() {
+function ProfilePageContent() {
   const { isLoaded, isAuthorized } = useRequireRole('client')
   const { user } = useUser()
   const [profile, setProfile] = useState<any>(null)
@@ -25,5 +25,13 @@ export default function ProfilePage() {
     <section className="w-full">
       <ProfileForm initialProfile={profile} isEditing={false} />
     </section>
+  )
+}
+
+export default function ProfilePage() {
+  return (
+    <Suspense fallback={null}>
+      <ProfilePageContent />
+    </Suspense>
   )
 } 

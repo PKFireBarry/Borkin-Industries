@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { Card, CardContent, CardTitle, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -39,7 +39,7 @@ interface DashboardStats {
   paymentMethods: number
 }
 
-export default function DashboardHomePage() {
+function DashboardHomePageContent() {
   const { isLoaded, isAuthorized } = useRequireRole('client')
   const { user } = useUser()
   const [profile, setProfile] = useState<Client | null>(null)
@@ -548,5 +548,20 @@ export default function DashboardHomePage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function DashboardHomePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-slate-600 font-medium">Loading your dashboard...</p>
+        </div>
+      </div>
+    }>
+      <DashboardHomePageContent />
+    </Suspense>
   )
 } 

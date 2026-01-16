@@ -1,6 +1,6 @@
 "use client"
 import { useRequireRole } from '../../use-require-role'
-import { useState, useEffect } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { Card, CardContent, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useUser } from '@clerk/nextjs'
@@ -163,7 +163,7 @@ function getGigDateTimeRange(g: Gig) {
   return `${startStr} — ${endStr}`;
 }
 
-export default function ContractorGigsPage() {
+function ContractorGigsPageContent() {
   const { isLoaded, isAuthorized } = useRequireRole('contractor')
   const { user } = useUser()
   const [filter, setFilter] = useState<'all' | Gig['status']>('all')
@@ -1375,5 +1375,13 @@ export default function ContractorGigsPage() {
         </Dialog>
       </div>
     </div>
+  )
+}
+
+export default function ContractorGigsPage() {
+  return (
+    <Suspense fallback={null}>
+      <ContractorGigsPageContent />
+    </Suspense>
   )
 }

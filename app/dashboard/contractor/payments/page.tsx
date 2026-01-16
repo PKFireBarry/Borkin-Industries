@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRequireRole } from '../../use-require-role'
 import { useUser } from '@clerk/nextjs'
 import { Card, CardContent, CardTitle, CardHeader } from '@/components/ui/card'
@@ -34,7 +34,7 @@ interface MonthlyEarnings {
   count: number;
 }
 
-export default function ContractorPaymentsPage() {
+function ContractorPaymentsPageContent() {
   const { isLoaded, isAuthorized } = useRequireRole('contractor')
   const { user } = useUser()
   const [loading, setLoading] = useState(true)
@@ -613,5 +613,13 @@ export default function ContractorPaymentsPage() {
         </DialogContent>
       </Dialog>
     </main>
+  )
+}
+
+export default function ContractorPaymentsPage() {
+  return (
+    <Suspense fallback={null}>
+      <ContractorPaymentsPageContent />
+    </Suspense>
   )
 } 

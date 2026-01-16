@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { useRequireRole } from '../../use-require-role';
 import { getContractorProfile, saveContractorFeedback } from '@/lib/firebase/contractors';
@@ -200,7 +200,7 @@ function FeedbackForm({ review, contractorId, onFeedbackSaved }: {
   );
 }
 
-export default function ContractorReviewsPage() {
+function ContractorReviewsPageContent() {
   const { isLoaded: isAuthLoaded, isAuthorized } = useRequireRole('contractor');
   const { user, isLoaded: isUserLoaded } = useUser();
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -558,4 +558,12 @@ export default function ContractorReviewsPage() {
       </div>
     </div>
   );
+}
+
+export default function ContractorReviewsPage() {
+  return (
+    <Suspense fallback={null}>
+      <ContractorReviewsPageContent />
+    </Suspense>
+  )
 } 

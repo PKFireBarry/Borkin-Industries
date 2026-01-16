@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { Suspense, useState } from 'react'
 import { getAllContractors, getContractorServiceOfferings } from '@/lib/firebase/contractors'
 import { getAllPlatformServices } from '@/lib/firebase/services'
 import { Card, CardContent, CardTitle } from '@/components/ui/card'
@@ -25,7 +25,7 @@ interface ContractorWithServices extends Contractor {
   serviceOfferings: ContractorServiceOffering[]
 }
 
-export default function ContractorsPageWrapper() {
+function ContractorsPageContent() {
   // All Hooks must be called at the top level, before any conditional returns.
   const { isLoaded, isAuthorized } = useRequireRole('client')
   const { user } = useUser()
@@ -460,5 +460,13 @@ export default function ContractorsPageWrapper() {
         />
       )}
     </div>
+  )
+}
+
+export default function ContractorsPageWrapper() {
+  return (
+    <Suspense fallback={null}>
+      <ContractorsPageContent />
+    </Suspense>
   )
 } 
