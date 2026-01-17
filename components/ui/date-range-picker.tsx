@@ -102,6 +102,19 @@ export function DateRangePicker({ value, onChange, minDate, className = '', unav
     return dateObj < minDateObj
   }
 
+  // Check if any date in a range is unavailable
+  const rangeIncludesUnavailableDate = (start: string, end: string): boolean => {
+    const startDate = parseDate(start)
+    const endDate = parseDate(end)
+    const current = new Date(startDate)
+    while (current <= endDate) {
+      const dateStr = formatDate(current)
+      if (unavailableSet.has(dateStr)) return true
+      current.setDate(current.getDate() + 1)
+    }
+    return false
+  }
+
   // Handle date click
   const handleDateClick = (date: string) => {
     if (isDateDisabled(date)) return
@@ -110,15 +123,24 @@ export function DateRangePicker({ value, onChange, minDate, className = '', unav
       // Start new selection
       onChange({ startDate: date, endDate: null })
     } else if (value.startDate && !value.endDate) {
-      // Complete the range
+      // Require minimum 2 days - don't allow same-day selection
+      if (date === value.startDate) {
+        return
+      }
+
+      // Determine actual start and end
       const startObj = parseDate(value.startDate)
       const endObj = parseDate(date)
-      
-      if (endObj >= startObj) {
-        onChange({ startDate: value.startDate, endDate: date })
-      } else {
-        onChange({ startDate: date, endDate: value.startDate })
+      const actualStart = endObj >= startObj ? value.startDate : date
+      const actualEnd = endObj >= startObj ? date : value.startDate
+
+      // Check if range includes unavailable dates
+      if (rangeIncludesUnavailableDate(actualStart, actualEnd)) {
+        return
       }
+
+      // Complete the range
+      onChange({ startDate: actualStart, endDate: actualEnd })
     }
   }
 
@@ -179,14 +201,14 @@ export function DateRangePicker({ value, onChange, minDate, className = '', unav
       return `${startFormatted} - ${endFormatted}`
     } else if (value.startDate) {
       const start = parseDate(value.startDate)
-      const startFormatted = start.toLocaleDateString('en-US', { 
-        weekday: 'short', 
-        month: 'short', 
-        day: 'numeric' 
+      const startFormatted = start.toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric'
       })
-      return `${startFormatted} - Select end date`
+      return `${startFormatted} - Select a different end date`
     }
-    return 'Click two dates to select range'
+    return 'Click two dates to select range (min. 2 days)'
   }
 
   const calendarDays = generateCalendarDays()

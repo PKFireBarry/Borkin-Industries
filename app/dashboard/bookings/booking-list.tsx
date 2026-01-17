@@ -1,12 +1,12 @@
 import type { Booking } from '@/types/booking'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { removeBooking, getBookingsForClient, setClientCompleted, saveBookingReview, updateBookingServices } from '@/lib/firebase/bookings'
 
 import { useUser } from '@clerk/nextjs'
-import { getAllContractors, getContractorServiceOfferings } from '@/lib/firebase/contractors'
-import type { Contractor } from '@/types/contractor'
+import { getAllContractors, getContractorServiceOfferings, getContractorProfile } from '@/lib/firebase/contractors'
+import type { Contractor, Availability } from '@/types/contractor'
 import { getClientProfile } from '@/lib/firebase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
@@ -230,6 +230,7 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
   const [editModalForceOpen, setEditModalForceOpen] = useState(false);
   const [editModalWarning, setEditModalWarning] = useState<string | null>(null);
   const [bookingMessageEligibility, setBookingMessageEligibility] = useState<Record<string, boolean>>({});
+  const [contractorAvailability, setContractorAvailability] = useState<Availability | null>(null);
 
   useEffect(() => {
     async function fetchContractors() {
@@ -349,6 +350,40 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
       }
     }
   }, [editServicesModal.open, editServicesModal.booking])
+
+  // Fetch contractor availability when edit modal opens
+  useEffect(() => {
+    async function fetchAvailability() {
+      if (!editServicesModal.open || !editServicesModal.booking?.contractorId) {
+        setContractorAvailability(null)
+        return
+      }
+      try {
+        const profile = await getContractorProfile(editServicesModal.booking.contractorId)
+        if (profile?.availability) {
+          setContractorAvailability(profile.availability)
+        } else {
+          setContractorAvailability(null)
+        }
+      } catch (error) {
+        console.warn('Failed to fetch contractor availability:', error)
+        setContractorAvailability(null)
+      }
+    }
+    fetchAvailability()
+  }, [editServicesModal.open, editServicesModal.booking?.contractorId])
+
+  // Derive unavailable dates for calendar overlay
+  const unavailableDatesForCalendar = useMemo(() => {
+    if (!contractorAvailability) return [] as string[]
+    const direct = contractorAvailability.unavailableDates || []
+    const daily = contractorAvailability.dailyAvailability || []
+    const isFullDay = (start: string, end: string) => start === '00:00' && (end === '23:59' || end === '24:00')
+    const fullDayFromDaily = daily
+      .filter(d => d.isFullyUnavailable || (d.unavailableSlots || []).some(s => isFullDay(s.startTime, s.endTime)))
+      .map(d => d.date)
+    return Array.from(new Set([...direct, ...fullDayFromDaily]))
+  }, [contractorAvailability])
 
   // Recalc numDays and total when end date/time or services change
   useEffect(() => {
@@ -1050,9 +1085,9 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
                       >
                         {/* Status Indicator Bar */}
                         <div className={`absolute top-0 left-0 right-0 h-1 ${b.status === 'completed' ? 'bg-gradient-to-r from-green-400 to-emerald-500' :
-                            b.status === 'pending' ? 'bg-gradient-to-r from-yellow-400 to-orange-500' :
-                              b.status === 'approved' ? 'bg-gradient-to-r from-blue-400 to-indigo-500' :
-                                'bg-gradient-to-r from-slate-300 to-slate-400'
+                          b.status === 'pending' ? 'bg-gradient-to-r from-yellow-400 to-orange-500' :
+                            b.status === 'approved' ? 'bg-gradient-to-r from-blue-400 to-indigo-500' :
+                              'bg-gradient-to-r from-slate-300 to-slate-400'
                           }`}></div>
 
                         <CardHeader className="pb-4">
@@ -1081,9 +1116,9 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
                                   ${formatAmount(b.paymentAmount || 0)}
                                 </div>
                                 <div className={`text-sm font-medium capitalize ${b.paymentStatus === 'paid' ? 'text-green-600' :
-                                    b.paymentStatus === 'pending' ? 'text-yellow-600' :
-                                      b.paymentStatus === 'cancelled' ? 'text-red-600' :
-                                        'text-slate-500'
+                                  b.paymentStatus === 'pending' ? 'text-yellow-600' :
+                                    b.paymentStatus === 'cancelled' ? 'text-red-600' :
+                                      'text-slate-500'
                                   }`}>
                                   {b.paymentStatus}
                                 </div>
@@ -1330,9 +1365,9 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
                 <div className="flex flex-col sm:items-end gap-2">
                   <StatusBadge status={detailBooking.status} />
                   <span className={`text-sm font-medium capitalize ${detailBooking.paymentStatus === 'paid' ? 'text-green-600' :
-                      detailBooking.paymentStatus === 'pending' ? 'text-yellow-600' :
-                        detailBooking.paymentStatus === 'cancelled' ? 'text-red-600' :
-                          'text-slate-500'
+                    detailBooking.paymentStatus === 'pending' ? 'text-yellow-600' :
+                      detailBooking.paymentStatus === 'cancelled' ? 'text-red-600' :
+                        'text-slate-500'
                     }`}>
                     Payment: {detailBooking.paymentStatus}
                   </span>
@@ -1667,22 +1702,22 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
 
               {/* Re-approval Warning for Approved Bookings with Date Changes */}
               {editServicesModal.booking?.status === 'approved' &&
-               (editStartDate !== editServicesModal.booking?.startDate || editEndDate !== editServicesModal.booking?.endDate) && (
-                <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                  <div className="flex items-start space-x-3">
-                    <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                    <div>
-                      <h4 className="font-semibold text-amber-800">Re-Approval Required</h4>
-                      <p className="text-sm text-amber-700 mt-1">
-                        Changing the dates of an approved booking will require your contractor to re-approve the booking.
-                        The booking status will be moved back to Pending until the contractor confirms the new dates.
-                      </p>
+                (editStartDate !== editServicesModal.booking?.startDate || editEndDate !== editServicesModal.booking?.endDate) && (
+                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                    <div className="flex items-start space-x-3">
+                      <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      <div>
+                        <h4 className="font-semibold text-amber-800">Re-Approval Required</h4>
+                        <p className="text-sm text-amber-700 mt-1">
+                          Changing the dates of an approved booking will require your contractor to re-approve the booking.
+                          The booking status will be moved back to Pending until the contractor confirms the new dates.
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
 
               {/* Date & Time Section */}
               <div className="p-6 bg-white rounded-2xl border border-slate-200/60 shadow-sm">
@@ -1716,10 +1751,13 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
                     <DateRangePicker
                       value={{ startDate: editStartDate, endDate: editEndDate }}
                       onChange={(range) => {
-                        if (range.startDate) setEditStartDate(range.startDate)
-                        if (range.endDate) setEditEndDate(range.endDate)
+                        // Always update both values to ensure state stays in sync
+                        // When selecting a start date, endDate will be null and must be cleared
+                        setEditStartDate(range.startDate)
+                        setEditEndDate(range.endDate)
                       }}
                       minDate={new Date().toISOString().split('T')[0]}
+                      unavailableDates={unavailableDatesForCalendar}
                       className="w-full"
                     />
                   </div>
@@ -1897,8 +1935,8 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
                         <div
                           key={offering.serviceId}
                           className={`group relative p-4 border-2 rounded-2xl cursor-pointer transition-all duration-200 ${checked
-                              ? 'border-emerald-300 bg-gradient-to-br from-emerald-50 to-emerald-100 shadow-lg transform scale-105'
-                              : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md hover:bg-slate-50'
+                            ? 'border-emerald-300 bg-gradient-to-br from-emerald-50 to-emerald-100 shadow-lg transform scale-105'
+                            : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md hover:bg-slate-50'
                             }`}
                           onClick={() => {
                             const serviceToAdd = {
@@ -1915,8 +1953,8 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
                         >
                           <div className="flex items-start space-x-3">
                             <div className={`mt-0.5 w-5 h-5 border-2 rounded-md transition-all duration-200 flex items-center justify-center ${checked
-                                ? 'bg-emerald-600 border-emerald-600'
-                                : 'bg-white border-slate-300 group-hover:border-emerald-400'
+                              ? 'bg-emerald-600 border-emerald-600'
+                              : 'bg-white border-slate-300 group-hover:border-emerald-400'
                               }`}>
                               {checked && (
                                 <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
