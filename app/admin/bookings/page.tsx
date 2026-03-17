@@ -111,7 +111,12 @@ export default async function AdminBookingsPage() {
       <div className="space-y-10">
         {/* Pass the correctly typed bookings to child components */}
         <BookingsSummary bookings={bookings} />
-        <AdminBookingsClient bookings={bookings} />
+        <AdminBookingsClient
+          bookings={bookings}
+          services={serializedServices}
+          clients={serializedClients}
+          contractors={serializedContractors}
+        />
       </div>
     </div>
   )

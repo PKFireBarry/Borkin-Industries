@@ -1,6 +1,6 @@
 import nodemailer from 'nodemailer'
-import { 
-  createBookingRequestClientEmail, 
+import {
+  createBookingRequestClientEmail,
   createNewGigRequestContractorEmail,
   createBookingApprovedClientEmail,
   createBookingDeclinedClientEmail,
@@ -9,7 +9,9 @@ import {
   createBookingCompletedClientEmail,
   createPaymentFailureEmail,
   createNewMessageEmail,
-  createServicesUpdatedContractorEmail
+  createServicesUpdatedContractorEmail,
+  createAdminPriceUpdatedClientEmail,
+  createAdminPriceUpdatedContractorEmail
 } from './templates'
 import type { Booking } from '@/types/booking'
 import type { Client } from '@/types/client'
@@ -246,6 +248,46 @@ export async function sendClientCancelledBookingNotification(
     console.log('Client cancelled booking notification sent successfully to contractor')
   } catch (error) {
     console.error('Error sending client cancelled booking notification:', error)
+  }
+}
+
+// Send admin price updated notifications (to both client and contractor)
+export async function sendAdminPriceUpdatedNotifications(
+  booking: Booking,
+  client: Client,
+  contractor: Contractor,
+  services: PlatformService[],
+  previousServices: {
+    serviceId: string
+    paymentType: 'one_time' | 'daily'
+    price: number
+    name?: string
+  }[]
+): Promise<void> {
+  const transporter = createTransporter()
+
+  try {
+    const clientEmail = createAdminPriceUpdatedClientEmail(booking, client, contractor, services, previousServices)
+    await transporter.sendMail({
+      from: `"${process.env.SMTP_FROM_NAME}" <${process.env.SMTP_FROM}>`,
+      to: client.email,
+      subject: clientEmail.subject,
+      html: clientEmail.html,
+      text: clientEmail.text,
+    })
+
+    const contractorEmail = createAdminPriceUpdatedContractorEmail(booking, client, contractor, services, previousServices)
+    await transporter.sendMail({
+      from: `"${process.env.SMTP_FROM_NAME}" <${process.env.SMTP_FROM}>`,
+      to: contractor.email,
+      subject: contractorEmail.subject,
+      html: contractorEmail.html,
+      text: contractorEmail.text,
+    })
+
+    console.log('Admin price updated notifications sent successfully')
+  } catch (error) {
+    console.error('Error sending admin price updated notifications:', error)
   }
 }
 
