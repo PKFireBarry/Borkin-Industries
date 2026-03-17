@@ -11,16 +11,17 @@ import { UpdateCouponData } from '@/types/coupon'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const user = await currentUser()
-    
+
     if (!user || !isAdmin(user)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const coupon = await getCoupon(params.id)
+    const coupon = await getCoupon(id)
     
     if (!coupon) {
       return NextResponse.json({ error: 'Coupon not found' }, { status: 404 })
@@ -38,20 +39,21 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const user = await currentUser()
-    
+
     if (!user || !isAdmin(user)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const body = await request.json()
-    
+
     // If code is being updated, check if it already exists
     if (body.code) {
-      const existingCoupon = await getCoupon(params.id)
+      const existingCoupon = await getCoupon(id)
       if (!existingCoupon) {
         return NextResponse.json({ error: 'Coupon not found' }, { status: 404 })
       }
@@ -75,7 +77,7 @@ export async function PATCH(
       maxUsage: body.maxUsage
     }
 
-    await updateCoupon(params.id, updateData)
+    await updateCoupon(id, updateData)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error in PATCH /api/admin/coupons/[id]:', error)
@@ -94,16 +96,17 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const user = await currentUser()
-    
+
     if (!user || !isAdmin(user)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    await deleteCoupon(params.id)
+    await deleteCoupon(id)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error in DELETE /api/admin/coupons/[id]:', error)
