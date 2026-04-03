@@ -10,6 +10,7 @@ import {
   createPaymentFailureEmail,
   createNewMessageEmail,
   createServicesUpdatedContractorEmail,
+  createServicesUpdatedClientEmail,
   createAdminPriceUpdatedClientEmail,
   createAdminPriceUpdatedContractorEmail
 } from './templates'
@@ -314,16 +315,27 @@ export async function sendServicesUpdatedNotification(
   const transporter = createTransporter()
 
   try {
-    const email = createServicesUpdatedContractorEmail(booking, client, contractor, services, previousServices, previousBookingData, statusReverted, previousStatus)
+    const contractorEmail = createServicesUpdatedContractorEmail(booking, client, contractor, services, previousServices, previousBookingData, statusReverted, previousStatus)
     await transporter.sendMail({
       from: `"${process.env.SMTP_FROM_NAME}" <${process.env.SMTP_FROM}>`,
       to: contractor.email,
-      subject: email.subject,
-      html: email.html,
-      text: email.text,
+      subject: contractorEmail.subject,
+      html: contractorEmail.html,
+      text: contractorEmail.text,
     })
 
-    console.log('Services updated notification sent successfully')
+    if (client.email) {
+      const clientEmail = createServicesUpdatedClientEmail(booking, client, contractor, services, previousBookingData, statusReverted)
+      await transporter.sendMail({
+        from: `"${process.env.SMTP_FROM_NAME}" <${process.env.SMTP_FROM}>`,
+        to: client.email,
+        subject: clientEmail.subject,
+        html: clientEmail.html,
+        text: clientEmail.text,
+      })
+    }
+
+    console.log('Services updated notifications sent successfully')
   } catch (error) {
     console.error('Error sending services updated notification:', error)
   }

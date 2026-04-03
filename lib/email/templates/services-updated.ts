@@ -231,4 +231,144 @@ The Boorkin Industries Team
     html: createEmailTemplate(content, emailTitle),
     text: textContent
   }
+}
+
+// CLIENT: Confirmation that their booking edit has been submitted
+export function createServicesUpdatedClientEmail(
+  booking: Booking,
+  client: Client,
+  contractor: Contractor,
+  services: PlatformService[],
+  previousBookingData?: {
+    startDate: string
+    endDate: string
+    endTime?: string
+  },
+  statusReverted?: boolean
+): { subject: string; html: string; text: string } {
+  const currentServiceDetails = booking.services?.map(bookingService => {
+    const platformService = services.find(s => s.id === bookingService.serviceId)
+    return {
+      name: platformService?.name || bookingService.name || bookingService.serviceId,
+      price: bookingService.price,
+      paymentType: bookingService.paymentType
+    }
+  }) || []
+
+  const currentTotalAmount = `$${booking.paymentAmount.toFixed(2)}`
+  const currentDateRange = formatBookingDateRange(booking.startDate, booking.endDate)
+  const previousDateRange = previousBookingData
+    ? formatBookingDateRange(previousBookingData.startDate, previousBookingData.endDate)
+    : null
+
+  const datesChanged = previousBookingData && (
+    previousBookingData.startDate !== booking.startDate ||
+    previousBookingData.endDate !== booking.endDate ||
+    previousBookingData.endTime !== booking.time?.endTime
+  )
+
+  const content = `
+    <p style="color: #374151; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
+      Hi ${client.name},
+    </p>
+
+    <p style="color: #374151; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
+      Your booking changes have been submitted successfully.
+    </p>
+
+    ${statusReverted ? `
+    <div style="background: #fef3c7; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #f59e0b;">
+      <h3 style="color: #92400e; margin: 0 0 15px 0; font-size: 18px;">Re-Approval Needed</h3>
+      <p style="color: #92400e; font-size: 14px; line-height: 1.6; margin: 0;">
+        Because the dates were changed, your booking has been moved back to <strong>Pending</strong> status.
+        <strong>${contractor.name}</strong> will need to re-approve the updated booking before it is confirmed.
+        You will receive an email once the contractor has reviewed your changes.
+      </p>
+    </div>
+    ` : ''}
+
+    <div style="background: #f0f9ff; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #0ea5e9;">
+      <h3 style="color: #0c4a6e; margin: 0 0 15px 0; font-size: 18px;">Updated Booking Details</h3>
+
+      <div style="margin-bottom: 15px;">
+        <strong style="color: #0c4a6e;">Contractor:</strong> ${contractor.name}<br>
+        <strong style="color: #0c4a6e;">Date & Time:</strong> ${currentDateRange}
+      </div>
+
+      ${datesChanged && previousDateRange ? `
+      <div style="margin-bottom: 15px; padding: 10px; background: #fff; border-radius: 6px;">
+        <strong style="color: #0c4a6e;">Schedule Change:</strong><br>
+        <span style="color: #991b1b;">Previous: ${previousDateRange}</span><br>
+        <span style="color: #065f46;">Updated: ${currentDateRange}</span>
+      </div>
+      ` : ''}
+
+      <div style="margin-bottom: 15px;">
+        <strong style="color: #0c4a6e;">Services:</strong>
+        <ul style="margin: 10px 0; padding-left: 20px;">
+          ${formatServicesList(currentServiceDetails)}
+        </ul>
+      </div>
+
+      <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #0ea5e9;">
+        <strong style="color: #0c4a6e;">Total Amount:</strong> ${currentTotalAmount}
+      </div>
+    </div>
+
+    <div style="text-align: center; margin: 30px 0;">
+      <a href="${process.env.NEXT_PUBLIC_APP_URL}/dashboard/bookings"
+         style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 30px; text-decoration: none; border-radius: 25px; font-weight: bold; display: inline-block;">
+        View Your Bookings
+      </a>
+    </div>
+
+    <p style="color: #6b7280; font-size: 14px; line-height: 1.6; margin-top: 20px;">
+      If you have any questions, please contact us at
+      <a href="mailto:${process.env.SMTP_FROM}" style="color: #667eea;">${process.env.SMTP_FROM}</a>
+      or call us at 352-340-3659.
+    </p>
+  `
+
+  const textContent = `
+Hi ${client.name},
+
+Your booking changes have been submitted successfully.
+
+${statusReverted ? `
+RE-APPROVAL NEEDED
+
+Because the dates were changed, your booking has been moved back to Pending status.
+${contractor.name} will need to re-approve the updated booking before it is confirmed.
+You will receive an email once the contractor has reviewed your changes.
+
+` : ''}UPDATED BOOKING DETAILS:
+Contractor: ${contractor.name}
+Date & Time: ${currentDateRange}
+
+${datesChanged && previousDateRange ? `
+SCHEDULE CHANGE:
+Previous: ${previousDateRange}
+Updated: ${currentDateRange}
+` : ''}
+
+Services:
+${currentServiceDetails.map(s => `- ${s.name} - $${(s.price / 100).toFixed(2)}${s.paymentType === 'daily' ? '/day' : ''}`).join('\n')}
+
+Total Amount: ${currentTotalAmount}
+
+View your bookings: ${process.env.NEXT_PUBLIC_APP_URL}/dashboard/bookings
+
+If you have any questions, please contact us at ${process.env.SMTP_FROM} or call us at 352-340-3659.
+
+Best regards,
+The Boorkin Industries Team
+  `
+
+  return {
+    subject: statusReverted
+      ? `Booking Update Submitted - Re-Approval Pending from ${contractor.name}`
+      : `Booking Updated Successfully - ${contractor.name}`,
+    html: createEmailTemplate(content, statusReverted ? 'Booking Update Submitted' : 'Booking Updated'),
+    text: textContent
+  }
 } 

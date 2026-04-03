@@ -502,7 +502,7 @@ export default function AdminBookingsClient({ bookings: initialBookings, service
                               </TableCell>
                               {isEditable && (
                                 <TableCell>
-                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => removeService(idx)}>
+                                  <Button variant="outline" className="h-8 w-8 p-0" onClick={() => removeService(idx)}>
                                     <X className="h-4 w-4" />
                                   </Button>
                                 </TableCell>

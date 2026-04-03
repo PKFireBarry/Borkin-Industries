@@ -732,8 +732,7 @@ export async function updateBookingServices({ bookingId, newServices, userId, ne
         booking.contractorId,
         booking.startDate,
         booking.endDate,
-        booking.time.startTime,
-        booking.time.endTime
+        { startTime: booking.time.startTime, endTime: booking.time.endTime }
       )
     } else {
       // Full-day booking

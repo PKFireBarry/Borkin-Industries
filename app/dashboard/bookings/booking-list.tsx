@@ -317,7 +317,8 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
     fetchOfferings()
   }, [editServicesModal, platformServices])
 
-  // When modal opens, set initial dates and recalc
+  // When modal opens, set initial dates and recalc (only on open, not on booking ref changes)
+  const editModalBookingId = editServicesModal.booking?.id
   useEffect(() => {
     if (editServicesModal.open && editServicesModal.booking) {
       setEditStartDate(editServicesModal.booking.startDate)
@@ -349,7 +350,8 @@ export function BookingList({ bookings: initialBookings, onNewBooking }: Booking
         setEditCouponCode('')
       }
     }
-  }, [editServicesModal.open, editServicesModal.booking])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editServicesModal.open, editModalBookingId])
 
   // Fetch contractor availability when edit modal opens
   useEffect(() => {

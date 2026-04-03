@@ -33,8 +33,16 @@ const MONTHS = [
 ]
 
 export function DateRangePicker({ value, onChange, minDate, className = '', unavailableDates = [], bookings = [] }: DateRangePickerProps) {
-  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth())
-  const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
+  const getInitialDate = () => {
+    if (value.startDate) {
+      const d = new Date(value.startDate + 'T00:00:00')
+      return { month: d.getMonth(), year: d.getFullYear() }
+    }
+    return { month: new Date().getMonth(), year: new Date().getFullYear() }
+  }
+  const initial = getInitialDate()
+  const [currentMonth, setCurrentMonth] = useState(initial.month)
+  const [currentYear, setCurrentYear] = useState(initial.year)
   const [hoverDate, setHoverDate] = useState<string | null>(null)
 
   const minDateObj = minDate ? new Date(minDate) : new Date()

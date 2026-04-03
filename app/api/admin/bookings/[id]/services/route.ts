@@ -98,10 +98,14 @@ export async function PATCH(
         const contractorData = contractorSnap.exists() ? contractorSnap.data() as Contractor : null
 
         if (contractorData?.stripeAccountId) {
+          const clientRef = doc(db, 'clients', booking.clientId)
+          const clientSnap = await getDoc(clientRef)
+          const clientData = clientSnap.exists() ? (clientSnap.data() as Client) : null
+
           const newIntent = await stripe.paymentIntents.create({
             amount: newAmountCents,
             currency: 'usd',
-            customer: booking.stripeCustomerId || undefined,
+            customer: clientData?.stripeCustomerId || undefined,
             capture_method: 'manual',
             transfer_data: {
               destination: contractorData.stripeAccountId,
