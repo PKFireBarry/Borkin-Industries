@@ -54,6 +54,10 @@ export interface Booking {
   // Optional fields for contractor/client completion tracking (if used)
   clientCompleted?: boolean
   contractorCompleted?: boolean
+  contractorCompletedAt?: string
+  completionRemindersSent?: number
+  lastReminderSentAt?: string | null
+  autoReleased?: boolean
 
   // Remove old single 'date' field if it's fully deprecated
   // date?: string; // Keep if some old bookings might still have it and need handling

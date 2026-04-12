@@ -1,6 +1,7 @@
 'use client'
 
-import React, { Suspense, useState } from 'react'
+import React, { Suspense, useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { getAllContractors, getContractorServiceOfferings } from '@/lib/firebase/contractors'
 import { getAllPlatformServices } from '@/lib/firebase/services'
 import { Card, CardContent, CardTitle } from '@/components/ui/card'
@@ -19,16 +20,46 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { MapPin, Star, Calendar, Filter, Search, X } from 'lucide-react'
+import { DashboardPageContent, DashboardPageHeader, DashboardPageShell } from '../components/dashboard-shell'
+import { EmptyState } from '../components/empty-state'
+import { MapPin, Star, Filter, Search, X } from 'lucide-react'
 
 interface ContractorWithServices extends Contractor {
   serviceOfferings: ContractorServiceOffering[]
+}
+
+const isFullDaySlot = (start: string, end: string) => start === '00:00' && (end === '23:59' || end === '24:00')
+
+const isContractorAvailableOnDate = (contractor: Contractor, date: string) => {
+  const availability = contractor.availability || {}
+  const unavailableDates = availability.unavailableDates || []
+  const dailyAvailability = availability.dailyAvailability || []
+
+  if (unavailableDates.includes(date)) {
+    return false
+  }
+
+  const day = dailyAvailability.find((entry) => entry.date === date)
+  if (!day) {
+    return true
+  }
+
+  if (day.isFullyUnavailable) {
+    return false
+  }
+
+  if ((day.unavailableSlots || []).some((slot) => isFullDaySlot(slot.startTime, slot.endTime))) {
+    return false
+  }
+
+  return true
 }
 
 function ContractorsPageContent() {
   // All Hooks must be called at the top level, before any conditional returns.
   const { isLoaded, isAuthorized } = useRequireRole('client')
   const { user } = useUser()
+  const searchParams = useSearchParams()
 
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedContractor, setSelectedContractor] = useState<Contractor | null>(null)
@@ -37,12 +68,14 @@ function ContractorsPageContent() {
   const [filterService, setFilterService] = useState('all')
   const [filterDate, setFilterDate] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const [showFilters, setShowFilters] = useState(false)
   const [isBookingOpen, setIsBookingOpen] = useState(false)
   const [bookingForContractorId, setBookingForContractorId] = useState<string | null>(null)
   const [clientLocation, setClientLocation] = useState<{ address?: string; city?: string; state?: string; postalCode?: string } | null>(null)
-  const [showFilters, setShowFilters] = useState(false)
   const [loading, setLoading] = useState(true)
   const { validateBeforeBooking, isValidationModalOpen, validationError, closeValidationModal } = useProfileValidation()
+  const initialContractorId = searchParams.get('contractorId')
+  const [hasHandledInitialContractorId, setHasHandledInitialContractorId] = useState(false)
 
   // Moved useEffect Hooks before the early return
   // Fetch contractors and platform services on mount
@@ -100,15 +133,25 @@ function ContractorsPageContent() {
     })
   }, [user, isAuthorized]) // Added isAuthorized dependency
 
+  useEffect(() => {
+    if (!initialContractorId || hasHandledInitialContractorId || contractors.length === 0 || modalOpen) return
+    const matchedContractor = contractors.find((contractor) => contractor.id === initialContractorId)
+    if (matchedContractor) {
+      setSelectedContractor(matchedContractor)
+      setModalOpen(true)
+      setHasHandledInitialContractorId(true)
+    }
+  }, [initialContractorId, contractors, hasHandledInitialContractorId, modalOpen])
+
   // Early return after all Hooks have been declared
   if (!isLoaded || !isAuthorized || loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p className="text-slate-600 font-medium">Finding amazing pet care professionals...</p>
+      <DashboardPageShell className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 via-white to-blue-50/60">
+        <div className="space-y-4 text-center">
+          <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+          <p className="font-medium text-slate-600">Finding amazing pet care professionals...</p>
         </div>
-      </div>
+      </DashboardPageShell>
     )
   }
 
@@ -123,8 +166,8 @@ function ContractorsPageContent() {
     const matchesService = !filterService || filterService === 'all' || 
       c.serviceOfferings.some(offering => offering.serviceId === filterService)
     
-    // Check if the selected date is NOT in the contractor's unavailable dates
-    const matchesDate = !filterDate || !(c.availability?.unavailableDates || []).includes(filterDate)
+    // Match current availability model including full-day dailyAvailability blocks
+    const matchesDate = !filterDate || isContractorAvailableOnDate(c, filterDate)
     
     // Search in name, location, bio, and offered services
     const matchesSearch = !searchQuery || 
@@ -171,6 +214,7 @@ function ContractorsPageContent() {
   }
 
   const hasActiveFilters = (filterService && filterService !== 'all') || filterDate || searchQuery
+  const activeFilterCount = [filterService !== 'all' ? filterService : null, filterDate, searchQuery].filter(Boolean).length
 
   // Calculate average rating for a contractor
   const getAverageRating = (contractor: Contractor) => {
@@ -180,229 +224,249 @@ function ContractorsPageContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
-      {/* Hero Section */}
-      <div className="bg-white border-b border-slate-200/60">
-        <div className="container mx-auto px-4 py-8 md:py-12">
-          <div className="text-center max-w-3xl mx-auto">
-            <h1 className="text-4xl md:text-5xl font-bold text-slate-900 mb-4 tracking-tight">
-              Find Your Perfect
-              <span className="text-primary block md:inline md:ml-3">Pet Care Professional</span>
-            </h1>
-            <p className="text-lg text-slate-600 mb-8 leading-relaxed">
-              Connect with trusted, experienced pet care specialists in your area. 
-              From daily walks to specialized care, find the perfect match for your furry family.
-            </p>
-            
-            {/* Search Bar */}
-            <div className="relative max-w-2xl mx-auto mb-6">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
-              <Input
-                placeholder="Search by name, location, or services..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-12 pr-4 py-4 text-lg border-2 border-slate-200 rounded-2xl focus:border-primary focus:ring-0 shadow-sm"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-4 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              )}
-            </div>
-
-            {/* Filter Toggle */}
-            <Button
-              variant="outline"
-              onClick={() => setShowFilters(!showFilters)}
-              className="rounded-full px-6 py-2 border-2 hover:bg-slate-50 transition-all duration-200"
-            >
-              <Filter className="w-4 h-4 mr-2" />
-              Filters
-              {hasActiveFilters && (
-                <Badge variant="secondary" className="ml-2 px-2 py-0.5 text-xs">
-                  {[filterService !== 'all' ? filterService : null, filterDate, searchQuery].filter(Boolean).length}
-                </Badge>
-              )}
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      <div className="container mx-auto px-4 py-8">
-        {/* Filters Section */}
-        {showFilters && (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 p-6 mb-8 transition-all duration-300">
-            <div className="flex flex-wrap gap-4 items-end">
-              <div className="flex-1 min-w-[200px]">
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Service Type</label>
-                <Select value={filterService} onValueChange={setFilterService}>
-                  <SelectTrigger className="rounded-xl border-2 border-slate-200">
-                    <SelectValue placeholder="All Services" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Services</SelectItem>
-                    {platformServices.map(service => (
-                      <SelectItem key={service.id} value={service.id}>{service.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="flex-1 min-w-[200px]">
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Available Date</label>
+    <DashboardPageShell className="bg-gradient-to-br from-slate-50 via-white to-blue-50/60">
+      <DashboardPageContent className="space-y-4 pb-8 pt-4 sm:space-y-6 sm:pb-10 sm:pt-6 lg:pb-12">
+        <DashboardPageHeader
+          variant="summary"
+          title="Find your next pet care professional"
+          description="Connect with trusted, experienced pet care specialists in your area. From daily walks to specialized care, find the right fit for your pets without digging through oversized cards."
+          eyebrow={
+            <>
+              <Badge className="rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-primary hover:bg-primary/10">
+                Find contractors
+              </Badge>
+              <Badge variant="secondary" className="rounded-full bg-white/80 px-2.5 py-1 text-[10px] font-medium text-slate-600">
+                {contractors.length} approved pros
+              </Badge>
+            </>
+          }
+          meta={
+            <div className="flex flex-col gap-3">
+              <div className="relative flex-1">
+                <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <Input
-                  type="date"
-                  value={filterDate}
-                  onChange={(e) => setFilterDate(e.target.value)}
-                  className="rounded-xl border-2 border-slate-200"
+                  placeholder="Search by name, location, or service"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-11 rounded-2xl border-slate-200 bg-slate-50 pl-10 pr-10 text-sm shadow-none focus-visible:border-primary focus-visible:ring-1 focus-visible:ring-primary"
                 />
+                {searchQuery ? (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-600"
+                    aria-label="Clear search"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                ) : null}
               </div>
-              
-              {hasActiveFilters && (
-                <Button
-                  variant="outline"
-                  onClick={clearAllFilters}
-                  className="rounded-xl px-4 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-                >
-                  <X className="w-4 h-4 mr-2" />
-                  Clear All
-                </Button>
-              )}
-            </div>
-          </div>
-        )}
 
-        {/* Results Header */}
-        <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="pill"
+                  onClick={() => setShowFilters((current) => !current)}
+                  className="h-11 rounded-2xl border-slate-200 bg-white/80 px-4 text-sm text-slate-700 hover:bg-white"
+                >
+                  <Filter className="mr-2 h-4 w-4" />
+                  Filters
+                  {hasActiveFilters ? (
+                    <Badge variant="secondary" className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-700">
+                      {activeFilterCount}
+                    </Badge>
+                  ) : null}
+                </Button>
+
+                {hasActiveFilters ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="pill"
+                    onClick={clearAllFilters}
+                    className="h-11 rounded-2xl px-3 text-sm text-slate-600 hover:bg-white/70 hover:text-slate-900"
+                  >
+                    <X className="mr-2 h-4 w-4" />
+                    Clear
+                  </Button>
+                ) : null}
+              </div>
+
+              {showFilters ? (
+                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] sm:items-end">
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                      <Filter className="h-3.5 w-3.5" />
+                      Service type
+                    </label>
+                    <Select value={filterService} onValueChange={setFilterService}>
+                      <SelectTrigger className="h-11 rounded-2xl border-blue-100 bg-white/85 text-sm shadow-none">
+                        <SelectValue placeholder="All services" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Services</SelectItem>
+                        {platformServices.map((service) => (
+                          <SelectItem key={service.id} value={service.id}>
+                            {service.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Available date</label>
+                    <Input
+                      type="date"
+                      value={filterDate}
+                      onChange={(e) => setFilterDate(e.target.value)}
+                      className="h-11 rounded-2xl border-purple-100 bg-white/85 text-sm shadow-none"
+                    />
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          }
+        />
+
+          <div className="flex flex-col gap-3 rounded-[1.5rem] border border-slate-200/70 bg-white/70 p-4 shadow-sm sm:flex-row sm:items-end sm:justify-between sm:p-5">
           <div>
-            <h2 className="text-2xl font-bold text-slate-900">
-              {filteredContractors.length} Professional{filteredContractors.length !== 1 ? 's' : ''} Available
+            <h2 className="text-base font-semibold text-slate-900 sm:text-xl">
+              {filteredContractors.length} professional{filteredContractors.length !== 1 ? 's' : ''} available
             </h2>
-            <p className="text-slate-600 mt-1">
-              {hasActiveFilters ? 'Filtered results' : 'All available pet care professionals'}
+            <p className="mt-1 text-sm text-slate-600">
+              {hasActiveFilters ? 'Showing filtered results for your current search.' : 'Browse all approved pet care professionals currently available to book.'}
             </p>
           </div>
+
+          {hasActiveFilters ? (
+            <div className="flex flex-wrap gap-2">
+              {filterService !== 'all' ? (
+                <Badge variant="secondary" className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] text-primary">
+                  {getServiceName(filterService)}
+                </Badge>
+              ) : null}
+              {filterDate ? (
+                <Badge variant="secondary" className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] text-blue-700">
+                  {filterDate}
+                </Badge>
+              ) : null}
+              {searchQuery ? (
+                <Badge variant="secondary" className="max-w-[16rem] truncate rounded-full bg-slate-100 px-2.5 py-1 text-[11px] text-slate-700">
+                  {searchQuery}
+                </Badge>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
-        {/* Contractors Grid */}
         {filteredContractors.length === 0 ? (
-          <div className="text-center py-20">
-            <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Search className="w-12 h-12 text-slate-400" />
-            </div>
-            <h3 className="text-xl font-semibold text-slate-900 mb-2">No professionals found</h3>
-            <p className="text-slate-600 mb-6 max-w-md mx-auto">
-              Try adjusting your search criteria or clearing filters to see more results.
-            </p>
-            {hasActiveFilters && (
-              <Button onClick={clearAllFilters} variant="outline" className="rounded-full">
-                Clear All Filters
+          <EmptyState
+            icon={<Search className="h-6 w-6 text-slate-400" />}
+            title="No professionals found"
+            description="Try adjusting your search criteria or clearing filters to see more results."
+            iconInCircle
+            iconWrapperClassName="h-14 w-14 bg-slate-100"
+            className="py-14"
+          >
+            {hasActiveFilters ? (
+              <Button type="button" onClick={clearAllFilters} variant="outline" size="pill">
+                Clear all filters
               </Button>
-            )}
-          </div>
+            ) : null}
+          </EmptyState>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {filteredContractors.map((contractor) => {
               const averageRating = getAverageRating(contractor)
               const reviewCount = contractor.ratings?.length || 0
-              
+              const accentShell = [
+                'border-pink-100 bg-gradient-to-br from-pink-50 via-white to-white',
+                'border-blue-100 bg-gradient-to-br from-blue-50 via-white to-white',
+                'border-purple-100 bg-gradient-to-br from-purple-50 via-white to-white',
+                'border-amber-100 bg-gradient-to-br from-amber-50 via-white to-white',
+                'border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-white',
+              ][filteredContractors.indexOf(contractor) % 5]
+
               return (
-                <Card 
-                  key={contractor.id} 
-                  className="group bg-white border-0 shadow-sm hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden cursor-pointer transform hover:-translate-y-1"
+                <Card
+                  key={contractor.id}
+                  className={`group cursor-pointer rounded-[1.6rem] border shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${accentShell}`}
                   onClick={() => handleOpenModal(contractor)}
                 >
-                  {/* Image Section */}
-                  <div className="relative h-48 bg-gradient-to-br from-primary/5 to-primary/10 flex items-center justify-center overflow-hidden">
-                    <Avatar className="w-24 h-24 border-4 border-white shadow-lg group-hover:scale-110 transition-transform duration-300">
-                      <AvatarImage 
-                        src={contractor.profileImage || '/avatars/default.png'} 
-                        alt={contractor.name || 'Contractor'} 
-                        className="object-cover" 
-                      />
-                      <AvatarFallback className="bg-primary/10 text-primary font-bold text-2xl">
-                        {contractor.name ? contractor.name[0].toUpperCase() : 'C'}
-                      </AvatarFallback>
-                    </Avatar>
-                    
-                    {/* Rating Badge */}
-                    {averageRating > 0 && (
-                      <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-sm rounded-full px-2 py-1 flex items-center gap-1 shadow-sm">
-                        <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-                        <span className="text-xs font-semibold text-slate-700">
-                          {averageRating.toFixed(1)}
-                        </span>
+                  <CardContent className="p-4 sm:p-5">
+                    <div className="flex items-start gap-3">
+                      <Avatar className="h-16 w-16 shrink-0 rounded-2xl border-2 border-white shadow-sm sm:h-20 sm:w-20">
+                        <AvatarImage src={contractor.profileImage || '/avatars/default.png'} alt={contractor.name || 'Contractor'} className="object-cover" />
+                        <AvatarFallback className="rounded-2xl bg-primary/10 text-lg font-semibold text-primary sm:text-xl">
+                          {contractor.name ? contractor.name[0].toUpperCase() : 'C'}
+                        </AvatarFallback>
+                      </Avatar>
+
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <h3 className="truncate text-base font-semibold text-slate-900 transition-colors group-hover:text-primary sm:text-lg">
+                              {contractor.name || 'Unnamed Contractor'}
+                            </h3>
+                            {(contractor.city || contractor.state) ? (
+                              <div className="mt-1 flex items-center gap-1 text-xs text-slate-500 sm:text-sm">
+                                <MapPin className="h-3.5 w-3.5 shrink-0" />
+                                <span className="truncate">{[contractor.city, contractor.state].filter(Boolean).join(', ')}</span>
+                              </div>
+                            ) : null}
+                          </div>
+
+                          {averageRating > 0 ? (
+                            <div className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">
+                              <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                              {averageRating.toFixed(1)}
+                            </div>
+                          ) : null}
+                        </div>
+
+                        {reviewCount > 0 ? (
+                          <div className="flex items-center gap-1 text-xs text-slate-500 sm:text-sm">
+                            <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                            <span className="font-medium text-slate-700">{averageRating.toFixed(1)}</span>
+                            <span>{reviewCount} review{reviewCount !== 1 ? 's' : ''}</span>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-slate-500 sm:text-sm">New to Borkin. No reviews yet.</p>
+                        )}
                       </div>
-                    )}
-                  </div>
-
-                  <CardContent className="p-6">
-                    {/* Header */}
-                    <div className="mb-4">
-                      <CardTitle className="text-xl font-bold text-slate-900 mb-1 group-hover:text-primary transition-colors">
-                        {contractor.name || 'Unnamed Contractor'}
-                      </CardTitle>
-                      
-                      {/* Location */}
-                      {(contractor.city || contractor.state) && (
-                        <div className="flex items-center text-slate-500 text-sm mb-2">
-                          <MapPin className="w-4 h-4 mr-1" />
-                          {[contractor.city, contractor.state].filter(Boolean).join(', ')}
-                        </div>
-                      )}
-
-                      {/* Reviews */}
-                      {reviewCount > 0 && (
-                        <div className="flex items-center text-slate-500 text-sm">
-                          <Star className="w-4 h-4 mr-1 fill-yellow-400 text-yellow-400" />
-                          <span className="font-medium text-slate-700">{averageRating.toFixed(1)}</span>
-                          <span className="ml-1">({reviewCount} review{reviewCount !== 1 ? 's' : ''})</span>
-                        </div>
-                      )}
                     </div>
 
-                    {/* Bio */}
-                    <p className="text-slate-600 text-sm mb-4 line-clamp-2 leading-relaxed">
-                      {contractor.bio || contractor.experience?.substring(0,100) || 'Experienced pet care professional dedicated to providing the best care for your furry friends.'}
+                    <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600">
+                      {contractor.bio || contractor.experience?.substring(0, 100) || 'Experienced pet care professional dedicated to providing thoughtful support for your furry family.'}
                     </p>
 
-                    {/* Services */}
-                    {contractor.serviceOfferings && contractor.serviceOfferings.length > 0 && (
-                      <div className="mb-4">
-                        <div className="flex flex-wrap gap-1">
-                          {contractor.serviceOfferings.slice(0, 3).map((offering, index) => (
-                            <Badge 
-                              key={index} 
-                              variant="secondary" 
-                              className="text-xs px-2 py-1 bg-primary/10 text-primary border-0 rounded-full"
-                            >
-                              {getServiceName(offering.serviceId)}
-                            </Badge>
-                          ))}
-                          {contractor.serviceOfferings.length > 3 && (
-                            <Badge 
-                              variant="secondary" 
-                              className="text-xs px-2 py-1 bg-slate-100 text-slate-600 border-0 rounded-full"
-                            >
-                              +{contractor.serviceOfferings.length - 3} more
-                            </Badge>
-                          )}
-                        </div>
+                    {contractor.serviceOfferings && contractor.serviceOfferings.length > 0 ? (
+                      <div className="mt-4 flex flex-wrap gap-1.5">
+                        {contractor.serviceOfferings.slice(0, 3).map((offering, index) => (
+                          <Badge key={index} variant="secondary" className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] text-primary">
+                            {getServiceName(offering.serviceId)}
+                          </Badge>
+                        ))}
+                        {contractor.serviceOfferings.length > 3 ? (
+                          <Badge variant="secondary" className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] text-slate-600">
+                            +{contractor.serviceOfferings.length - 3} more
+                          </Badge>
+                        ) : null}
                       </div>
-                    )}
+                    ) : null}
 
-                    {/* Driving Range */}
-                    <div className="flex items-center justify-between text-sm text-slate-500 mb-4">
-                      <span>Service Range:</span>
-                      <span className="font-medium text-slate-700">{contractor.drivingRange || 'Contact for details'}</span>
+                    <div className="mt-4 flex items-center justify-between rounded-xl border border-white/80 bg-white/75 px-3 py-2 text-xs text-slate-500">
+                      <span>Service range</span>
+                      <span className="font-medium text-slate-700">{contractor.drivingRange ? `${contractor.drivingRange} miles` : 'Contact for details'}</span>
                     </div>
 
-                    {/* CTA Button */}
-                    <Button 
-                      className="w-full rounded-xl font-semibold py-3 bg-primary hover:bg-primary/90 text-white shadow-sm hover:shadow-md transition-all duration-200"
+                    <Button
+                      type="button"
+                      variant="petCta"
+                      size="pill"
+                      className="mt-4 h-10 w-full rounded-xl text-sm"
                       onClick={(e) => {
                         e.stopPropagation()
                         handleOpenModal(contractor)
@@ -416,7 +480,7 @@ function ContractorsPageContent() {
             })}
           </div>
         )}
-      </div>
+      </DashboardPageContent>
 
       {/* Modals */}
       {modalOpen && selectedContractor && (
@@ -459,7 +523,7 @@ function ContractorsPageContent() {
           error={validationError}
         />
       )}
-    </div>
+    </DashboardPageShell>
   )
 }
 

@@ -158,8 +158,7 @@ export async function removeGigTimeFromContractorCalendar(
     const dayMap = new Map<string, DayAvailability>()
     dailyAvailability.forEach(day => dayMap.set(day.date, { ...day }))
 
-    // Track dates that should be completely removed
-    const datesToRemove = new Set<string>()
+    const hasManualAvailability = (day: DayAvailability) => Boolean(day.availableSlots && day.availableSlots.length > 0)
 
     if (isOvernight) {
       // Handle overnight booking removal spanning multiple days
@@ -173,8 +172,12 @@ export async function removeGigTimeFromContractorCalendar(
           const filtered = (day.unavailableSlots || []).filter(
             s => !(s.startTime === targetSlot.startTime && s.endTime === targetSlot.endTime)
           )
-          if (filtered.length === 0 && !day.isFullyUnavailable) {
-            datesToRemove.add(iso)
+          if (filtered.length === 0) {
+            if (day.isFullyUnavailable || hasManualAvailability(day)) {
+              dayMap.set(iso, { ...day, unavailableSlots: filtered })
+            } else {
+              dayMap.delete(iso)
+            }
           } else {
             dayMap.set(iso, { ...day, unavailableSlots: filtered })
           }
@@ -184,8 +187,12 @@ export async function removeGigTimeFromContractorCalendar(
           const filtered = (day.unavailableSlots || []).filter(
             s => !(s.startTime === targetSlot.startTime && s.endTime === targetSlot.endTime)
           )
-          if (filtered.length === 0 && !day.isFullyUnavailable) {
-            datesToRemove.add(iso)
+          if (filtered.length === 0) {
+            if (day.isFullyUnavailable || hasManualAvailability(day)) {
+              dayMap.set(iso, { ...day, unavailableSlots: filtered })
+            } else {
+              dayMap.delete(iso)
+            }
           } else {
             dayMap.set(iso, { ...day, unavailableSlots: filtered })
           }
@@ -194,7 +201,11 @@ export async function removeGigTimeFromContractorCalendar(
           if (day.isFullyUnavailable) {
             // If no slots, remove the entry entirely
             if (!day.unavailableSlots || day.unavailableSlots.length === 0) {
-              datesToRemove.add(iso)
+              if (hasManualAvailability(day)) {
+                dayMap.set(iso, { ...day, isFullyUnavailable: false })
+              } else {
+                dayMap.delete(iso)
+              }
             } else {
               // Keep the entry but mark as not fully unavailable
               dayMap.set(iso, { ...day, isFullyUnavailable: false })
@@ -216,16 +227,16 @@ export async function removeGigTimeFromContractorCalendar(
         )
 
         if (filtered.length === 0) {
-          // Remove the day entry if no slots remaining
-          datesToRemove.add(iso)
+          if (hasManualAvailability(day) || day.isFullyUnavailable) {
+            dayMap.set(iso, { ...day, unavailableSlots: filtered })
+          } else {
+            dayMap.delete(iso)
+          }
         } else {
           dayMap.set(iso, { ...day, unavailableSlots: filtered })
         }
       }
     }
-
-    // Remove dates marked for deletion
-    datesToRemove.forEach(iso => dayMap.delete(iso))
 
     // Convert Map back to array
     const updated = Array.from(dayMap.values())
@@ -432,22 +443,28 @@ export async function removeGigDatesFromContractorCalendar(contractorId: string,
     // Remove gig dates from unavailable dates (legacy array)
     const updatedUnavailableDates = currentUnavailableDates.filter(date => !gigDates.includes(date))
 
+    const hasManualAvailability = (day: DayAvailability) => Boolean(day.availableSlots && day.availableSlots.length > 0)
+
     // Also remove/clean up any entries in dailyAvailability for these dates
     // This handles cases where the date might have been added to both systems
-    const updatedDailyAvailability = currentDailyAvailability.filter(day => {
-      // If this date is in our gig date range
-      if (gigDates.includes(day.date)) {
-        // If the day was marked as fully unavailable (by this gig), remove it
-        if (day.isFullyUnavailable) {
-          return false // Remove this entry
-        }
-        // If it has no unavailable slots, also remove it
-        if (!day.unavailableSlots || day.unavailableSlots.length === 0) {
-          return false // Remove this entry
-        }
-        // Otherwise keep it (it has time slots from other bookings)
+    const updatedDailyAvailability = currentDailyAvailability.flatMap((day) => {
+      if (!gigDates.includes(day.date)) {
+        return [day]
       }
-      return true
+
+      if (day.isFullyUnavailable) {
+        if (hasManualAvailability(day) || (day.unavailableSlots && day.unavailableSlots.length > 0)) {
+          return [{ ...day, isFullyUnavailable: false }]
+        }
+
+        return []
+      }
+
+      if (!day.unavailableSlots || day.unavailableSlots.length === 0) {
+        return hasManualAvailability(day) ? [day] : []
+      }
+
+      return [day]
     })
 
     // Update contractor availability (both arrays)

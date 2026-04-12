@@ -1,12 +1,13 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useActionState } from 'react';
+import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Send, AlertCircle, Info } from 'lucide-react';
+import { Send, AlertCircle, Info, ArrowLeft } from 'lucide-react';
 import { formatDistanceToNowStrict } from 'date-fns';
 import type { Chat, Message } from '@/types/messaging';
 import { sendMessage, markMessagesAsRead } from '@/app/actions/messaging-actions';
@@ -65,6 +66,26 @@ export function ChatView({
       text: text.trim(),
     });
     if (result.success && result.data) {
+        try {
+          await fetch('/api/notifications/new-message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              recipientId: receiver.userId,
+              senderId: currentUserId,
+              message: {
+                id: result.data.id,
+                content: result.data.text,
+                timestamp: new Date(result.data.timestamp).toISOString(),
+                chatId: chat.id,
+              },
+              isRecipientClient: receiver.userId === chat.client.userId,
+              isSenderClient: currentUserId === chat.client.userId,
+            }),
+          })
+        } catch (notificationError) {
+          console.error('Failed to trigger new message notification:', notificationError)
+        }
         setNewMessageText(''); 
         return { message: 'Message sent!', timestamp: Date.now() };
     }
@@ -138,23 +159,37 @@ export function ChatView({
   return (
     <div className="flex flex-col h-full bg-white">
       {/* Chat Header */}
-      <div className="flex items-center justify-between p-4 border-b bg-white/80 backdrop-blur-sm sticky top-0 z-10">
-        <div className="flex items-center space-x-3">
-          <Avatar 
-            className="h-10 w-10 ring-2 ring-white shadow-sm cursor-pointer hover:ring-blue-200 transition-all" 
-            onClick={() => handleAvatarClick(otherParticipant)}
-          >
-            <AvatarImage src={otherParticipant.avatarUrl} className="object-cover" />
-            <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white font-semibold">
-              {getInitials(otherParticipant.displayName)}
-            </AvatarFallback>
-          </Avatar>
-          <div>
-            <h2 className="font-semibold text-gray-900">{otherParticipant.displayName}</h2>
-            <p className="text-sm text-gray-500">
-              {canSendMessage ? 'Active conversation' : `Booking ${bookingStatus}`}
-            </p>
+      <div className="sticky top-0 z-10 border-b bg-white/90 p-4 backdrop-blur-sm">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center space-x-3">
+            <Link href="/dashboard/messages" className="inline-flex shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white p-2 text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900 sm:hidden" aria-label="Back to messages">
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+            <Link href="/dashboard/messages" className="hidden shrink-0 items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900 sm:inline-flex">
+              <ArrowLeft className="h-4 w-4" />
+              Back to inbox
+            </Link>
+            <Avatar 
+              className="h-10 w-10 ring-2 ring-white shadow-sm cursor-pointer hover:ring-blue-200 transition-all" 
+              onClick={() => handleAvatarClick(otherParticipant)}
+            >
+              <AvatarImage src={otherParticipant.avatarUrl} className="object-cover" />
+              <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white font-semibold">
+                {getInitials(otherParticipant.displayName)}
+              </AvatarFallback>
+            </Avatar>
+            <div className="min-w-0">
+              <h2 className="truncate font-semibold text-gray-900">{otherParticipant.displayName}</h2>
+              <p className="text-sm text-gray-500">
+                {canSendMessage ? 'Active conversation' : `Booking ${bookingStatus}`}
+              </p>
+            </div>
           </div>
+          {!canSendMessage ? (
+            <span className="hidden rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-700 sm:inline-flex">
+              Messaging disabled
+            </span>
+          ) : null}
         </div>
       </div>
 

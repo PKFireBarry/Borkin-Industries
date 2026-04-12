@@ -16,6 +16,7 @@ interface DateRangePickerProps {
   className?: string
   unavailableDates?: string[]
   bookings?: Booking[]
+  compact?: boolean
 }
 
 interface EndDatePickerProps {
@@ -32,7 +33,7 @@ const MONTHS = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ]
 
-export function DateRangePicker({ value, onChange, minDate, className = '', unavailableDates = [], bookings = [] }: DateRangePickerProps) {
+export function DateRangePicker({ value, onChange, minDate, className = '', unavailableDates = [], bookings = [], compact = false }: DateRangePickerProps) {
   const getInitialDate = () => {
     if (value.startDate) {
       const d = new Date(value.startDate + 'T00:00:00')
@@ -224,44 +225,44 @@ export function DateRangePicker({ value, onChange, minDate, className = '', unav
   return (
     <div className={`date-range-picker ${className}`}>
       {/* Calendar */}
-      <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6">
+      <div className={`bg-white rounded-2xl border border-slate-200/60 shadow-sm ${compact ? 'p-3 sm:p-4' : 'p-6'}`}>
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className={`flex items-center justify-between ${compact ? 'mb-3' : 'mb-6'}`}>
           <button
             type="button"
             onClick={goToPreviousMonth}
-            className="h-10 w-10 p-0 hover:bg-purple-50 hover:text-purple-600 rounded-xl flex items-center justify-center transition-colors border border-slate-200 hover:border-purple-200"
+            className={`${compact ? 'h-8 w-8 rounded-lg' : 'h-10 w-10 rounded-xl'} flex items-center justify-center border border-slate-200 p-0 transition-colors hover:border-purple-200 hover:bg-purple-50 hover:text-purple-600`}
           >
-            <ChevronLeft className="h-5 w-5" />
+            <ChevronLeft className={compact ? 'h-4 w-4' : 'h-5 w-5'} />
           </button>
           
-          <h3 className="text-xl font-bold text-slate-900">
+          <h3 className={`${compact ? 'text-base' : 'text-xl'} font-bold text-slate-900`}>
             {MONTHS[currentMonth]} {currentYear}
           </h3>
           
           <button
             type="button"
             onClick={goToNextMonth}
-            className="h-10 w-10 p-0 hover:bg-purple-50 hover:text-purple-600 rounded-xl flex items-center justify-center transition-colors border border-slate-200 hover:border-purple-200"
+            className={`${compact ? 'h-8 w-8 rounded-lg' : 'h-10 w-10 rounded-xl'} flex items-center justify-center border border-slate-200 p-0 transition-colors hover:border-purple-200 hover:bg-purple-50 hover:text-purple-600`}
           >
-            <ChevronRight className="h-5 w-5" />
+            <ChevronRight className={compact ? 'h-4 w-4' : 'h-5 w-5'} />
           </button>
         </div>
 
         {/* Days of week header */}
-        <div className="grid grid-cols-7 gap-1 mb-3">
+        <div className={`grid grid-cols-7 ${compact ? 'mb-1.5 gap-0.5' : 'mb-3 gap-1'}`}>
           {DAYS.map(day => (
-            <div key={day} className="text-center text-sm font-semibold text-slate-600 py-3">
+            <div key={day} className={`text-center font-semibold text-slate-600 ${compact ? 'py-1.5 text-[11px]' : 'py-3 text-sm'}`}>
               {day}
             </div>
           ))}
         </div>
 
         {/* Calendar Grid */}
-        <div className="grid grid-cols-7 gap-1">
+        <div className={`grid grid-cols-7 ${compact ? 'gap-0.5' : 'gap-1'}`}>
           {calendarDays.map((date, index) => {
             if (!date) {
-              return <div key={index} className="h-12" />
+              return <div key={index} className={compact ? 'aspect-square w-full' : 'h-12'} />
             }
 
             const disabled = isDateDisabled(date)
@@ -284,7 +285,8 @@ export function DateRangePicker({ value, onChange, minDate, className = '', unav
                 onMouseLeave={() => setHoverDate(null)}
                 disabled={disabled}
                 className={`
-                  h-12 w-12 text-sm rounded-xl transition-all duration-200 relative font-medium
+                  relative aspect-square w-full font-medium transition-all duration-200
+                  ${compact ? 'rounded-lg text-[12px]' : 'rounded-xl text-sm'}
                   ${disabled 
                     ? 'text-slate-300 cursor-not-allowed' 
                     : 'text-slate-700 hover:bg-purple-50 hover:text-purple-600 cursor-pointer hover:scale-105'
@@ -313,12 +315,12 @@ export function DateRangePicker({ value, onChange, minDate, className = '', unav
               >
                 {parseDate(date).getDate()}
                 {(isStart || isEnd) && (
-                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-white rounded-full border-2 border-purple-600"></div>
+                  <div className={`${compact ? '-right-0.5 -top-0.5 h-2.5 w-2.5' : '-right-1 -top-1 h-3 w-3'} absolute rounded-full border-2 border-purple-600 bg-white`}></div>
                 )}
                 {hasBookings && (
-                  <div className="absolute bottom-0.5 right-0.5 flex gap-0.5">
+                  <div className={`absolute bottom-0.5 right-0.5 flex ${compact ? 'gap-px' : 'gap-0.5'}`}>
                     {dayBookings.slice(0, 3).map((_, i) => (
-                      <span key={i} className="w-1.5 h-1.5 bg-purple-500 rounded-full" />
+                      <span key={i} className={`${compact ? 'h-1 w-1' : 'h-1.5 w-1.5'} rounded-full bg-purple-500`} />
                     ))}
                     {dayBookings.length > 3 && (
                       <span className="text-[10px] font-bold text-purple-700">+</span>
@@ -332,18 +334,18 @@ export function DateRangePicker({ value, onChange, minDate, className = '', unav
       </div>
 
       {/* Selected Range Display */}
-      <div className="mt-4 p-4 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl border border-purple-200/60">
+      <div className={`mt-4 rounded-xl border border-purple-200/60 bg-gradient-to-r from-purple-50 to-indigo-50 ${compact ? 'p-3' : 'p-4'}`}>
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium text-purple-700 mb-1">Selected Date Range</p>
-            <p className="text-lg font-bold text-purple-900">
+            <p className={`${compact ? 'mb-1 text-xs' : 'mb-1 text-sm'} font-medium text-purple-700`}>Selected Date Range</p>
+            <p className={`${compact ? 'text-sm' : 'text-lg'} font-bold text-purple-900`}>
               {getDisplayValue()}
             </p>
           </div>
           {value.startDate && value.endDate && (
             <div className="text-right">
-              <p className="text-sm font-medium text-purple-700 mb-1">Duration</p>
-              <p className="text-lg font-bold text-purple-900">
+              <p className={`${compact ? 'mb-1 text-xs' : 'mb-1 text-sm'} font-medium text-purple-700`}>Duration</p>
+              <p className={`${compact ? 'text-sm' : 'text-lg'} font-bold text-purple-900`}>
                 {(() => {
                   const start = parseDate(value.startDate)
                   const end = parseDate(value.endDate)
@@ -362,7 +364,7 @@ export function DateRangePicker({ value, onChange, minDate, className = '', unav
             <button
               type="button"
               onClick={() => onChange({ startDate: null, endDate: null })}
-              className="text-sm text-purple-600 hover:text-purple-800 font-medium transition-colors"
+              className={`${compact ? 'text-xs' : 'text-sm'} font-medium text-purple-600 transition-colors hover:text-purple-800`}
             >
               Clear selection
             </button>

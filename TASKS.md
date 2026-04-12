@@ -1,17 +1,50 @@
 # Project Requirements Document (PRD): Borkin Industries Platform
 
 ##TODO
- - add cert image to application 
- - add phone number to application filters on admin side of app
- - [x] Update phone number across all email notifications and website pages to 352-340-3659
- - [x] Simplify email notifications to only include homepage link instead of specific dashboard routes
- - implement tier-based payment structure (entry, vet assistant, CVT) for pricing page on admin side
- - add pricing page to admin dashboard
- - add coupons to admin dashboard in the pricing page
- - [x] implement platform fees: 5% base fee for first three months, then 10% base fee after 3 months
- - [x] add internal messaging system for client-contractor communication about gigs (Backend Started)
- - [x] Shift fee structure: clients now pay platform and processing fees, contractors receive full service amount
- - [x] Fix email notification issues: update payment collection messaging, contractor earnings display, missing template functions, and remove unnecessary fee messaging
+  - add cert image to application 
+  - add phone number to application filters on admin side of app
+  - [x] Update phone number across all email notifications and website pages to 352-340-3659
+  - [x] Simplify email notifications to only include homepage link instead of specific dashboard routes
+  - implement tier-based payment structure (entry, vet assistant, CVT) for pricing page on admin side
+  - add pricing page to admin dashboard
+  - add coupons to admin dashboard in the pricing page
+  - [x] implement platform fees: 5% base fee for first three months, then 10% base fee after 3 months
+  - [x] add internal messaging system for client-contractor communication about gigs (Backend Started)
+  - [x] Shift fee structure: clients now pay platform and processing fees, contractors receive full service amount
+  - [x] Fix email notification issues: update payment collection messaging, contractor earnings display, missing template functions, and remove unnecessary fee messaging
+
+## Bug Backlog
+
+### Contractor Bugs - Verified Done
+- [x] Dashboard upcoming/current gig cards open the actual gig detail modal (`app/dashboard/contractor/page.tsx`, `app/dashboard/contractor/gigs/page.tsx`)
+- [x] Contractor pages show contractor earnings only, not full business-side amounts (`app/dashboard/contractor/page.tsx`, `app/dashboard/contractor/gigs/page.tsx`, `app/dashboard/contractor/payments/page.tsx`)
+- [x] Contractor coupon amount display fix (`app/dashboard/contractor/page.tsx`, `app/dashboard/contractor/gigs/page.tsx`)
+- [x] Approved gigs completed by contractor moved to the correct place in approved gigs list
+- [x] Availability calendar interaction rewrite: single-day edit/unblock works immediately, range selection is explicit, and sidebar block/unblock state matches the selected day (`app/dashboard/contractor/availability/components/time-based-availability-calendar.tsx`, `app/dashboard/contractor/availability/page.tsx`)
+- [x] Availability sidebar shows fuller booking context, including which client the booking belongs to (`app/dashboard/contractor/availability/page.tsx`, `app/dashboard/contractor/availability/components/time-based-availability-calendar.tsx`)
+- [x] Accept/decline loading state only shows loading UI for the action that was actually clicked (`app/dashboard/contractor/gigs/page.tsx`)
+- [x] Gig detail modal includes emergency contact, primary care provider, and emergency clinic information in the client information section (`app/dashboard/contractor/gigs/page.tsx`, `types/client.ts`)
+- [x] Google Calendar export from gig details includes emergency information (`app/dashboard/contractor/gigs/page.tsx`)
+- [x] Gig detail modal includes Google Maps and Apple Maps buttons (`app/dashboard/contractor/gigs/page.tsx`)
+- [x] Dashboard upcoming/current gig cards include status action buttons such as Accept, Decline, or Mark Complete where appropriate (`app/dashboard/contractor/page.tsx`)
+- [x] Mark Complete actions require confirmation before a contractor can complete a gig from the dashboard or gigs page (`app/dashboard/contractor/page.tsx`, `app/dashboard/contractor/gigs/page.tsx`)
+- [x] Contractor gigs sort chronologically within each status tab while preserving the mixed-priority workflow in the All view (`app/dashboard/contractor/gigs/page.tsx`)
+- [x] Cancelled gigs reliably remove booking-owned blocked availability without deleting contractor-managed availability settings (`lib/firebase/contractors.ts`, `lib/firebase/bookings.ts`)
+- [x] Contractor profile view/edit flow is split into Profile Info, Services, and Coupons tabs, keeps the main surface viewport-bounded, uses modal-based service add/edit flows, adds a bottom save action, and uses consistent mobile cards plus bounded desktop pagination for services and coupons (`app/dashboard/contractor/profile/page.tsx`, `app/dashboard/contractor/profile/components/contractor-profile-service-manager.tsx`)
+- [x] Contractor payments dashboard shows paid history plus awaiting-client-completion and awaiting-release states, uses interactive summary filters, supports time-range filtering, and exposes Stripe payout/account readiness details (`app/dashboard/contractor/payments/page.tsx`, `app/api/stripe/list-payouts/route.ts`, `app/api/stripe/list-payment-methods/route.ts`)
+- [x] Messages include a clear back-to-inbox control, unread message badges in dashboard navigation, and send-triggered message notifications that deep-link into the conversation (`app/dashboard/messages/[chatId]/components/chat-view.tsx`, `app/dashboard/layout.tsx`, `lib/email/templates/new-message.ts`)
+
+### Contractor Bugs - Verified Done
+- [x] Contractor payment completion flow reminds the client with signed email links, records contractor completion timing, and auto-releases after 48 hours via the daily cron when the booking is still eligible (`types/booking.ts`, `lib/firebase/bookings.ts`, `app/api/bookings/complete-from-email/route.ts`, `app/api/cron/payment-auto-release/route.ts`, Stripe capture flow, email notifications, `vercel.json`)
+
+### Contractor Bugs - Active
+
+### Contractor Bugs - Deferred / Blocked
+- [ ] Contractor profile picture upload/replacement is blocked by current Firebase Storage plan constraints and is deferred until storage strategy changes (`app/dashboard/contractor/profile/page.tsx`, `components/PhotoUpload.tsx`, storage provider/infrastructure)
+- [ ] Base rate vs per animal rate clarification is deferred for now and should not block contractor bug fixes
+
+### Contractor Bugs - Research / Later
+- [ ] Sterling / First Advantage background check integration pending external vendor documentation review (`app/dashboard/contractor/apply/page.tsx`, admin applications flow, contractor types/helpers)
 
 ## Coupon System Implementation
 

@@ -18,11 +18,11 @@ export default function ContractorApplyLayout({ children }: ContractorApplyLayou
           <div className="flex items-center gap-2">
             <Link href="/" className="flex items-center gap-2">
               <PawPrintIcon className="h-7 w-7 text-pink-500" />
-              <span className="font-semibold text-xl text-gray-800">Borkin Industries</span>
+              <span className="font-semibold text-xl text-slate-800">Borkin Industries</span>
             </Link>
             <div className="hidden md:flex items-center ml-6">
-              <div className="h-6 w-px bg-gray-200 mx-4"></div>
-              <span className="text-sm font-medium text-gray-600">Contractor Application</span>
+              <div className="mx-4 h-6 w-px bg-slate-200"></div>
+              <span className="text-sm font-medium text-slate-600">Contractor Application</span>
             </div>
           </div>
           <div className="flex items-center gap-4">
@@ -33,14 +33,14 @@ export default function ContractorApplyLayout({ children }: ContractorApplyLayou
       <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         {children}
       </main>
-      <footer className="py-6 text-center text-sm text-gray-500 border-t bg-white mt-auto">
+      <footer className="mt-auto border-t bg-white py-6 text-center text-sm text-slate-500">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-2">
             <div>&copy; {new Date().getFullYear()} Borkin Industries. All rights reserved.</div>
             <div className="flex items-center gap-4">
-              <Link href="/terms" className="hover:text-gray-900 transition-colors">Terms</Link>
-              <Link href="/privacy" className="hover:text-gray-900 transition-colors">Privacy</Link>
-              <Link href="/help" className="hover:text-gray-900 transition-colors">Help</Link>
+              <Link href="/terms" className="transition-colors hover:text-slate-900">Terms</Link>
+              <Link href="/privacy" className="transition-colors hover:text-slate-900">Privacy</Link>
+              <Link href="/help" className="transition-colors hover:text-slate-900">Help</Link>
             </div>
           </div>
         </div>

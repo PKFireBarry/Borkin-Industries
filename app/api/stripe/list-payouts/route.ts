@@ -23,15 +23,19 @@ export async function POST(req: NextRequest) {
       description: t.description,
     }))
 
-    // Fetch all paid gigs for this contractor
+    // Fetch contractor gigs that matter to payment state visibility.
     const bookingsRef = collection(db, 'bookings')
     const q = query(
       bookingsRef,
-      where('contractorId', '==', contractorId),
-      where('paymentStatus', '==', 'paid')
+      where('contractorId', '==', contractorId)
     )
     const snapshot = await getDocs(q)
-    const gigs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+    const gigs = snapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .filter((gig: any) => {
+        const paymentStatus = gig.paymentStatus || 'pending'
+        return ['paid', 'escrow', 'pending'].includes(paymentStatus)
+      })
 
     return NextResponse.json({ payouts, gigs })
   } catch (err) {

@@ -4,6 +4,7 @@ import { useRequireRole } from '../../use-require-role'
 import { useUser } from '@clerk/nextjs'
 import { Button } from '@/components/ui/button'
 import { getContractorProfile, updateContractorProfile } from '@/lib/firebase/contractors'
+import { getClientById } from '@/lib/firebase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
@@ -13,10 +14,10 @@ import {
   AlertCircle,
   CalendarX
 } from 'lucide-react'
-import { TimeBasedAvailabilityCalendar } from './components/time-based-availability-calendar'
+import { TimeBasedAvailabilityCalendar, type AvailabilityCalendarBooking } from './components/time-based-availability-calendar'
 import type { DayAvailability } from '@/types/contractor'
 import { getGigsForContractor } from '@/lib/firebase/bookings'
-import type { Booking } from '@/types/booking'
+import { DashboardPageContent, DashboardPageHeader, DashboardPageShell } from '../../components/dashboard-shell'
 
 function ContractorAvailabilityPageContent() {
   const { isLoaded, isAuthorized } = useRequireRole('contractor')
@@ -26,7 +27,7 @@ function ContractorAvailabilityPageContent() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
-  const [existingBookings, setExistingBookings] = useState<Booking[]>([])
+  const [existingBookings, setExistingBookings] = useState<AvailabilityCalendarBooking[]>([])
 
   useEffect(() => {
     if (!user) return
@@ -36,7 +37,7 @@ function ContractorAvailabilityPageContent() {
       getContractorProfile(user.id),
       getGigsForContractor(user.id)
     ])
-      .then(([profile, bookings]) => {
+      .then(async ([profile, bookings]) => {
         const availability = profile?.availability
 
         // Load time-based availability if it exists
@@ -44,8 +45,19 @@ function ContractorAvailabilityPageContent() {
           setDailyAvailability(availability.dailyAvailability)
         }
 
-        // Load existing bookings
-        setExistingBookings(bookings.filter(b => b.status === 'approved' || b.status === 'completed'))
+        const activeBookings = bookings.filter(b => b.status === 'approved' || b.status === 'completed')
+        const uniqueClientIds = [...new Set(activeBookings.map((booking) => booking.clientId).filter(Boolean))]
+        const clientEntries = await Promise.all(
+          uniqueClientIds.map(async (clientId) => [clientId, await getClientById(clientId)] as const)
+        )
+        const clientsById = new Map(clientEntries)
+
+        setExistingBookings(
+          activeBookings.map((booking) => ({
+            ...booking,
+            clientName: clientsById.get(booking.clientId)?.name || 'Client'
+          }))
+        )
       })
       .catch(() => setError('Failed to load availability'))
       .finally(() => setLoading(false))
@@ -96,69 +108,98 @@ function ContractorAvailabilityPageContent() {
 
   if (!isLoaded || !isAuthorized) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p className="text-slate-600 font-medium">Loading availability...</p>
+      <DashboardPageShell className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 via-white to-blue-50/60">
+        <div className="space-y-4 text-center">
+          <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+          <p className="font-medium text-slate-600">Loading availability...</p>
         </div>
-      </div>
+      </DashboardPageShell>
     )
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
-        <div className="max-w-6xl mx-auto px-4 py-8">
+      <DashboardPageShell className="bg-gradient-to-br from-slate-50 via-white to-blue-50/60">
+        <DashboardPageContent className="space-y-6 pb-8 pt-5 sm:space-y-8 lg:pb-12">
+          <DashboardPageHeader
+            variant="summary"
+            title="Availability Calendar"
+            description="Manage your availability with precise time control."
+            eyebrow={
+              <Badge className="rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-primary hover:bg-primary/10">
+                Contractor availability
+              </Badge>
+            }
+          />
           <div className="animate-pulse space-y-8">
-            <div className="h-8 bg-slate-200 rounded w-1/3"></div>
             <div className="bg-slate-200 rounded-xl h-96"></div>
           </div>
-        </div>
-      </div>
+        </DashboardPageContent>
+      </DashboardPageShell>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
-      {/* Header Section */}
-      <div className="bg-white/80 backdrop-blur-sm border-b border-slate-200/60 sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="py-6">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div className="flex items-center gap-4">
-                <Avatar className="w-12 h-12 border-2 border-white shadow-md">
-                  <AvatarImage src={user?.imageUrl} alt={user?.fullName || 'Contractor'} />
-                  <AvatarFallback className="bg-primary/10 text-primary font-bold">
-                    {(user?.fullName || 'C')[0].toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
-                    Availability Calendar
-                  </h1>
-                  <p className="text-slate-600 mt-1">
-                    Manage your availability with precise time control
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <Badge variant="outline" className="bg-white/80 text-slate-700 border-slate-300">
-                  <CalendarX className="w-4 h-4 mr-1" />
-                  {fullyBlockedDays} full days blocked
+    <DashboardPageShell className="bg-gradient-to-br from-slate-50 via-white to-blue-50/60">
+      <DashboardPageContent className="space-y-6 pb-8 pt-5 sm:space-y-8 lg:flex lg:min-h-[calc(100dvh-4rem)] lg:flex-col lg:pb-6">
+        <DashboardPageHeader
+          variant="summary"
+          title="Availability Calendar"
+          description="Manage your availability with precise time control so clients always see an accurate schedule."
+          eyebrow={
+            <>
+              <Badge className="rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-primary hover:bg-primary/10">
+                Contractor availability
+              </Badge>
+              <Badge variant="secondary" className="rounded-full bg-white/80 px-2.5 py-1 text-[10px] font-medium text-slate-600">
+                {existingBookings.length} active bookings
+              </Badge>
+            </>
+          }
+          meta={
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="outline" className="bg-white/80 text-slate-700 border-slate-300">
+                <CalendarX className="mr-1 h-4 w-4" />
+                {fullyBlockedDays} full days blocked
+              </Badge>
+              {partiallyBlockedDays > 0 ? (
+                <Badge variant="outline" className="border-orange-300 bg-orange-50 text-orange-700">
+                  <Clock className="mr-1 h-4 w-4" />
+                  {partiallyBlockedDays} partial days
                 </Badge>
-                {partiallyBlockedDays > 0 && (
-                  <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-300">
-                    <Clock className="w-4 h-4 mr-1" />
-                    {partiallyBlockedDays} partial days
-                  </Badge>
-                )}
-              </div>
+              ) : null}
+              {totalTimeSlots > 0 ? (
+                <Badge variant="outline" className="border-blue-300 bg-blue-50 text-blue-700">
+                  <Clock className="mr-1 h-4 w-4" />
+                  {totalTimeSlots} blocked time slots
+                </Badge>
+              ) : null}
             </div>
-          </div>
-        </div>
-      </div>
+          }
+          actions={
+            <Button
+              onClick={handleSave}
+              disabled={saving}
+              variant="petCta"
+              size="pill"
+              className="w-full sm:w-auto"
+            >
+              {saving ? (
+                <>
+                  <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Clock className="mr-2 h-4 w-4" />
+                  Save Availability
+                </>
+              )}
+            </Button>
+          }
+        />
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="space-y-4 lg:min-h-0 lg:flex-1">
         {/* Calendar Content */}
         <TimeBasedAvailabilityCalendar
           dailyAvailability={dailyAvailability}
@@ -166,8 +207,8 @@ function ContractorAvailabilityPageContent() {
           existingBookings={existingBookings}
         />
 
-        {/* Save Section */}
-        <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg mt-8">
+        {(error || success) ? (
+        <Card className="border-0 bg-white/80 shadow-lg backdrop-blur-sm">
           <CardContent className="pt-6">
             {error && (
               <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl mb-4">
@@ -176,32 +217,17 @@ function ContractorAvailabilityPageContent() {
               </div>
             )}
             {success && (
-              <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-xl mb-4">
+              <div className="flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 p-3">
                 <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
                 <span className="text-sm text-green-700">Availability saved successfully!</span>
               </div>
             )}
-            <Button
-              onClick={handleSave}
-              disabled={saving}
-              className="w-full rounded-xl py-3 bg-primary hover:bg-primary/90 text-white font-semibold shadow-sm hover:shadow-md transition-all duration-200"
-            >
-              {saving ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Clock className="w-4 h-4 mr-2" />
-                  Save Availability
-                </>
-              )}
-            </Button>
           </CardContent>
         </Card>
+        ) : null}
       </div>
-    </div>
+      </DashboardPageContent>
+    </DashboardPageShell>
   )
 }
 

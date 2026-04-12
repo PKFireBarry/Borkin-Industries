@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { DateRangePicker } from '@/components/ui/date-range-picker'
@@ -24,13 +24,17 @@ import type { Pet } from '@/types/client'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
-import { Plus, X, AlertTriangle, Clock } from 'lucide-react'
+import { Plus, X, AlertTriangle, Calendar, CheckCircle2, Clock, FileText, Heart, Ticket, User } from 'lucide-react'
 import { calculateClientFeeBreakdown } from '@/lib/utils'
 import { validateCoupon } from '@/lib/firebase/coupons'
 import { Coupon } from '@/types/coupon'
 import { checkBookingConflicts } from '@/lib/firebase/booking-conflicts'
 import type { BookingConflict } from '@/lib/firebase/booking-conflicts'
 import { calculateTotalDuration, calculateEndTime, formatDuration } from '@/lib/utils/booking-duration'
+import { cn } from '@/lib/utils'
+import { useSwipeSteps } from '@/hooks/use-swipe-steps'
+import { MobileStepFooter } from '../components/mobile-step-footer'
+import { SectionHeader } from '../components/section-header'
 
 
 // REMOVED Unused constant
@@ -194,7 +198,7 @@ interface SelectedService {
   name: string;
 }
 
-export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onSuccess: () => void; preselectedContractorId?: string | null }) {
+export function BookingRequestForm({ onSuccess, onClose, preselectedContractorId }: { onSuccess: () => void; onClose?: () => void; preselectedContractorId?: string | null }) {
   const { user } = useUser()
   const [pets, setPets] = useState<Pet[]>([])
   const [allContractors, setAllContractors] = useState<Contractor[]>([])
@@ -244,6 +248,9 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
   const [isPending, setIsPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [mobileStep, setMobileStep] = useState(0)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const formRef = useRef<HTMLFormElement | null>(null)
 
   // Remove MOCK_PLATFORM_SERVICES constant
   // Instead add a state to store platform services
@@ -748,7 +755,6 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
       setSelectedServices([]);
       setSelectedPets([]);
       setDateRange({ startDate: null, endDate: null });
-      onSuccess();
     } catch (err) {
       console.error("Booking creation error:", err);
       setError(err instanceof Error ? err.message : 'Failed to create booking. Please try again.');
@@ -762,36 +768,187 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
     return selectedServices.some(s => s.serviceId === serviceId);
   };
 
+  const hasSummaryReady = numberOfDays > 0 && selectedServices.length > 0 && calculatedTotalPrice
+
+  const mobileSteps = [
+    {
+      key: 'pets',
+      label: 'Pets',
+      title: 'Select pet(s)',
+      description: 'Choose which pets need care for this booking.',
+    },
+    {
+      key: 'contractor',
+      label: 'Contractor',
+      title: 'Choose contractor',
+      description: 'Pick the pet care professional you want to work with.',
+    },
+    {
+      key: 'services',
+      label: 'Services',
+      title: 'Choose services',
+      description: 'Select the care tasks and visit types you need.',
+    },
+    {
+      key: 'schedule',
+      label: 'Schedule',
+      title: 'Set the schedule',
+      description: 'Choose your dates and times, then review availability.',
+    },
+    {
+      key: 'review',
+      label: 'Review',
+      title: 'Review pricing',
+      description: 'Apply any coupon and check the booking total before continuing.',
+    },
+    {
+      key: 'confirm',
+      label: 'Confirm',
+      title: 'Confirm booking',
+      description: 'One final check before you submit your booking request.',
+    },
+  ] as const
+
+  const currentMobileStep = mobileSteps[mobileStep]
+
+  const goToPreviousStep = () => {
+    setMobileStep((prev) => Math.max(prev - 1, 0))
+  }
+
+  const goToNextStep = () => {
+    setMobileStep((prev) => Math.min(prev + 1, mobileSteps.length - 1))
+  }
+
+  useEffect(() => {
+    const modalScrollContainer = containerRef.current?.querySelector('.booking-request-scroll')
+    if (modalScrollContainer instanceof HTMLElement) {
+      modalScrollContainer.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }, [mobileStep])
+
+  useEffect(() => {
+    if (!success) return
+    const successTimer = window.setTimeout(() => {
+      onSuccess()
+    }, 1400)
+
+    return () => window.clearTimeout(successTimer)
+  }, [success, onSuccess])
+
+  const mobileStepComplete = {
+    pets: selectedPets.length > 0,
+    contractor: !!selectedContractorId,
+    services: selectedServices.length > 0,
+    schedule: !!dateRange.startDate && !!dateRange.endDate,
+    review: hasSummaryReady,
+    confirm: hasSummaryReady,
+  }
+
+  const canAdvanceFromCurrentStep = (() => {
+    switch (currentMobileStep.key) {
+      case 'pets':
+        return mobileStepComplete.pets
+      case 'contractor':
+        return mobileStepComplete.contractor
+      case 'services':
+        return mobileStepComplete.services
+      case 'schedule':
+        return mobileStepComplete.schedule
+      case 'review':
+        return mobileStepComplete.review
+      case 'confirm':
+        return true
+      default:
+        return false
+    }
+  })()
+
+  const submitDisabled =
+    isPending ||
+    success ||
+    selectedServices.length === 0 ||
+    selectedPets.length === 0 ||
+    !dateRange.startDate ||
+    !dateRange.endDate
+
+  const { onTouchStart: handleMobileTouchStart, onTouchMove: handleMobileTouchMove, onTouchEnd: handleMobileTouchEnd } = useSwipeSteps({
+    step: mobileStep,
+    maxStep: mobileSteps.length - 1,
+    threshold: 50,
+    maxVerticalDelta: 40,
+    canGoNext: Boolean(canAdvanceFromCurrentStep),
+    onNext: goToNextStep,
+    onPrevious: goToPreviousStep,
+  })
+
+  const sectionCardClassName = 'rounded-[1.75rem] border border-slate-200/80 bg-white p-4 shadow-sm sm:p-6'
+
 
 
 
 
   return (
-    <div className="max-h-full overflow-y-auto">
-      <form onSubmit={handleSubmit} className="space-y-8">
-        {/* Pet Selection Section */}
-        <div className="p-6 bg-white rounded-2xl border border-slate-200/60 shadow-sm">
-          <div className="flex items-center space-x-3 mb-6">
-            <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
-              <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-              </svg>
+    <div ref={containerRef} className="flex h-full min-h-0 flex-col overflow-hidden">
+      <form ref={formRef} onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+        <div className="booking-request-scroll flex-1 space-y-5 overflow-y-auto p-4 pb-6 sm:space-y-8 sm:p-6 sm:pb-6">
+        <div className="rounded-[1.75rem] border border-slate-200/80 bg-gradient-to-br from-white via-blue-50/70 to-indigo-50/70 p-3.5 shadow-sm sm:hidden">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-700">New booking</p>
+              <h2 className="mt-1 text-lg font-semibold tracking-tight text-slate-900">{currentMobileStep.title}</h2>
+              <p className="mt-1 text-xs text-slate-600">{currentMobileStep.description}</p>
             </div>
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900">Select Pet(s)</h3>
-              <p className="text-sm text-slate-600">Choose which pets need care</p>
-            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-700"
+              aria-label="Close booking request"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
+        </div>
+
+        <div className="hidden items-start justify-between gap-4 rounded-[1.75rem] border border-slate-200/80 bg-gradient-to-br from-white via-blue-50/70 to-indigo-50/70 p-6 shadow-sm sm:flex">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">New booking</p>
+            <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">Create your booking request</h2>
+            <p className="mt-2 text-sm text-slate-600">Choose pets, contractor, services, schedule, and final pricing before you submit.</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-700"
+            aria-label="Close booking request"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Pet Selection Section */}
+        <div
+          className={cn(sectionCardClassName, mobileStep !== 0 && 'hidden sm:block')}
+          onTouchStart={handleMobileTouchStart}
+          onTouchMove={handleMobileTouchMove}
+          onTouchEnd={handleMobileTouchEnd}
+        >
+          <SectionHeader
+            icon={<Heart className="h-4 w-4" />}
+            title="Select Pet(s)"
+            description="Choose which pets need care"
+            iconWrapClassName="bg-orange-100 text-orange-600"
+            className="mb-5"
+          />
           {pets.length === 0 && (
-            <div className="p-4 bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200 rounded-xl">
-              <p className="text-yellow-800 font-medium">No pets found. Add pets in your dashboard first.</p>
+            <div className="rounded-xl border border-yellow-200 bg-gradient-to-r from-yellow-50 to-orange-50 p-3.5">
+              <p className="text-sm font-medium text-yellow-800">No pets found. Add pets in your dashboard first.</p>
             </div>
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {pets.map((pet) => (
               <label
                 key={pet.id}
-                className={`group relative p-4 border-2 rounded-2xl cursor-pointer transition-all duration-200 ${selectedPets.includes(pet.id)
+                className={`group relative p-3.5 border-2 rounded-2xl cursor-pointer transition-all duration-200 ${selectedPets.includes(pet.id)
                   ? 'border-orange-300 bg-gradient-to-br from-orange-50 to-orange-100 shadow-lg transform scale-105'
                   : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md hover:bg-slate-50'
                   }`}
@@ -801,18 +958,18 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
                     type="checkbox"
                     checked={selectedPets.includes(pet.id)}
                     onChange={() => handlePetToggle(pet.id)}
-                    className="w-5 h-5 text-orange-600 bg-white border-2 border-slate-300 rounded-md focus:ring-orange-500 focus:ring-2"
+                    className="h-4.5 w-4.5 rounded-md border-2 border-slate-300 bg-white text-orange-600 focus:ring-2 focus:ring-orange-500"
                   />
                   <div className="flex-1 min-w-0">
-                    <h4 className="font-semibold text-slate-900 group-hover:text-orange-700 transition-colors">
+                    <h4 className="text-sm font-semibold text-slate-900 transition-colors group-hover:text-orange-700">
                       {pet.name}
                     </h4>
-                    <p className="text-sm text-slate-500">{pet.breed || 'Pet'}</p>
+                    <p className="text-xs text-slate-500 sm:text-sm">{pet.breed || 'Pet'}</p>
                   </div>
                 </div>
                 {selectedPets.includes(pet.id) && (
-                  <div className="absolute -top-2 -right-2 w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center shadow-lg">
-                    <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="absolute -right-2 -top-2 flex h-5.5 w-5.5 items-center justify-center rounded-full bg-orange-500 shadow-lg">
+                    <svg className="h-3 w-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                     </svg>
                   </div>
@@ -823,46 +980,45 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
         </div>
 
         {/* Contractor Selection */}
-        <div className="p-6 bg-white rounded-2xl border border-slate-200/60 shadow-sm">
-          <div className="flex items-center space-x-3 mb-6">
-            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900">Choose Contractor</h3>
-              <p className="text-sm text-slate-600">Select your preferred pet care professional</p>
-            </div>
-          </div>
-          <select
-            id="contractorSelect"
-            className="w-full bg-white border-2 border-slate-300 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 shadow-sm hover:border-slate-400"
-            value={selectedContractorId}
-            onChange={e => setSelectedContractorId(e.target.value)}
-            required
-            disabled={!!preselectedContractorId}
-          >
-            <option value="" disabled>Select a contractor</option>
-            {allContractors.map(c => (
-              <option key={c.id} value={c.id}>{c.name || c.email}</option>
-            ))}
-          </select>
+        <div
+          className={cn(sectionCardClassName, mobileStep !== 1 && 'hidden sm:block')}
+          onTouchStart={handleMobileTouchStart}
+          onTouchMove={handleMobileTouchMove}
+          onTouchEnd={handleMobileTouchEnd}
+        >
+          <SectionHeader
+            icon={<User className="h-4 w-4" />}
+            title="Choose Contractor"
+            description="Select your preferred pet care professional"
+            iconWrapClassName="bg-blue-100 text-blue-600"
+            className="mb-5"
+          />
+          <Select value={selectedContractorId} onValueChange={setSelectedContractorId} disabled={!!preselectedContractorId}>
+            <SelectTrigger id="contractorSelect" className="h-12 rounded-2xl border-slate-200 bg-white text-sm shadow-sm">
+              <SelectValue placeholder="Select a contractor" />
+            </SelectTrigger>
+            <SelectContent>
+              {allContractors.map(c => (
+                <SelectItem key={c.id} value={c.id}>{c.name || c.email}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Services Selection */}
-        <div className="p-6 bg-white rounded-2xl border border-slate-200/60 shadow-sm">
-          <div className="flex items-center space-x-3 mb-6">
-            <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
-              <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900">Services</h3>
-              <p className="text-sm text-slate-600">Choose the services you need</p>
-            </div>
-          </div>
+        <div
+          className={cn(sectionCardClassName, mobileStep !== 2 && 'hidden sm:block')}
+          onTouchStart={handleMobileTouchStart}
+          onTouchMove={handleMobileTouchMove}
+          onTouchEnd={handleMobileTouchEnd}
+        >
+          <SectionHeader
+            icon={<FileText className="h-4 w-4" />}
+            title="Services"
+            description="Choose the services you need"
+            iconWrapClassName="bg-emerald-100 text-emerald-600"
+            className="mb-5"
+          />
 
           {isLoadingServices && (
             <div className="flex items-center justify-center py-8">
@@ -872,19 +1028,19 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
           )}
 
           {!isLoadingServices && contractorServices.length === 0 && selectedContractorId && (
-            <div className="p-4 bg-gradient-to-r from-gray-50 to-slate-50 border border-gray-200 rounded-xl">
-              <p className="text-slate-600 font-medium">No services available for this contractor.</p>
+            <div className="rounded-xl border border-slate-200 bg-gradient-to-r from-slate-50 to-white p-3.5">
+              <p className="text-sm font-medium text-slate-600">No services available for this contractor.</p>
             </div>
           )}
 
           {/* Selected services display */}
           {selectedServices.length > 0 && (
             <div className="mb-6">
-              <h4 className="text-sm font-semibold text-slate-700 mb-3">Selected Services:</h4>
-              <div className="flex flex-wrap gap-2 mb-3">
+              <h4 className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-700">Selected Services</h4>
+              <div className="mb-3 flex flex-wrap gap-2">
                 {selectedServices.map(service => (
-                  <div key={service.serviceId} className="flex items-center gap-2 bg-gradient-to-r from-emerald-50 to-emerald-100 border border-emerald-200 px-4 py-2 rounded-xl">
-                    <span className="font-medium text-emerald-800">
+                  <div key={service.serviceId} className="flex items-center gap-2 rounded-full border border-emerald-200 bg-gradient-to-r from-emerald-50 to-emerald-100 px-3 py-1.5">
+                    <span className="text-xs font-medium text-emerald-800 sm:text-sm">
                       {service.name} ({formatPrice(service.price, service.paymentType)})
                     </span>
                     <button
@@ -898,9 +1054,9 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
                 ))}
               </div>
               {totalServiceDuration > 0 && (
-                <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                <div className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 p-3">
                   <Clock className="h-4 w-4 text-blue-600" />
-                  <span className="text-sm text-blue-800">
+                  <span className="text-xs text-blue-800 sm:text-sm">
                     Total service duration: <strong>{formatDuration(totalServiceDuration)}</strong>
                     {calculatedEndTime && (
                       <span className="ml-2">
@@ -915,7 +1071,7 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
 
           {/* Service selection grid */}
           {!isLoadingServices && contractorServices.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3">
               {contractorServices.map(service => {
                 const serviceName = getServiceName(service.serviceId);
                 const checked = isServiceSelected(service.serviceId);
@@ -923,14 +1079,14 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
                 return (
                   <div
                     key={service.serviceId}
-                    className={`group relative p-4 border-2 rounded-2xl cursor-pointer transition-all duration-200 ${checked
-                      ? 'border-emerald-300 bg-gradient-to-br from-emerald-50 to-emerald-100 shadow-lg transform scale-105'
-                      : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md hover:bg-slate-50'
+                    className={`group relative cursor-pointer rounded-[1.25rem] border p-3 transition-all duration-200 ${checked
+                      ? 'border-emerald-300 bg-gradient-to-br from-emerald-50 to-emerald-100 shadow-sm'
+                      : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
                       }`}
                     onClick={() => handleServiceToggle(service)}
                   >
-                    <div className="flex items-start space-x-3">
-                      <div className={`mt-0.5 w-5 h-5 border-2 rounded-md transition-all duration-200 flex items-center justify-center ${checked
+                    <div className="flex items-start gap-2.5">
+                      <div className={`mt-0.5 flex h-4.5 w-4.5 items-center justify-center rounded-md border-2 transition-all duration-200 ${checked
                         ? 'bg-emerald-600 border-emerald-600'
                         : 'bg-white border-slate-300 group-hover:border-emerald-400'
                         }`}>
@@ -941,29 +1097,29 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h4 className="font-semibold text-slate-900 mb-1 group-hover:text-emerald-700 transition-colors">
+                        <h4 className="mb-1 text-sm font-semibold text-slate-900 transition-colors group-hover:text-emerald-700 sm:text-[15px]">
                           {serviceName}
                         </h4>
-                        <div className="flex items-center justify-between">
-                          <span className="text-lg font-bold text-emerald-600">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-sm font-bold text-emerald-600 sm:text-base">
                             {formatPrice(service.price, service.paymentType)}
                           </span>
-                          <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-full">
+                          <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] text-slate-500 sm:text-xs">
                             {service.paymentType === 'daily' ? 'Daily rate' : 'One-time fee'}
                           </span>
                         </div>
                       </div>
                     </div>
                     {checked && (
-                      <div className="absolute -top-2 -right-2 w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center shadow-lg">
+                      <div className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 shadow-md">
                         <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                         </svg>
                       </div>
                     )}
                     {!checked && (
-                      <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Plus className="h-5 w-5 text-slate-400" />
+                      <div className="absolute right-3 top-3 opacity-0 transition-opacity group-hover:opacity-100">
+                        <Plus className="h-4 w-4 text-slate-400" />
                       </div>
                     )}
                   </div>
@@ -974,18 +1130,19 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
         </div>
 
         {/* Date & Time Selection */}
-        <div className="p-6 bg-white rounded-2xl border border-slate-200/60 shadow-sm">
-          <div className="flex items-center space-x-3 mb-6">
-            <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
-              <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3a2 2 0 012-2h4a2 2 0 012 2v4m-6 0V6a2 2 0 012-2h4a2 2 0 012 2v1m-6 0h8m-8 0H6a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V9a2 2 0 00-2-2h-2" />
-              </svg>
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900">Schedule</h3>
-              <p className="text-sm text-slate-600">Set your service dates and times</p>
-            </div>
-          </div>
+        <div
+          className={cn(sectionCardClassName, mobileStep !== 3 && 'hidden sm:block')}
+          onTouchStart={handleMobileTouchStart}
+          onTouchMove={handleMobileTouchMove}
+          onTouchEnd={handleMobileTouchEnd}
+        >
+          <SectionHeader
+            icon={<Calendar className="h-4 w-4" />}
+            title="Schedule"
+            description="Set your service dates and times"
+            iconWrapClassName="bg-purple-100 text-purple-600"
+            className="mb-5"
+          />
 
           {/* Calendar with overlays for unavailable and booked dates */}
           <div className="mb-6">
@@ -996,6 +1153,7 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
               unavailableDates={unavailableDatesForCalendar}
               bookings={contractorBookings}
               className="w-full"
+              compact
             />
           </div>
 
@@ -1051,7 +1209,7 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
 
         {/* Overnight Stay Contact Message */}
         {hasOvernightStay && (
-          <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+          <div className={cn('mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4', mobileStep !== 3 && 'hidden sm:block')}>
             <div className="flex items-start gap-3">
               <svg className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -1068,15 +1226,17 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
         )}
         {/* Contractor Schedule Visualization */}
         {selectedContractorId && dateRange.startDate && (
-          <ContractorScheduleView
-            contractorId={selectedContractorId}
-            selectedDate={dateRange.startDate}
-            serviceDurationMinutes={totalServiceDuration}
-            onTimeSlotSelect={(startTime, endTime) => {
-              setStartTime(startTime)
-              setEndTime(endTime)
-            }}
-          />
+          <div className={cn(mobileStep !== 3 && 'hidden sm:block')}>
+            <ContractorScheduleView
+              contractorId={selectedContractorId}
+              selectedDate={dateRange.startDate}
+              serviceDurationMinutes={totalServiceDuration}
+              onTimeSlotSelect={(startTime, endTime) => {
+                setStartTime(startTime)
+                setEndTime(endTime)
+              }}
+            />
+          </div>
         )}
 
 
@@ -1084,7 +1244,7 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
         {/* Availability hint */}
         {/* Booking Validation Status */}
         {isValidatingBooking && (
-          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+          <div className={cn('mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3', mobileStep !== 3 && 'hidden sm:block')}>
             <div className="flex items-center gap-2 text-blue-700">
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
               <span className="text-sm">Checking availability...</span>
@@ -1094,7 +1254,7 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
 
         {/* Booking Conflicts */}
         {bookingConflicts.length > 0 && (
-          <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl">
+          <div className={cn('mt-4 rounded-xl border border-red-200 bg-red-50 p-4', mobileStep !== 3 && 'hidden sm:block')}>
             <div className="flex items-center gap-2 text-red-800 mb-1">
               <AlertTriangle className="w-4 h-4" />
               <span className="font-semibold">Time Unavailable</span>
@@ -1108,62 +1268,63 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
 
 
         {selectedContractorId && contractorAvailability && (
-          <div className="mt-4 text-sm text-slate-600">
+          <div className={cn('mt-4 text-sm text-slate-600', mobileStep !== 3 && 'hidden sm:block')}>
             <p>Contractor uses partial-day availability. If your chosen time overlaps existing blocks, you will be prompted to adjust.</p>
           </div>
         )}
 
         {/* Booking Summary */}
         {numberOfDays > 0 && selectedServices.length > 0 && calculatedTotalPrice && (
-          <div className="p-6 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-2xl border border-blue-200/60 shadow-sm">
-            <div className="flex items-center space-x-3 mb-6">
-              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+          <div
+            className={cn('rounded-[1.75rem] border border-blue-200/60 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-5 shadow-sm sm:p-6', mobileStep !== 4 && 'hidden sm:block')}
+            onTouchStart={handleMobileTouchStart}
+            onTouchMove={handleMobileTouchMove}
+            onTouchEnd={handleMobileTouchEnd}
+          >
+            <SectionHeader
+              icon={<CheckCircle2 className="h-4 w-4" />}
+              title="Booking Summary"
+              description="Review your booking details"
+              iconWrapClassName="bg-blue-100 text-blue-600"
+              className="mb-5"
+            />
+
+            <div className="mb-4 grid grid-cols-3 gap-2 sm:mb-6 sm:gap-4">
+              <div className="rounded-xl border border-blue-200/40 bg-white/80 p-2.5 text-center sm:p-3">
+                <p className="mb-1 text-[11px] font-medium text-blue-600 sm:text-sm">Duration</p>
+                <p className="text-base font-bold text-blue-900 sm:text-2xl">{numberOfDays}</p>
+                <p className="text-[11px] text-blue-600 sm:text-sm">day{numberOfDays !== 1 ? 's' : ''}</p>
               </div>
-              <div>
-                <h3 className="text-lg font-semibold text-slate-900">Booking Summary</h3>
-                <p className="text-sm text-slate-600">Review your booking details</p>
+              <div className="rounded-xl border border-blue-200/40 bg-white/80 p-2.5 text-center sm:p-3">
+                <p className="mb-1 text-[11px] font-medium text-blue-600 sm:text-sm">Daily Hours</p>
+                <p className="text-base font-bold text-blue-900 sm:text-2xl">{hoursPerDay}</p>
+                <p className="text-[11px] text-blue-600 sm:text-sm">hour{hoursPerDay !== 1 ? 's' : ''}</p>
+              </div>
+              <div className="rounded-xl border border-blue-200/40 bg-white/80 p-2.5 text-center sm:p-3">
+                <p className="mb-1 text-[11px] font-medium text-blue-600 sm:text-sm">Total Hours</p>
+                <p className="text-base font-bold text-blue-900 sm:text-2xl">{numberOfDays * hoursPerDay}</p>
+                <p className="text-[11px] text-blue-600 sm:text-sm">hour{numberOfDays * hoursPerDay !== 1 ? 's' : ''}</p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-              <div className="text-center p-4 bg-white/80 rounded-xl border border-blue-200/40">
-                <p className="text-sm font-medium text-blue-600 mb-1">Duration</p>
-                <p className="text-2xl font-bold text-blue-900">{numberOfDays}</p>
-                <p className="text-sm text-blue-600">day{numberOfDays !== 1 ? 's' : ''}</p>
-              </div>
-              <div className="text-center p-4 bg-white/80 rounded-xl border border-blue-200/40">
-                <p className="text-sm font-medium text-blue-600 mb-1">Daily Hours</p>
-                <p className="text-2xl font-bold text-blue-900">{hoursPerDay}</p>
-                <p className="text-sm text-blue-600">hour{hoursPerDay !== 1 ? 's' : ''}</p>
-              </div>
-              <div className="text-center p-4 bg-white/80 rounded-xl border border-blue-200/40">
-                <p className="text-sm font-medium text-blue-600 mb-1">Total Hours</p>
-                <p className="text-2xl font-bold text-blue-900">{numberOfDays * hoursPerDay}</p>
-                <p className="text-sm text-blue-600">hour{numberOfDays * hoursPerDay !== 1 ? 's' : ''}</p>
-              </div>
-            </div>
-
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               <div>
-                <h4 className="font-semibold text-slate-900 mb-3">Services Breakdown:</h4>
-                <div className="space-y-2">
+                <h4 className="mb-2 text-sm font-semibold text-slate-900 sm:mb-3">Services Breakdown:</h4>
+                <div className="space-y-1.5 sm:space-y-2">
                   {selectedServices.map(service => {
                     const servicePrice = service.paymentType === 'one_time'
                       ? service.price
                       : service.price * numberOfDays;
 
                     return (
-                      <div key={service.serviceId} className="flex justify-between items-center py-2 px-4 bg-white/60 rounded-lg border border-blue-200/30">
-                        <div>
-                          <span className="font-medium text-slate-900">{service.name}</span>
-                          <span className="text-sm text-slate-600 ml-2">
+                      <div key={service.serviceId} className="flex items-center justify-between rounded-lg border border-blue-200/30 bg-white/60 px-3 py-2">
+                        <div className="min-w-0 pr-3">
+                          <span className="text-sm font-medium text-slate-900">{service.name}</span>
+                          <span className="ml-2 text-xs text-slate-600 sm:text-sm">
                             ({service.paymentType === 'daily' ? 'Daily' : 'One-time'})
                           </span>
                         </div>
-                        <span className="font-bold text-blue-900">${(servicePrice / 100).toFixed(2)}</span>
+                        <span className="shrink-0 text-sm font-bold text-blue-900 sm:text-base">${(servicePrice / 100).toFixed(2)}</span>
                       </div>
                     );
                   })}
@@ -1174,35 +1335,35 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
               {(() => {
                 const feeBreakdown = calculateClientFeeBreakdown(calculatedTotalPrice);
                 return (
-                  <div className="p-4 bg-white/80 rounded-xl border border-blue-200/40">
-                    <div className="space-y-3">
+                  <div className="rounded-xl border border-blue-200/40 bg-white/80 p-3 sm:p-4">
+                    <div className="space-y-2.5 sm:space-y-3">
                       {appliedCoupon && originalPrice && (
-                        <div className="flex justify-between text-slate-600 text-sm">
+                        <div className="flex justify-between text-xs text-slate-600 sm:text-sm">
                           <span>Original Price:</span>
                           <span className="line-through">${originalPrice.toFixed(2)}</span>
                         </div>
                       )}
-                      <div className="flex justify-between text-slate-700">
+                      <div className="flex justify-between text-sm text-slate-700 sm:text-base">
                         <span>Services Subtotal:</span>
                         <span className="font-semibold">${calculatedTotalPrice!.toFixed(2)}</span>
                       </div>
                       {appliedCoupon && (
-                        <div className="flex justify-between text-green-600 text-sm">
+                        <div className="flex justify-between text-xs text-green-600 sm:text-sm">
                           <span>Coupon Applied ({appliedCoupon.name}):</span>
                           <span className={calculatedTotalPrice! > originalPrice! ? 'text-red-600' : 'text-green-600'}>
                             {calculatedTotalPrice! > originalPrice! ? '+' : '-'}${Math.abs(originalPrice! - calculatedTotalPrice!).toFixed(2)}
                           </span>
                         </div>
                       )}
-                      <div className="flex justify-between text-slate-600 text-sm">
+                      <div className="flex justify-between text-xs text-slate-600 sm:text-sm">
                         <span>Platform Fee (5%):</span>
                         <span>+${feeBreakdown.platformFee.toFixed(2)}</span>
                       </div>
-                      <div className="flex justify-between text-slate-600 text-sm">
+                      <div className="flex justify-between text-xs text-slate-600 sm:text-sm">
                         <span>Processing Fee:</span>
                         <span>+${feeBreakdown.stripeFee.toFixed(2)}</span>
                       </div>
-                      <div className="flex justify-between text-xl font-bold text-blue-900 pt-3 border-t border-blue-200">
+                      <div className="flex justify-between border-t border-blue-200 pt-2.5 text-lg font-bold text-blue-900 sm:pt-3 sm:text-xl">
                         <span>Total Amount:</span>
                         <span>${feeBreakdown.totalAmount.toFixed(2)}</span>
                       </div>
@@ -1220,21 +1381,22 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
 
         {/* Coupon Section */}
         {numberOfDays > 0 && selectedServices.length > 0 && calculatedTotalPrice && (
-          <div className="p-6 bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 rounded-2xl border border-green-200/60 shadow-sm">
-            <div className="flex items-center space-x-3 mb-6">
-              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-slate-900">Have a Coupon?</h3>
-                <p className="text-sm text-slate-600">Enter your coupon code to get a discount</p>
-              </div>
-            </div>
+          <div
+            className={cn('rounded-[1.75rem] border border-green-200/60 bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 p-4 shadow-sm sm:p-6', mobileStep !== 4 && 'hidden sm:block')}
+            onTouchStart={handleMobileTouchStart}
+            onTouchMove={handleMobileTouchMove}
+            onTouchEnd={handleMobileTouchEnd}
+          >
+            <SectionHeader
+              icon={<Ticket className="h-4 w-4" />}
+              title="Have a Coupon?"
+              description="Enter your coupon code to get a discount"
+              iconWrapClassName="bg-green-100 text-green-600"
+              className="mb-4 sm:mb-6"
+            />
 
             {!appliedCoupon ? (
-              <div className="flex gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row">
                 <div className="flex-1">
                   <Input
                     type="text"
@@ -1242,14 +1404,15 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
                     value={couponCode}
                     onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
                     maxLength={8}
-                    className="bg-white border-green-300 focus:border-green-500 focus:ring-green-500 rounded-xl"
+                    className="rounded-xl border-green-300 bg-white text-sm focus:border-green-500 focus:ring-green-500"
                     disabled={isValidatingCoupon}
                   />
                 </div>
                 <Button
+                  type="button"
                   onClick={handleApplyCoupon}
                   disabled={!couponCode.trim() || isValidatingCoupon}
-                  className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-semibold transition-all duration-200"
+                  className="h-10 rounded-xl bg-green-600 px-4 text-sm font-semibold text-white transition-all duration-200 hover:bg-green-700 sm:h-11 sm:px-6"
                 >
                   {isValidatingCoupon ? (
                     <div className="flex items-center space-x-2">
@@ -1262,22 +1425,23 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
                 </Button>
               </div>
             ) : (
-              <div className="flex items-center justify-between p-4 bg-white/80 rounded-xl border border-green-200/40">
+              <div className="flex items-center justify-between rounded-xl border border-green-200/40 bg-white/80 p-3">
                 <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                    <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-green-100 sm:h-8 sm:w-8">
+                    <svg className="h-3.5 w-3.5 text-green-600 sm:h-4 sm:w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                   </div>
                   <div>
-                    <p className="font-semibold text-green-800">{appliedCoupon.name}</p>
-                    <p className="text-sm text-green-600">Code: {appliedCoupon.code}</p>
+                    <p className="text-sm font-semibold text-green-800">{appliedCoupon.name}</p>
+                    <p className="text-xs text-green-600 sm:text-sm">Code: {appliedCoupon.code}</p>
                   </div>
                 </div>
                 <Button
+                  type="button"
                   onClick={handleRemoveCoupon}
                   variant="outline"
-                  className="text-red-600 border-red-300 hover:bg-red-50 rounded-xl"
+                  className="h-9 rounded-xl border-red-300 px-3 text-xs text-red-600 hover:bg-red-50 sm:text-sm"
                 >
                   Remove
                 </Button>
@@ -1299,7 +1463,7 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
 
         {/* Error & Success Messages */}
         {error && (
-          <div className="p-4 bg-gradient-to-r from-red-50 to-red-100 border border-red-200 rounded-xl">
+          <div className="rounded-xl border border-red-200 bg-gradient-to-r from-red-50 to-red-100 p-4">
             <div className="flex items-center space-x-3">
               <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
                 <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1312,7 +1476,7 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
         )}
 
         {success && (
-          <div className="p-4 bg-gradient-to-r from-green-50 to-green-100 border border-green-200 rounded-xl">
+          <div className="rounded-xl border border-green-200 bg-gradient-to-r from-green-50 to-green-100 p-4">
             <div className="flex items-center space-x-3">
               <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
                 <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1324,23 +1488,86 @@ export function BookingRequestForm({ onSuccess, preselectedContractorId }: { onS
           </div>
         )}
 
+        <div
+          className={cn('rounded-[1.75rem] border border-slate-200/80 bg-white p-5 shadow-sm sm:hidden', mobileStep !== 5 && 'hidden')}
+          onTouchStart={handleMobileTouchStart}
+          onTouchMove={handleMobileTouchMove}
+          onTouchEnd={handleMobileTouchEnd}
+        >
+          <div className="space-y-4 text-center">
+            {success ? (
+              <div className="relative overflow-hidden rounded-[1.5rem] border border-green-200 bg-gradient-to-br from-green-50 via-white to-emerald-100 px-4 py-8">
+                <div className="absolute left-6 top-6 h-2 w-2 animate-ping rounded-full bg-pink-400" />
+                <div className="absolute right-8 top-10 h-2.5 w-2.5 animate-ping rounded-full bg-blue-400 [animation-delay:150ms]" />
+                <div className="absolute bottom-8 left-10 h-2.5 w-2.5 animate-ping rounded-full bg-amber-400 [animation-delay:300ms]" />
+                <div className="absolute bottom-10 right-10 h-2 w-2 animate-ping rounded-full bg-green-400 [animation-delay:450ms]" />
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-green-700">
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h3 className="mt-4 text-base font-semibold text-slate-900 sm:text-lg">Booking created</h3>
+                <p className="mt-2 text-xs text-slate-600 sm:text-sm">Your request was submitted and will move to pending while the contractor reviews it.</p>
+              </div>
+            ) : (
+              <>
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 text-blue-700">
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-slate-900 sm:text-lg">Ready to submit?</h3>
+                  <p className="mt-2 text-xs text-slate-600 sm:text-sm">
+                    Tap Book Now to send this request. Once submitted, it will appear as pending until the contractor responds.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="petCta"
+                  size="pill"
+                  disabled={submitDisabled}
+                  className="w-full"
+                  onClick={() => formRef.current?.requestSubmit()}
+                >
+                  {isPending ? 'Booking...' : 'Book Now'}
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+
+        </div>
+
+        <MobileStepFooter
+          step={mobileStep}
+          maxStep={mobileSteps.length - 1}
+          onBack={goToPreviousStep}
+          onNext={goToNextStep}
+          onClose={onClose}
+          canGoNext={Boolean(canAdvanceFromCurrentStep)}
+          backDisabled={isPending}
+          nextDisabled={isPending}
+          hideNextOnFinal
+          className="z-20 shadow-[0_-10px_30px_rgba(15,23,42,0.08)]"
+          backButtonClassName="min-w-[7.5rem] flex-none"
+          nextButtonClassName="min-w-[8.5rem] flex-none"
+        />
+
         {/* Submit Button */}
-        <div className="flex justify-center">
+        <div className="hidden justify-center pb-6 sm:flex sm:pb-8">
           <Button
             type="submit"
-            className="px-12 py-4 text-lg font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+            variant="petCta"
+            size="pill"
+            className="px-10 py-3.5 text-base sm:px-12 sm:py-4 sm:text-lg"
             disabled={
-              isPending ||
-              success ||
-              selectedServices.length === 0 ||
-              selectedPets.length === 0 ||
-              !dateRange.startDate ||
-              !dateRange.endDate
+              submitDisabled
             }
           >
             {isPending ? (
               <div className="flex items-center space-x-3">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                <div className="h-5 w-5 animate-spin rounded-full border-b-2 border-white"></div>
                 <span>Creating Booking...</span>
               </div>
             ) : (
@@ -1486,10 +1713,10 @@ function ContractorScheduleView({ contractorId, selectedDate, serviceDurationMin
   })
 
   return (
-    <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-xl">
-      <h4 className="font-semibold text-slate-800 mb-3">
-        Contractor Schedule for {formattedDate}
-      </h4>
+        <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:mt-4 sm:p-4">
+          <h4 className="font-semibold text-slate-800 mb-3">
+            Contractor Schedule for {formattedDate}
+          </h4>
       {/* Existing bookings are intentionally hidden from clients to protect privacy */}
 
       {/* Available Time Slots */}
@@ -1512,14 +1739,14 @@ function ContractorScheduleView({ contractorId, selectedDate, serviceDurationMin
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {/* Smart Time Slots */}
             {getSmartAvailableSlots(daySchedule.bookings).map((slot: any, index: number) => (
               <button
                 key={index}
                 type="button"
                 onClick={() => onTimeSlotSelect(slot.startTime, slot.endTime)}
-                className="p-2 text-sm bg-green-100 hover:bg-green-200 border border-green-300 rounded-lg text-green-800 transition-colors font-medium"
+                className="rounded-lg border border-green-300 bg-green-100 px-2 py-2 text-[11px] font-medium text-green-800 transition-colors hover:bg-green-200 sm:text-sm"
               >
                 {formatTime(slot.startTime)} - {formatTime(slot.endTime)}
               </button>

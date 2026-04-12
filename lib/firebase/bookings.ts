@@ -544,12 +544,20 @@ export async function updateBookingStatus(bookingId: string, status: Booking['st
 
 export async function setClientCompleted(bookingId: string, completed: boolean): Promise<void> {
   const bookingRef = doc(db, 'bookings', bookingId)
-  await updateDoc(bookingRef, { clientCompleted: completed })
+  await updateDoc(bookingRef, {
+    clientCompleted: completed,
+    updatedAt: new Date().toISOString(),
+  })
 }
 
-export async function setContractorCompleted(bookingId: string, completed: boolean): Promise<void> {
+export async function setContractorCompleted(bookingId: string, completed: boolean, completedAt?: string): Promise<void> {
   const bookingRef = doc(db, 'bookings', bookingId)
-  await updateDoc(bookingRef, { contractorCompleted: completed })
+  const timestamp = completedAt || new Date().toISOString()
+  await updateDoc(bookingRef, {
+    contractorCompleted: completed,
+    contractorCompletedAt: completed ? timestamp : null,
+    updatedAt: timestamp,
+  })
 }
 
 export async function saveBookingReview(

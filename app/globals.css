@@ -125,6 +125,53 @@
 }
 
 @layer utilities {
+  .home-font-theme {
+    --home-font-display: var(--font-home-display), var(--font-geist-sans), sans-serif;
+    --home-font-accent: var(--font-home-accent), var(--font-geist-sans), sans-serif;
+    --home-font-body: var(--font-home-body), var(--font-geist-sans), sans-serif;
+    --home-desktop-text-scale: 1;
+    font-family: var(--home-font-body);
+  }
+
+  .home-font-theme h1,
+  .home-font-theme h2,
+  .home-font-theme h3,
+  .home-font-theme [data-home-display='true'] {
+    font-family: var(--home-font-display) !important;
+    font-style: normal !important;
+    font-weight: 700;
+    letter-spacing: 0.018em;
+    text-rendering: geometricPrecision;
+  }
+
+  .home-font-theme p,
+  .home-font-theme li,
+  .home-font-theme small,
+  .home-font-theme [data-home-body='true'] {
+    font-family: var(--home-font-body);
+    line-height: 1.55;
+  }
+
+  .home-font-theme button,
+  .home-font-theme [data-home-accent='true'] {
+    font-family: var(--home-font-accent);
+    letter-spacing: 0.01em;
+  }
+
+  .home-font-theme a {
+    font-family: var(--home-font-body);
+  }
+
+  @media (min-width: 1024px) {
+    .home-font-theme {
+      --home-desktop-text-scale: 1.1;
+    }
+
+    .home-font-theme :where(p, li, small, a, button, input, textarea, label) {
+      font-size: calc(1em * var(--home-desktop-text-scale));
+    }
+  }
+
   .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;

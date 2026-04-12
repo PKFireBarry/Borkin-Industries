@@ -1,5 +1,6 @@
 import type { Message } from '@/types/messaging'
 import { createEmailTemplate } from '../utils'
+import { getBaseAppUrl } from '@/lib/utils'
 
 // New message received while offline
 export function createNewMessageEmail(
@@ -9,9 +10,7 @@ export function createNewMessageEmail(
   isContractor: boolean = false
 ): { subject: string; html: string; text: string } {
   
-  const dashboardUrl = isContractor 
-    ? `${process.env.NEXT_PUBLIC_APP_URL}`
-    : `${process.env.NEXT_PUBLIC_APP_URL}`
+  const dashboardUrl = `${getBaseAppUrl()}/dashboard/messages/${message.chatId}`
 
   const content = `
     <p style="color: #374151; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">

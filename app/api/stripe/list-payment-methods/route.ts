@@ -61,7 +61,18 @@ export async function POST(req: NextRequest) {
           }
         }
       }
-      return NextResponse.json({ hasPayoutMethod, payoutMethod })
+      return NextResponse.json({
+        hasPayoutMethod,
+        payoutMethod,
+        accountStatus: {
+          payoutsEnabled: account.payouts_enabled,
+          chargesEnabled: account.charges_enabled,
+          detailsSubmitted: account.details_submitted,
+          currentlyDue: account.requirements?.currently_due || [],
+          eventuallyDue: account.requirements?.eventually_due || [],
+          pendingVerification: account.requirements?.pending_verification || [],
+        },
+      })
     } catch (err: any) {
       console.error('Failed to check payout method:', err)
       

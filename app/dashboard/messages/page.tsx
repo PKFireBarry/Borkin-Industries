@@ -1,92 +1,98 @@
-import { Suspense } from 'react';
-import { auth } from '@clerk/nextjs/server';
-import { getChatsForUser } from '@/app/actions/messaging-actions';
-import { ChatList } from '@/app/dashboard/messages/components/chat-list';
-import { ChatListSkeleton } from '@/app/dashboard/messages/components/chat-list-skeleton';
-import { PageTitle } from '@/app/dashboard/components/page-title';
-import { MessageCircle, AlertTriangle } from 'lucide-react';
+import { Suspense } from 'react'
+import { auth } from '@clerk/nextjs/server'
+import { getChatsForUser } from '@/app/actions/messaging-actions'
+import { ChatList } from '@/app/dashboard/messages/components/chat-list'
+import { ChatListSkeleton } from '@/app/dashboard/messages/components/chat-list-skeleton'
+import { Badge } from '@/components/ui/badge'
+import { DashboardPageContent, DashboardPageHeader, DashboardPageShell } from '../components/dashboard-shell'
+import { AlertTriangle, BellDot } from 'lucide-react'
 
 export default async function MessagesPage() {
-  const authResult = await auth();
+  const authResult = await auth()
+
   if (!authResult || !authResult.userId) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-        <div className="container mx-auto px-4 py-8">
-          <div className="max-w-2xl mx-auto">
-            <div className="bg-white rounded-2xl shadow-sm border p-8 text-center">
-              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <AlertTriangle className="w-8 h-8 text-red-600" />
-              </div>
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">Authentication Required</h2>
-              <p className="text-gray-600">
-                You must be logged in to view your messages.
-              </p>
+      <DashboardPageShell className="bg-gradient-to-br from-blue-50 via-white to-purple-50">
+        <DashboardPageContent className="pt-4 sm:pt-6">
+          <div className="mx-auto max-w-2xl rounded-[1.75rem] border border-red-200 bg-white p-8 text-center shadow-sm">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
+              <AlertTriangle className="h-8 w-8 text-red-600" />
             </div>
+            <h2 className="mb-2 text-xl font-semibold text-slate-900">Authentication Required</h2>
+            <p className="text-slate-600">You must be logged in to view your messages.</p>
           </div>
-        </div>
-      </div>
-    );
+        </DashboardPageContent>
+      </DashboardPageShell>
+    )
   }
 
-  const chatsResult = await getChatsForUser();
+  const chatsResult = await getChatsForUser()
 
   if (!chatsResult.success) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-        <div className="container mx-auto px-4 py-8">
-          <div className="max-w-2xl mx-auto">
-            <PageTitle title="Messages" />
-            <div className="bg-white rounded-2xl shadow-sm border p-8 text-center mt-6">
-              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <AlertTriangle className="w-8 h-8 text-red-600" />
-              </div>
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">Error Loading Conversations</h2>
-              <p className="text-gray-600 mb-1">
-                {chatsResult.error || 'Could not retrieve your chat conversations.'}
-              </p>
-              {chatsResult.errorCode && (
-                <p className="text-sm text-gray-500">Error Code: {chatsResult.errorCode}</p>
-              )}
+      <DashboardPageShell className="bg-gradient-to-br from-blue-50 via-white to-purple-50">
+        <DashboardPageContent className="pt-4 sm:pt-6">
+          <div className="mx-auto max-w-2xl rounded-[1.75rem] border border-red-200 bg-white p-8 text-center shadow-sm">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
+              <AlertTriangle className="h-8 w-8 text-red-600" />
             </div>
+            <h2 className="mb-2 text-xl font-semibold text-slate-900">Error Loading Conversations</h2>
+            <p className="mb-1 text-slate-600">{chatsResult.error || 'Could not retrieve your chat conversations.'}</p>
+            {chatsResult.errorCode ? <p className="text-sm text-slate-500">Error Code: {chatsResult.errorCode}</p> : null}
           </div>
-        </div>
-      </div>
-    );
+        </DashboardPageContent>
+      </DashboardPageShell>
+    )
   }
 
-  const chats = chatsResult.data || [];
-  const currentUserId = authResult.userId;
-
+  const chats = chatsResult.data || []
+  const currentUserId = authResult.userId
+  const totalUnreadMessages = chats.reduce((total, chat) => {
+    return total + (currentUserId === chat.client.userId ? chat.clientUnreadMessages : chat.contractorUnreadMessages)
+  }, 0)
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-      <div className="container mx-auto px-4 py-8">
-        <div className="max-w-4xl mx-auto">
-          {/* Header */}
-          <div className="mb-8">
-            <div className="flex items-center space-x-3 mb-2">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center">
-                <MessageCircle className="w-6 h-6 text-white" />
+    <DashboardPageShell className="bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      <DashboardPageContent className="space-y-4 pb-8 pt-4 sm:space-y-6 sm:pb-10 sm:pt-6 lg:pb-12">
+        <DashboardPageHeader
+          variant="summary"
+          title="Messages"
+          surfaceClassName="from-white via-blue-50/70 to-purple-50/70"
+          actions={
+            totalUnreadMessages > 0 ? (
+              <div className="rounded-[1.5rem] border border-white/80 bg-white/80 p-4 shadow-sm sm:min-w-[14rem]">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
+                    <BellDot className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Unread messages</p>
+                    <p className="mt-1 text-lg font-semibold text-slate-900">{totalUnreadMessages}</p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">Messages</h1>
-                <p className="text-gray-600">
-                  {chats.length > 0 
-                    ? `${chats.length} conversation${chats.length !== 1 ? 's' : ''}`
-                    : 'Stay connected with your bookings'
-                  }
-                </p>
+            ) : null
+          }
+        />
+
+        <section className="rounded-[1.75rem] border border-slate-200/70 bg-white/90 shadow-sm">
+          {totalUnreadMessages > 0 ? (
+            <div className="border-b border-slate-200/70 px-4 py-3 sm:px-5">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
+                  <BellDot className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">Unread messages waiting</p>
+                  <p className="mt-1 text-sm text-slate-600">Unread threads are highlighted directly in the directory below.</p>
+                </div>
               </div>
             </div>
-          </div>
-
-          {/* Chat List */}
-          <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
-            <Suspense fallback={<ChatListSkeleton />}>
-              <ChatList chats={chats} currentUserId={currentUserId} />
-            </Suspense>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-} 
+          ) : null}
+          <Suspense fallback={<ChatListSkeleton />}>
+            <ChatList chats={chats} currentUserId={currentUserId} pageSize={8} />
+          </Suspense>
+        </section>
+      </DashboardPageContent>
+    </DashboardPageShell>
+  )
+}

@@ -1,15 +1,28 @@
 'use client'
 
 import Link from "next/link"
-import { PawPrintIcon as Paw, Menu, X } from 'lucide-react'
+import Image from 'next/image'
+import { Menu, X } from 'lucide-react'
 import { motion, AnimatePresence } from "framer-motion"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { SignInButton, SignUpButton, SignedIn, SignedOut, UserButton } from "@clerk/nextjs"
 import { Button } from "@/components/ui/button"
 
 export default function Header() {
   const [isHovered, setIsHovered] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+
+  useEffect(() => {
+    if (!isMobileMenuOpen) {
+      document.body.style.overflow = ''
+      return
+    }
+
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [isMobileMenuOpen])
 
   const navItems = [
     { href: "#hero", label: "Home" },
@@ -23,12 +36,12 @@ export default function Header() {
         initial={{ y: -100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ type: "spring", stiffness: 100, damping: 20 }}
-        className="fixed top-0 left-0 right-0 z-50 w-full px-4 sm:px-6 lg:px-8 h-16 flex items-center bg-white/80 backdrop-blur-md border-b border-slate-200/60 shadow-sm"
+        className="fixed left-3 right-3 top-2 z-50 flex h-14 items-center rounded-2xl border border-white/80 bg-white/78 px-3 shadow-[0_14px_40px_-20px_rgba(79,70,229,0.45)] backdrop-blur-xl sm:left-6 sm:right-6 sm:top-3 sm:h-16 lg:left-8 lg:right-8"
       >
-        <div className="w-full max-w-7xl mx-auto flex justify-between items-center">
+        <div className="mx-auto flex w-full max-w-7xl items-center justify-between lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:gap-6">
           {/* Logo */}
           <Link 
-            className="flex items-center justify-center group flex-shrink-0" 
+            className="group flex shrink-0 items-center justify-center lg:justify-self-start" 
             href="#hero"
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
@@ -36,13 +49,19 @@ export default function Header() {
             <motion.div
               animate={{ rotate: isHovered ? 360 : 0 }}
               transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-              className="relative"
+              className="relative h-10 w-10 transition-all duration-300 group-hover:drop-shadow-[0_12px_20px_rgba(59,130,246,0.28)]"
             >
-              <div className="absolute inset-0 bg-gradient-to-br from-indigo-400 to-purple-500 rounded-full blur-sm opacity-20 group-hover:opacity-40 transition-opacity duration-300" />
-              <Paw className="relative h-8 w-8 text-indigo-600 group-hover:text-purple-600 transition-colors duration-300" />
+              <Image
+                src="/logo.png"
+                alt="Borkin Industries logo"
+                fill
+                sizes="40px"
+                className="object-contain"
+                priority
+              />
             </motion.div>
             <motion.span 
-              className="ml-3 text-xl font-bold bg-gradient-to-r from-slate-900 to-indigo-900 bg-clip-text text-transparent group-hover:from-indigo-600 group-hover:to-purple-600 transition-all duration-300"
+              className="ml-2 bg-gradient-to-r from-slate-900 to-indigo-900 bg-clip-text text-lg font-bold text-transparent transition-all duration-300 group-hover:from-indigo-600 group-hover:to-purple-600 sm:ml-3 sm:text-xl"
               whileHover={{ scale: 1.02 }}
               transition={{ type: "spring", stiffness: 400 }}
             >
@@ -52,63 +71,53 @@ export default function Header() {
           </Link>
           
           {/* Desktop Navigation */}
-          <div className="hidden lg:flex items-center gap-8">
-            <nav className="flex gap-6">
-              {navItems.map((item) => (
-                <motion.div
-                  key={item.href}
-                  whileHover={{ y: -2 }}
-                  whileTap={{ scale: 0.95 }}
+          <nav className="hidden lg:flex lg:items-center lg:justify-center lg:gap-3">
+            {navItems.map((item) => (
+              <motion.div
+                key={item.href}
+                whileHover={{ y: -2 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <Button asChild variant="petSoft" className="h-12 rounded-xl px-6 text-base font-semibold text-slate-700">
+                  <Link href={item.href}>{item.label}</Link>
+                </Button>
+              </motion.div>
+            ))}
+          </nav>
+
+          {/* Desktop Auth Buttons */}
+          <div className="hidden lg:flex lg:items-center lg:justify-self-end lg:gap-3">
+            <SignedOut>
+              <SignInButton mode="modal">
+                <Button 
+                  variant="petSoft" 
+                  className="h-12 rounded-xl px-6 text-base font-semibold text-slate-700"
                 >
-                  <Link 
-                    className="relative text-sm font-medium text-slate-700 hover:text-indigo-600 transition-colors duration-200 group py-2"
-                    href={item.href}
-                  >
-                    {item.label}
-                    <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-indigo-600 to-purple-600 group-hover:w-full transition-all duration-300 ease-out" />
-                  </Link>
-                </motion.div>
-              ))}
-            </nav>
+                  Sign In
+                </Button>
+              </SignInButton>
+              <SignUpButton mode="modal">
+                <Button variant="petPrimary" className="h-12 rounded-xl px-6 text-base font-semibold">
+                  Sign Up
+                </Button>
+              </SignUpButton>
+            </SignedOut>
             
-            {/* Desktop Auth Buttons */}
-            <div className="flex items-center gap-3">
-              <SignedOut>
-                <SignInButton mode="modal">
-                  <Button 
-                    variant="outline" 
-                    className="text-sm font-medium text-slate-700 hover:text-indigo-600 hover:bg-indigo-50 border-transparent hover:border-indigo-200 transition-all duration-200"
-                  >
-                    Sign In
-                  </Button>
-                </SignInButton>
-                <SignUpButton mode="modal">
-                  <Button 
-                    className="text-sm font-semibold bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-6 py-2 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200"
-                  >
-                    Sign Up
-                  </Button>
-                </SignUpButton>
-              </SignedOut>
-              
-              <SignedIn>
-                <Link href="/dashboard">
-                  <Button 
-                    className="text-sm font-semibold bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-6 py-2 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 mr-3"
-                  >
-                    Dashboard
-                  </Button>
-                </Link>
-                <UserButton 
-                  afterSignOutUrl="/"
-                  appearance={{
-                    elements: {
-                      avatarBox: "w-9 h-9 rounded-xl border-2 border-slate-200 hover:border-indigo-300 transition-colors duration-200"
-                    }
-                  }}
-                />
-              </SignedIn>
-            </div>
+            <SignedIn>
+              <Link href="/dashboard">
+                <Button variant="petPrimary" className="h-12 rounded-xl px-6 text-base font-semibold">
+                  Dashboard
+                </Button>
+              </Link>
+              <UserButton 
+                afterSignOutUrl="/"
+                appearance={{
+                  elements: {
+                    avatarBox: "w-9 h-9 rounded-xl border-2 border-slate-200 hover:border-indigo-300 transition-colors duration-200"
+                  }
+                }}
+              />
+            </SignedIn>
           </div>
 
           {/* Mobile Menu Button */}
@@ -126,7 +135,9 @@ export default function Header() {
             <motion.button
               whileTap={{ scale: 0.95 }}
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 transition-colors duration-200"
+              aria-label={isMobileMenuOpen ? 'Close menu' : 'Open menu'}
+              aria-expanded={isMobileMenuOpen}
+              className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-white to-indigo-50 p-2.5 shadow-md transition-all duration-200 hover:border-indigo-200 hover:shadow-lg"
             >
               <AnimatePresence mode="wait">
                 {isMobileMenuOpen ? (
@@ -166,84 +177,84 @@ export default function Header() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 lg:hidden"
+              className="fixed inset-0 z-40 bg-slate-900/35 backdrop-blur-sm lg:hidden"
               onClick={() => setIsMobileMenuOpen(false)}
             />
             
-            {/* Mobile Menu */}
             <motion.div
-              initial={{ x: "100%", opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: "100%", opacity: 0 }}
-              transition={{ type: "spring", stiffness: 300, damping: 30 }}
-              className="fixed top-16 right-0 bottom-0 w-80 max-w-[85vw] bg-white/95 backdrop-blur-xl border-l border-slate-200/60 shadow-2xl z-50 lg:hidden"
+              initial={{ opacity: 0, y: 24, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 16, scale: 0.98 }}
+              transition={{ type: "spring", stiffness: 260, damping: 28 }}
+              className="fixed inset-x-3 top-[4.5rem] z-50 max-h-[calc(100vh-5.25rem)] overflow-y-auto rounded-3xl border border-white/80 bg-gradient-to-b from-white/95 via-blue-50/85 to-rose-50/70 shadow-2xl backdrop-blur-xl sm:top-[5rem] sm:max-h-[calc(100vh-5.75rem)] lg:hidden"
             >
-              <div className="flex flex-col h-full p-6">
-                {/* Navigation Links */}
-                <nav className="space-y-1 mb-8">
+              <div className="p-4">
+                <nav className="space-y-2" aria-label="Mobile navigation links">
                   {navItems.map((item, index) => (
                     <motion.div
                       key={item.href}
-                      initial={{ x: 50, opacity: 0 }}
-                      animate={{ x: 0, opacity: 1 }}
-                      transition={{ delay: index * 0.1 }}
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.05 * index }}
                     >
-                      <Link 
-                        className="flex items-center py-3 px-4 text-lg font-medium text-slate-700 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all duration-200"
+                      <Link
+                        className="flex items-center justify-between rounded-2xl border border-white/85 bg-white/85 px-4 py-4 text-base font-semibold text-slate-700 shadow-sm transition-all duration-200 hover:border-indigo-200 hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 hover:text-indigo-700 hover:shadow-md"
                         href={item.href}
                         onClick={() => setIsMobileMenuOpen(false)}
                       >
-                        {item.label}
+                        <span>{item.label}</span>
                       </Link>
                     </motion.div>
                   ))}
                 </nav>
-                
-                {/* Mobile Auth Buttons */}
-                <SignedOut>
-                  <motion.div 
-                    className="space-y-3 mt-auto"
-                    initial={{ y: 50, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    transition={{ delay: 0.3 }}
-                  >
-                    <SignInButton mode="modal">
-                      <Button 
-                        variant="outline" 
-                        className="w-full py-3 text-base font-medium border-2 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 rounded-xl transition-all duration-200"
-                        onClick={() => setIsMobileMenuOpen(false)}
-                      >
-                        Sign In
-                      </Button>
-                    </SignInButton>
-                    <SignUpButton mode="modal">
-                      <Button 
-                        className="w-full py-3 text-base font-semibold bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-200"
-                        onClick={() => setIsMobileMenuOpen(false)}
-                      >
-                        Sign Up
-                      </Button>
-                    </SignUpButton>
-                  </motion.div>
-                </SignedOut>
-                
-                <SignedIn>
-                  <motion.div 
-                    className="mt-auto"
-                    initial={{ y: 50, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    transition={{ delay: 0.3 }}
-                  >
-                    <Link href="/dashboard">
-                      <Button 
-                        className="w-full py-3 text-base font-semibold bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-200"
-                        onClick={() => setIsMobileMenuOpen(false)}
-                      >
-                        Go to Dashboard
-                      </Button>
-                    </Link>
-                  </motion.div>
-                </SignedIn>
+
+                <div className="mt-4 border-t border-indigo-100/80 pt-4">
+                  <SignedOut>
+                    <motion.div
+                      className="space-y-2"
+                      initial={{ y: 18, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      transition={{ delay: 0.2 }}
+                    >
+                      <SignInButton mode="modal">
+                        <Button
+                          variant="petSoft"
+                          className="h-12 w-full rounded-xl text-base font-medium"
+                          onClick={() => setIsMobileMenuOpen(false)}
+                        >
+                          Sign In
+                        </Button>
+                      </SignInButton>
+                      <SignUpButton mode="modal">
+                        <Button
+                          variant="petPrimary"
+                          className="h-12 w-full rounded-xl text-base font-semibold"
+                          onClick={() => setIsMobileMenuOpen(false)}
+                        >
+                          Sign Up
+                        </Button>
+                      </SignUpButton>
+                    </motion.div>
+                  </SignedOut>
+
+                  <SignedIn>
+                    <motion.div
+                      initial={{ y: 18, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      transition={{ delay: 0.2 }}
+                    >
+                      <Link href="/dashboard">
+                        <Button
+                          variant="petPrimary"
+                          className="h-12 w-full rounded-xl text-base font-semibold"
+                          onClick={() => setIsMobileMenuOpen(false)}
+                        >
+                          Go to Dashboard
+                        </Button>
+                      </Link>
+                    </motion.div>
+                  </SignedIn>
+                </div>
               </div>
             </motion.div>
           </>

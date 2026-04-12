@@ -55,7 +55,7 @@ function ContractorDashboardLayoutContent({ children }: ContractorDashboardLayou
 
   if (!isUserLoaded || isLoadingStatus) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+      <div className="flex min-h-screen items-center justify-center bg-slate-100">
         <p>Loading contractor data...</p>
       </div>
     );
@@ -86,7 +86,7 @@ function ContractorDashboardLayoutContent({ children }: ContractorDashboardLayou
 
 function LoadingFallback() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
+    <div className="flex min-h-screen items-center justify-center bg-slate-100">
       <p>Loading contractor data...</p>
     </div>
   );

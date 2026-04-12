@@ -21,6 +21,7 @@ interface PhotoUploadProps {
   maxHeight?: number
   quality?: number // 0-1, default 0.8
   previewSize?: 'sm' | 'md' | 'lg' | 'xl'
+  previewClassName?: string
 }
 
 export function PhotoUpload({ 
@@ -36,7 +37,8 @@ export function PhotoUpload({
   maxWidth = 800,
   maxHeight = 800,
   quality = 0.8,
-  previewSize = 'md'
+  previewSize = 'md',
+  previewClassName,
 }: PhotoUploadProps) {
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(initialUrl || null)
@@ -196,7 +198,7 @@ export function PhotoUpload({
               <img 
                 src={preview} 
                 alt="Preview" 
-                className={`${previewSizeClasses[previewSize]} object-cover rounded-full border shadow-lg`} 
+                className={`${previewClassName || previewSizeClasses[previewSize]} object-cover rounded-full border shadow-lg`} 
               />
               
               {/* Quick action buttons */}

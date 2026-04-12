@@ -6,7 +6,6 @@ import { redirect } from 'next/navigation';
 import About from "@/components/About";
 import HeroSection from "@/components/HeroSection";
 import TeamSection from "@/components/TeamSection";
-import TermsOfServiceSection from "@/components/TermsOfServiceSection";
 import Footer from "@/components/Footer";
 import Header from "@/components/Header";
 import ContactComponent from "@/components/Contact";
@@ -25,7 +24,7 @@ export default async function Home() {
   if (user && !role) redirect('/select-role');
 
   return (
-    <div className="flex flex-col min-h-screen w-full overflow-x-hidden">
+    <div className="home-font-theme flex min-h-screen w-full flex-col overflow-x-hidden">
       <Header />
       <main className="flex-1 flex flex-col w-full overflow-x-hidden">
 
@@ -36,9 +35,6 @@ export default async function Home() {
         <WhyChooseUs/>
         <ServicesSection />
         <div id="contact"><ContactComponent /></div>
-        <div className="flex justify-center w-full px-4">
-          <TermsOfServiceSection />
-        </div>
       </main>
       <Footer />
     </div>

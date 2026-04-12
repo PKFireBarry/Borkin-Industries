@@ -23,6 +23,7 @@ import type {
   MessageInputData,
 } from "@/types/messaging";
 import { auth } from "@clerk/nextjs/server";
+import { getBookingById } from "@/lib/firebase/bookings";
 
 // Helper to convert Firestore Timestamps in a Chat object
 function convertChatTimestamps(chatData: DocumentData): Chat {
@@ -56,6 +57,63 @@ export interface ActionResult<T = null> {
   data?: T;
   error?: string;
   errorCode?: string;
+}
+
+/**
+ * Validates whether a thread is still available to open for the current user.
+ * This protects the UI from stale chat rows whose backing booking no longer exists.
+ */
+export async function validateThreadAccess(
+  bookingId: string,
+): Promise<ActionResult<{ chatExists: boolean; bookingExists: boolean }>> {
+  const authResult = await auth();
+  if (!authResult || !authResult.userId) {
+    return { success: false, error: "User not authenticated.", errorCode: "UNAUTHENTICATED" };
+  }
+
+  const { userId } = authResult;
+
+  try {
+    const chatDocRef = doc(db, "chats", bookingId);
+    const chatDocSnap = await getDoc(chatDocRef);
+    const booking = await getBookingById(bookingId);
+
+    if (!booking) {
+      if (chatDocSnap.exists()) {
+        await writeBatch(db).delete(chatDocRef).commit();
+      }
+
+      return {
+        success: false,
+        error: "This conversation is no longer available.",
+        errorCode: "BOOKING_NOT_FOUND",
+        data: { chatExists: false, bookingExists: false },
+      };
+    }
+
+    if (userId !== booking.clientId && userId !== booking.contractorId) {
+      return {
+        success: false,
+        error: "You are not authorized to open this conversation.",
+        errorCode: "FORBIDDEN",
+      };
+    }
+
+    return {
+      success: true,
+      data: {
+        chatExists: chatDocSnap.exists(),
+        bookingExists: true,
+      },
+    };
+  } catch (error: unknown) {
+    console.error("Error in validateThreadAccess:", error);
+    return {
+      success: false,
+      error: "Failed to validate thread access.",
+      errorCode: "FIRESTORE_ERROR",
+    };
+  }
 }
 
 /**

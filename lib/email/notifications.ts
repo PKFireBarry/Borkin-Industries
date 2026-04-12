@@ -12,7 +12,8 @@ import {
   createServicesUpdatedContractorEmail,
   createServicesUpdatedClientEmail,
   createAdminPriceUpdatedClientEmail,
-  createAdminPriceUpdatedContractorEmail
+  createAdminPriceUpdatedContractorEmail,
+  createCompletionReminderEmail
 } from './templates'
 import type { Booking } from '@/types/booking'
 import type { Client } from '@/types/client'
@@ -139,6 +140,32 @@ export async function sendBookingCompletedReceipt(
     console.log('Booking completed receipt sent successfully')
   } catch (error) {
     console.error('Error sending booking completed receipt:', error)
+  }
+}
+
+export async function sendCompletionReminderEmail(
+  booking: Booking,
+  client: Client,
+  contractor: Contractor,
+  services: PlatformService[],
+  completionUrl: string,
+  reminderNumber: number
+): Promise<void> {
+  const transporter = createTransporter()
+
+  try {
+    const email = createCompletionReminderEmail(booking, client, contractor, services, completionUrl, reminderNumber)
+    await transporter.sendMail({
+      from: `"${process.env.SMTP_FROM_NAME}" <${process.env.SMTP_FROM}>`,
+      to: client.email,
+      subject: email.subject,
+      html: email.html,
+      text: email.text,
+    })
+
+    console.log('Completion reminder email sent successfully')
+  } catch (error) {
+    console.error('Error sending completion reminder email:', error)
   }
 }
 

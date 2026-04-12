@@ -37,15 +37,15 @@ export default function ContractorMap({ lat, lng, miles, clientLat, clientLng }:
     <MapContainer
       center={[lat, lng]}
       zoom={8}
-      scrollWheelZoom={true}
+      scrollWheelZoom={false}
       style={{ height: '100%', width: '100%', borderRadius: 12, position: 'relative', zIndex: 0 }}
-      dragging={true}
-      doubleClickZoom={true}
-      zoomControl={true}
+      dragging={false}
+      doubleClickZoom={false}
+      zoomControl={false}
       attributionControl={false}
       keyboard={false}
-      touchZoom={true}
-      boxZoom={true}
+      touchZoom={false}
+      boxZoom={false}
     >
       <TileLayer
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
