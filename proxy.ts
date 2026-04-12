@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server'
 import { clerkMiddleware } from '@clerk/nextjs/server'
 
 // Export the Clerk middleware with ban check configurations

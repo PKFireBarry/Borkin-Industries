@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
+import { Suspense } from 'react'
 import { useUser } from '@clerk/nextjs'
 import { Button } from '@/components/ui/button'
 
@@ -50,7 +51,7 @@ function getToneClasses(tone: 'success' | 'warning' | 'error' | 'info') {
   return 'border-blue-200 bg-blue-50 text-blue-700'
 }
 
-export default function BookingCompletionPage() {
+function BookingCompletionContent() {
   const searchParams = useSearchParams()
   const { isSignedIn } = useUser()
   const status = searchParams.get('status') || 'not-ready'
@@ -92,5 +93,21 @@ export default function BookingCompletionPage() {
         </div>
       </div>
     </main>
+  )
+}
+
+export default function BookingCompletionPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-blue-50 px-4 py-16 sm:px-6">
+          <div className="mx-auto max-w-xl rounded-[2rem] border border-slate-200 bg-white p-8 shadow-xl shadow-slate-200/60 sm:p-10">
+            <p className="text-sm font-medium text-slate-500">Loading booking update...</p>
+          </div>
+        </main>
+      }
+    >
+      <BookingCompletionContent />
+    </Suspense>
   )
 }
