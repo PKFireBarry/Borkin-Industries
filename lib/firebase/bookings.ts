@@ -224,6 +224,26 @@ export async function addBooking(data: AddBookingDataInput): Promise<string> {
     throw new Error(validationResult.message || 'Booking conflicts with existing bookings');
   }
 
+  try {
+    const recentCutoff = new Date(Date.now() - 60_000).toISOString()
+    const dupQuery = query(
+      collection(db, 'bookings'),
+      where('clientId', '==', data.clientId),
+      where('contractorId', '==', data.contractorId),
+      where('startDate', '==', data.startDate),
+      where('endDate', '==', data.endDate),
+      where('status', '==', 'pending'),
+      where('createdAt', '>=', recentCutoff),
+    )
+    const dupSnap = await getDocs(dupQuery)
+    if (!dupSnap.empty) {
+      console.warn('[addBooking] duplicate submission detected, returning existing booking', dupSnap.docs[0].id)
+      return dupSnap.docs[0].id
+    }
+  } catch (error) {
+    console.warn('[addBooking] duplicate check failed; continuing without dedup protection', error)
+  }
+
   // Calculate fees for display/tracking purposes
   const platformFeeInCents = calculatePlatformFee(baseServiceAmountInCents);
   const estimatedStripeFeeInCents = calculateStripeFee(baseServiceAmountInCents);
@@ -271,6 +291,7 @@ export async function addBooking(data: AddBookingDataInput): Promise<string> {
     customerId: data.stripeCustomerId,
     contractorId: data.contractorId,
     baseServiceAmount: baseServiceAmountInCents, // Amount contractor receives
+    idempotencyKey: `bi_${data.clientId}_${data.contractorId}_${data.startDate}_${data.endDate}_${baseServiceAmountInCents}`,
     metadata: stripeMetadata,
     // The API route /api/stripe/create-payment-intent handles the new fee structure
   };

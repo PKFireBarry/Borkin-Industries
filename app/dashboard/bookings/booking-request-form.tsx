@@ -248,6 +248,7 @@ export function BookingRequestForm({ onSuccess, onClose, preselectedContractorId
   const [isPending, setIsPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const isSubmittingRef = useRef(false)
   const [mobileStep, setMobileStep] = useState(0)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const formRef = useRef<HTMLFormElement | null>(null)
@@ -599,6 +600,7 @@ export function BookingRequestForm({ onSuccess, onClose, preselectedContractorId
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingRef.current) return
     setError(null);
     setSuccess(false);
 
@@ -669,11 +671,13 @@ export function BookingRequestForm({ onSuccess, onClose, preselectedContractorId
       }
     }
 
+    isSubmittingRef.current = true
     setIsPending(true);
     try {
       const profile = await getClientProfile(user.id);
       if (!profile?.stripeCustomerId) {
         setError('Payment profile not set up. Please add a payment method in your dashboard.');
+        isSubmittingRef.current = false
         setIsPending(false);
         return;
       }
@@ -717,6 +721,7 @@ export function BookingRequestForm({ onSuccess, onClose, preselectedContractorId
 
       if (!paymentMethodId) {
         setError('No payment method found. Please add a payment method in your dashboard.');
+        isSubmittingRef.current = false
         setIsPending(false);
         return;
       }
@@ -759,6 +764,7 @@ export function BookingRequestForm({ onSuccess, onClose, preselectedContractorId
       console.error("Booking creation error:", err);
       setError(err instanceof Error ? err.message : 'Failed to create booking. Please try again.');
     } finally {
+      isSubmittingRef.current = false
       setIsPending(false);
     }
   };
