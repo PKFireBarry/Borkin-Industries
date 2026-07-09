@@ -16,7 +16,10 @@ export function useRequireRole(requiredRole: 'client' | 'contractor') {
     if (isPreviewMode) return
 
     const role = user?.publicMetadata?.role
-    if (!role) return // Optionally redirect to sign-in or not-authorized
+    if (!role) {
+      router.replace('/select-role')
+      return
+    }
     if (role !== requiredRole) {
       if (role === 'contractor') {
         router.replace('/dashboard/contractor')
