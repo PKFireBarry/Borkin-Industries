@@ -4,6 +4,8 @@ import { Boogaloo, Bubblegum_Sans, Fredoka, Geist, Geist_Mono, Permanent_Marker 
 import './globals.css'
 import { BanCheck } from '@/components/ban-check'
 import { Toaster } from "@/components/ui/sonner"
+import { PostHogPageView } from '@/components/posthog-pageview'
+import { PostHogIdentify } from '@/components/posthog-identify'
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -58,6 +60,8 @@ export default function RootLayout({
     <ClerkProvider>
       <html lang="en">
         <body className={`${geistSans.variable} ${geistMono.variable} ${permanentMarker.variable} ${fredoka.variable} ${boogaloo.variable} ${bubblegumSans.variable} antialiased`}>
+          <PostHogPageView />
+          <PostHogIdentify />
           <BanCheck />
           {children}
           <Toaster />
