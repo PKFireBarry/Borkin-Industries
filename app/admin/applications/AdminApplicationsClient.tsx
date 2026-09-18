@@ -18,6 +18,7 @@ import {
   Clock,
   FileText
 } from 'lucide-react'
+import { SCREENING_QUESTIONS } from '@/lib/screening/questions'
 
 export interface Application {
   id: string;
@@ -67,6 +68,11 @@ export interface Application {
     maxDistance?: string;
     willTravelOutside?: string;
   };
+  screeningAnswers?: Record<string, string>;
+  screeningScore?: number | null;
+  gradedAt?: string | Date | { seconds: number; nanoseconds: number } | null;
+  gradedByEmail?: string | null;
+  isTestData?: boolean;
   // Add other potential fields with specific types
   [key: string]: unknown; // Allow other properties not explicitly defined with unknown type
 }
@@ -106,6 +112,12 @@ function getStatusColor(status: string) {
   }
 }
 
+function getScoreColor(score: number | null | undefined) {
+  if (score == null) return 'bg-gray-100 text-gray-600 border-gray-200'
+  if (score <= 70) return 'bg-red-100 text-red-800 border-red-200'
+  return 'bg-green-100 text-green-800 border-green-200'
+}
+
 function formatExperience(exp: any) {
   const title = exp.title || 'Position'
   const employer = exp.employer || 'Company'
@@ -139,16 +151,22 @@ function formatEducation(edu: any) {
   }
 }
 
-export default function AdminApplicationsClient({ applications, onApprove, onReject, onReinstate }: {
+export default function AdminApplicationsClient({ applications, onApprove, onReject, onReinstate, onGrade, onCreateTest, onDelete }: {
   applications: Application[], // Use the Application interface
   onApprove: (id: string) => Promise<void>,
   onReject: (id: string) => Promise<void>,
   onReinstate: (id: string) => Promise<void>,
+  onGrade: (id: string, score: number) => Promise<void>,
+  onCreateTest: () => Promise<void>,
+  onDelete: (id: string) => Promise<void>,
 }) {
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending')
   const [search, setSearch] = useState('')
   const [date, setDate] = useState('')
   const [actionStatus, setActionStatus] = useState<{ [id: string]: 'idle' | 'loading' | 'success' }>({})
+  const [expandedScreening, setExpandedScreening] = useState<{ [id: string]: boolean }>({})
+  const [scoreDrafts, setScoreDrafts] = useState<{ [id: string]: string }>({})
+  const [creatingTest, setCreatingTest] = useState(false)
 
   const filtered = applications.filter(a => {
     if (filter !== 'all' && a.status !== filter) return false
@@ -176,6 +194,18 @@ export default function AdminApplicationsClient({ applications, onApprove, onRej
     return true
   })
 
+  // Surface ungraded and low-scoring pending applications at the top of the queue.
+  const sorted = (filter === 'pending' || filter === 'all')
+    ? [...filtered].sort((a, b) => {
+        const priority = (app: Application) => {
+          if (app.status !== 'pending') return 2
+          if (app.screeningScore == null || app.screeningScore <= 70) return 0
+          return 1
+        }
+        return priority(a) - priority(b)
+      })
+    : filtered
+
   const handleAction = async (id: string, action: 'approve' | 'reject' | 'reinstate') => {
     setActionStatus(s => ({ ...s, [id]: 'loading' }))
     try {
@@ -186,6 +216,39 @@ export default function AdminApplicationsClient({ applications, onApprove, onRej
       window.location.reload()
     } catch {
       setActionStatus(s => ({ ...s, [id]: 'idle' }))
+    }
+  }
+
+  const handleGrade = async (id: string) => {
+    const score = Number(scoreDrafts[id])
+    if (!Number.isInteger(score) || score < 0 || score > 100) return
+    setActionStatus(s => ({ ...s, [id]: 'loading' }))
+    try {
+      await onGrade(id, score)
+      window.location.reload()
+    } catch {
+      setActionStatus(s => ({ ...s, [id]: 'idle' }))
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Delete this test application? This cannot be undone.')) return
+    setActionStatus(s => ({ ...s, [id]: 'loading' }))
+    try {
+      await onDelete(id)
+      window.location.reload()
+    } catch {
+      setActionStatus(s => ({ ...s, [id]: 'idle' }))
+    }
+  }
+
+  const handleCreateTest = async () => {
+    setCreatingTest(true)
+    try {
+      await onCreateTest()
+      window.location.reload()
+    } catch {
+      setCreatingTest(false)
     }
   }
 
@@ -244,6 +307,15 @@ export default function AdminApplicationsClient({ applications, onApprove, onRej
                 className="w-full sm:w-auto"
               />
             </div>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={creatingTest}
+              onClick={handleCreateTest}
+              className="min-w-[160px]"
+            >
+              {creatingTest ? 'Seeding...' : 'Seed Test Application'}
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -258,7 +330,7 @@ export default function AdminApplicationsClient({ applications, onApprove, onRej
         </Card>
       ) : (
         <div className="space-y-6">
-          {filtered.map((application: Application) => (
+          {sorted.map((application: Application) => (
             <Card key={application.id} className="overflow-hidden">
               <CardHeader className="bg-gray-50 border-b">
                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -277,6 +349,14 @@ export default function AdminApplicationsClient({ applications, onApprove, onRej
                       >
                         {application.w9Url ? 'W-9 on file' : 'W-9 missing'}
                       </Badge>
+                      <Badge className={getScoreColor(application.screeningScore)}>
+                        {application.screeningScore == null ? 'Not graded yet' : `Screening: ${application.screeningScore}`}
+                      </Badge>
+                      {application.isTestData && (
+                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                          Test data
+                        </Badge>
+                      )}
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-sm text-gray-600">
                       <div className="flex items-center gap-2">
@@ -336,8 +416,18 @@ export default function AdminApplicationsClient({ applications, onApprove, onRej
                         onClick={() => handleAction(application.id, 'reinstate')}
                         className="min-w-[100px]"
                       >
-                        {actionStatus[application.id] === 'loading' ? 'Reinstating...' : 
+                        {actionStatus[application.id] === 'loading' ? 'Reinstating...' :
                          actionStatus[application.id] === 'success' ? 'Reinstated!' : 'Reinstate'}
+                      </Button>
+                    )}
+                    {application.isTestData && (
+                      <Button
+                        variant="outline"
+                        disabled={actionStatus[application.id] === 'loading'}
+                        onClick={() => handleDelete(application.id)}
+                        className="min-w-[100px]"
+                      >
+                        {actionStatus[application.id] === 'loading' ? 'Deleting...' : 'Delete'}
                       </Button>
                     )}
                   </div>
@@ -522,6 +612,65 @@ export default function AdminApplicationsClient({ applications, onApprove, onRej
                     </div>
                   </div>
                 )}
+
+                {/* Screening Quiz */}
+                <div className="mt-6 pt-6 border-t">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedScreening(s => ({ ...s, [application.id]: !s[application.id] }))}
+                    className="flex items-center gap-2 font-semibold text-gray-900"
+                  >
+                    <FileText className="h-4 w-4 text-gray-500" />
+                    Screening Quiz Answers
+                    <span className="text-xs font-normal text-gray-500">
+                      ({expandedScreening[application.id] ? 'hide' : 'show'})
+                    </span>
+                  </button>
+                  {expandedScreening[application.id] && (
+                    <div className="mt-4 space-y-4">
+                      {SCREENING_QUESTIONS.map(q => (
+                        <div key={q.id} className="border-l-2 border-blue-200 pl-4 py-2">
+                          <div className="font-medium text-gray-900 text-sm">{q.prompt}</div>
+                          <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">
+                            {application.screeningAnswers?.[q.id] || <span className="italic text-gray-400">No answer</span>}
+                          </p>
+                          <details className="mt-1">
+                            <summary className="text-xs text-blue-600 cursor-pointer select-none">Show expected focus</summary>
+                            <p className="text-xs text-gray-500 mt-1">{q.expectedFocus}</p>
+                          </details>
+                        </div>
+                      ))}
+                      <div className="flex items-center gap-2 pt-2">
+                        <Input
+                          type="number"
+                          min={0}
+                          max={100}
+                          placeholder="Score (0-100)"
+                          value={scoreDrafts[application.id] ?? (application.screeningScore ?? '')}
+                          onChange={e => setScoreDrafts(s => ({ ...s, [application.id]: e.target.value }))}
+                          className="w-32"
+                        />
+                        <Button
+                          type="button"
+                          disabled={
+                            actionStatus[application.id] === 'loading' ||
+                            !Number.isInteger(Number(scoreDrafts[application.id])) ||
+                            Number(scoreDrafts[application.id]) < 0 ||
+                            Number(scoreDrafts[application.id]) > 100
+                          }
+                          onClick={() => handleGrade(application.id)}
+                        >
+                          {actionStatus[application.id] === 'loading' ? 'Saving...' : 'Save Score'}
+                        </Button>
+                        {application.gradedByEmail && (
+                          <span className="text-xs text-gray-500">
+                            Last graded by {application.gradedByEmail}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 {/* Application Details */}
                 <div className="mt-6 pt-6 border-t">

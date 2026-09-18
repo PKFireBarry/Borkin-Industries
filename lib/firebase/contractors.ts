@@ -1,8 +1,9 @@
 import { db } from '../../firebase'
-import { collection, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, arrayUnion, arrayRemove } from 'firebase/firestore'
+import { collection, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, serverTimestamp, arrayUnion, arrayRemove } from 'firebase/firestore'
 import type { Contractor } from '@/types/contractor'
 import type { ContractorServiceOffering } from '@/types/service'
 import type { DayAvailability, TimeSlot } from '@/types/contractor'
+import { SCREENING_QUESTIONS } from '@/lib/screening/questions'
 
 export async function getAllContractors(): Promise<Contractor[]> {
   const contractorsRef = collection(db, 'contractors')
@@ -328,6 +329,55 @@ export async function getAllContractorApplications() {
 export async function updateContractorApplicationStatus(applicationId: string, status: string) {
   const appRef = doc(db, 'contractorApplications', applicationId)
   await updateDoc(appRef, { status })
+}
+
+export async function updateContractorApplicationScreeningScore(
+  applicationId: string,
+  score: number,
+  gradedByEmail: string
+): Promise<void> {
+  const appRef = doc(db, 'contractorApplications', applicationId)
+  await updateDoc(appRef, {
+    screeningScore: score,
+    gradedAt: serverTimestamp(),
+    gradedByEmail,
+  })
+}
+
+export async function createTestContractorApplication(): Promise<string> {
+  const docRef = await addDoc(collection(db, 'contractorApplications'), {
+    firstName: 'Test',
+    lastName: 'Applicant',
+    name: 'Test Applicant',
+    email: 'test-applicant@example.com',
+    phone: '555-0100',
+    city: 'Tampa',
+    state: 'FL',
+    postalCode: '33601',
+    country: 'USA',
+    address: '123 Test St',
+    experience: [],
+    education: [],
+    certifications: [],
+    references: [],
+    drivingRange: { maxDistance: '25', willTravelOutside: 'no' },
+    w9Url: '',
+    screeningAnswers: Object.fromEntries(
+      SCREENING_QUESTIONS.map((q) => [q.id, 'Sample answer for testing — no real applicant data.'])
+    ),
+    status: 'pending',
+    createdAt: serverTimestamp(),
+    userId: `test-${Date.now()}`,
+    screeningScore: null,
+    gradedAt: null,
+    gradedByEmail: null,
+    isTestData: true,
+  })
+  return docRef.id
+}
+
+export async function deleteContractorApplication(applicationId: string): Promise<void> {
+  await deleteDoc(doc(db, 'contractorApplications', applicationId))
 }
 
 export async function removeContractor(contractorId: string): Promise<void> {

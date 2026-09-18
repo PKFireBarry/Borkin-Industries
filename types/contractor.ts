@@ -11,6 +11,7 @@ export interface ContractorApplication {
   certifications: string[]
   references: string[]
   w9Url?: string
+  screeningScore?: number
 }
 
 export interface TimeSlot {

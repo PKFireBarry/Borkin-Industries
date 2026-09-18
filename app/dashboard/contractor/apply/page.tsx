@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation'
 import { Check, ChevronRight, AlertCircle } from 'lucide-react'
 import { uploadFileToStorage } from '@/lib/firebase/storage'
 import W9Form from '@/components/forms/w9-form'
+import { SCREENING_QUESTIONS } from '@/lib/screening/questions'
 
 interface ExperienceEntry {
   employer: string
@@ -78,6 +79,7 @@ interface ContractorForm {
     willTravelOutside: string // 'yes' | 'no'
   }
   w9Url: string
+  screeningAnswers: Record<string, string>
 }
 
 const initialExperience: ExperienceEntry = {
@@ -146,6 +148,7 @@ const initialForm: ContractorForm = {
     willTravelOutside: '',
   },
   w9Url: '',
+  screeningAnswers: {},
 }
 
 const steps = [
@@ -156,6 +159,7 @@ const steps = [
   'References',
   'Driving Range',
   'W-9 Upload',
+  'Screening Quiz',
   'Review & Submit',
 ] as const
 
@@ -316,6 +320,9 @@ export default function ContractorApplyPage() {
         status: 'pending',
         createdAt: serverTimestamp(),
         userId: user.id,
+        screeningScore: null,
+        gradedAt: null,
+        gradedByEmail: null,
       });
       
       console.log('Application submitted with ID:', docRef.id);
@@ -344,6 +351,8 @@ export default function ContractorApplyPage() {
         return ['drivingRange']
       case 'W-9 Upload':
         return ['w9Url']
+      case 'Screening Quiz':
+        return ['screeningAnswers']
       default:
         return []
     }
@@ -399,6 +408,9 @@ export default function ContractorApplyPage() {
     }
     if (step === 'W-9 Upload') {
       return Boolean(form.w9Url && form.w9Url.trim())
+    }
+    if (step === 'Screening Quiz') {
+      return SCREENING_QUESTIONS.every((q) => (form.screeningAnswers[q.id] || '').trim().length > 0)
     }
     const required: (keyof ContractorForm)[] = fieldsForStep(step)
     return required.every((field) => {
@@ -524,6 +536,10 @@ export default function ContractorApplyPage() {
 
   function handleDrivingRangeChange(field: keyof ContractorForm['drivingRange'], value: any) {
     setForm((prev) => ({ ...prev, drivingRange: { ...prev.drivingRange, [field]: value } }))
+  }
+
+  function handleScreeningAnswerChange(questionId: string, value: string) {
+    setForm((prev) => ({ ...prev, screeningAnswers: { ...prev.screeningAnswers, [questionId]: value } }))
   }
 
   async function handleW9Upload() {
@@ -1516,6 +1532,40 @@ export default function ContractorApplyPage() {
             </div>
           </section>
         )
+      case 'Screening Quiz':
+        return (
+          <section className="bg-card rounded-xl shadow-md p-1 sm:p-6 mb-1 sm:mb-8">
+            <h2 className="text-sm sm:text-2xl font-bold mb-1 sm:mb-2">Pet Care Screening Quiz</h2>
+            <div className="text-muted-foreground text-xs sm:text-sm mb-2 sm:mb-4">
+              Answer each scenario in your own words based on how you would actually respond. All {SCREENING_QUESTIONS.length} questions are required.
+            </div>
+            <div className="space-y-3 sm:space-y-6">
+              {SCREENING_QUESTIONS.map((q, idx) => {
+                const answer = form.screeningAnswers[q.id] || ''
+                const touchKey = `screening_${q.id}`
+                const showError = touched[touchKey] && !answer.trim()
+                return (
+                  <div key={q.id} className="p-2 sm:p-4 bg-muted rounded-lg">
+                    <label className="block font-medium text-xs sm:text-sm mb-1 sm:mb-2">
+                      {idx + 1}. {q.prompt}
+                    </label>
+                    <Textarea
+                      value={answer}
+                      onChange={(e) => handleScreeningAnswerChange(q.id, e.target.value)}
+                      onBlur={() => setTouched((prev) => ({ ...prev, [touchKey]: true }))}
+                      aria-invalid={showError}
+                      rows={3}
+                      className="text-xs sm:text-sm"
+                    />
+                    {showError && (
+                      <p className="text-destructive text-xs mt-1">An answer is required.</p>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+        )
       case 'Review & Submit':
         return (
           <section className="bg-card rounded-xl shadow-md p-1 sm:p-6 mb-1 sm:mb-8">
@@ -1602,6 +1652,13 @@ export default function ContractorApplyPage() {
                 )}
               </div>
               
+              <div className="p-2 sm:p-4 bg-muted rounded-lg">
+                <h3 className="font-semibold text-xs sm:text-base mb-1 sm:mb-2">Screening Quiz</h3>
+                <div>
+                  {SCREENING_QUESTIONS.filter((q) => (form.screeningAnswers[q.id] || '').trim()).length}/{SCREENING_QUESTIONS.length} answered
+                </div>
+              </div>
+
               <div className="p-2 sm:p-4 bg-muted rounded-lg">
                 <h3 className="font-semibold text-xs sm:text-base mb-1 sm:mb-2">Driving Range & Service Area</h3>
                 <div>Maximum Distance: {form.drivingRange.maxDistance}</div>
