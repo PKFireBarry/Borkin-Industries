@@ -11,7 +11,7 @@ import { useRouter } from 'next/navigation'
 import { Check, ChevronRight, AlertCircle } from 'lucide-react'
 import { uploadFileToStorage } from '@/lib/firebase/storage'
 import W9Form from '@/components/forms/w9-form'
-import { SCREENING_QUESTIONS } from '@/lib/screening/questions'
+import { getRandomQuestions, type ScreeningQuestion } from '@/lib/screening/questions'
 
 interface ExperienceEntry {
   employer: string
@@ -201,6 +201,9 @@ export default function ContractorApplyPage() {
   const [isUploadingW9, setIsUploadingW9] = useState(false)
   const [w9ModalOpen, setW9ModalOpen] = useState(false)
   const [w9Error, setW9Error] = useState<string | null>(null)
+  // Picked once per application session so the same 5 questions stay stable
+  // across steps but differ between applicants (discourages shared answer keys).
+  const [assignedQuestions] = useState<ScreeningQuestion[]>(() => getRandomQuestions())
 
   useEffect(() => {
     if (!userLoaded) return
@@ -320,6 +323,7 @@ export default function ContractorApplyPage() {
         status: 'pending',
         createdAt: serverTimestamp(),
         userId: user.id,
+        assignedQuestionIds: assignedQuestions.map((q) => q.id),
         screeningScore: null,
         gradedAt: null,
         gradedByEmail: null,
@@ -410,7 +414,7 @@ export default function ContractorApplyPage() {
       return Boolean(form.w9Url && form.w9Url.trim())
     }
     if (step === 'Screening Quiz') {
-      return SCREENING_QUESTIONS.every((q) => (form.screeningAnswers[q.id] || '').trim().length > 0)
+      return assignedQuestions.every((q) => (form.screeningAnswers[q.id] || '').trim().length > 0)
     }
     const required: (keyof ContractorForm)[] = fieldsForStep(step)
     return required.every((field) => {
@@ -1537,10 +1541,10 @@ export default function ContractorApplyPage() {
           <section className="bg-card rounded-xl shadow-md p-1 sm:p-6 mb-1 sm:mb-8">
             <h2 className="text-sm sm:text-2xl font-bold mb-1 sm:mb-2">Pet Care Screening Quiz</h2>
             <div className="text-muted-foreground text-xs sm:text-sm mb-2 sm:mb-4">
-              Answer each scenario in your own words based on how you would actually respond. All {SCREENING_QUESTIONS.length} questions are required.
+              Answer each scenario in your own words based on how you would actually respond. You've been given {assignedQuestions.length} questions from our screening pool — all {assignedQuestions.length} are required.
             </div>
             <div className="space-y-3 sm:space-y-6">
-              {SCREENING_QUESTIONS.map((q, idx) => {
+              {assignedQuestions.map((q, idx) => {
                 const answer = form.screeningAnswers[q.id] || ''
                 const touchKey = `screening_${q.id}`
                 const showError = touched[touchKey] && !answer.trim()
@@ -1655,7 +1659,7 @@ export default function ContractorApplyPage() {
               <div className="p-2 sm:p-4 bg-muted rounded-lg">
                 <h3 className="font-semibold text-xs sm:text-base mb-1 sm:mb-2">Screening Quiz</h3>
                 <div>
-                  {SCREENING_QUESTIONS.filter((q) => (form.screeningAnswers[q.id] || '').trim()).length}/{SCREENING_QUESTIONS.length} answered
+                  {assignedQuestions.filter((q) => (form.screeningAnswers[q.id] || '').trim()).length}/{assignedQuestions.length} answered
                 </div>
               </div>
 

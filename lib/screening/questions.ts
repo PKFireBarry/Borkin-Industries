@@ -4,6 +4,22 @@ export interface ScreeningQuestion {
   expectedFocus: string
 }
 
+export const SCREENING_QUESTIONS_PER_APPLICANT = 5
+
+// Picks a random subset (no repeats) from the question pool so each applicant
+// sees a different sample and can't just copy another applicant's answer key.
+export function getRandomQuestions(
+  count: number = SCREENING_QUESTIONS_PER_APPLICANT,
+  pool: ScreeningQuestion[] = SCREENING_QUESTIONS
+): ScreeningQuestion[] {
+  const shuffled = [...pool]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+  }
+  return shuffled.slice(0, count)
+}
+
 // Stable ids ('q1'..'q28') so answers stay tied to the right question even if
 // this list is ever reordered or edited. Do not reuse or reorder existing ids.
 export const SCREENING_QUESTIONS: ScreeningQuestion[] = [

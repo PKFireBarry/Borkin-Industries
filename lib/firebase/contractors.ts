@@ -3,7 +3,7 @@ import { collection, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc,
 import type { Contractor } from '@/types/contractor'
 import type { ContractorServiceOffering } from '@/types/service'
 import type { DayAvailability, TimeSlot } from '@/types/contractor'
-import { SCREENING_QUESTIONS } from '@/lib/screening/questions'
+import { getRandomQuestions } from '@/lib/screening/questions'
 
 export async function getAllContractors(): Promise<Contractor[]> {
   const contractorsRef = collection(db, 'contractors')
@@ -345,6 +345,7 @@ export async function updateContractorApplicationScreeningScore(
 }
 
 export async function createTestContractorApplication(): Promise<string> {
+  const assignedQuestions = getRandomQuestions()
   const docRef = await addDoc(collection(db, 'contractorApplications'), {
     firstName: 'Test',
     lastName: 'Applicant',
@@ -362,8 +363,9 @@ export async function createTestContractorApplication(): Promise<string> {
     references: [],
     drivingRange: { maxDistance: '25', willTravelOutside: 'no' },
     w9Url: '',
+    assignedQuestionIds: assignedQuestions.map((q) => q.id),
     screeningAnswers: Object.fromEntries(
-      SCREENING_QUESTIONS.map((q) => [q.id, 'Sample answer for testing — no real applicant data.'])
+      assignedQuestions.map((q) => [q.id, 'Sample answer for testing — no real applicant data.'])
     ),
     status: 'pending',
     createdAt: serverTimestamp(),

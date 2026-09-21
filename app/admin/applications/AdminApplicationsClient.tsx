@@ -69,6 +69,7 @@ export interface Application {
     willTravelOutside?: string;
   };
   screeningAnswers?: Record<string, string>;
+  assignedQuestionIds?: string[];
   screeningScore?: number | null;
   gradedAt?: string | Date | { seconds: number; nanoseconds: number } | null;
   gradedByEmail?: string | null;
@@ -621,14 +622,18 @@ export default function AdminApplicationsClient({ applications, onApprove, onRej
                     className="flex items-center gap-2 font-semibold text-gray-900"
                   >
                     <FileText className="h-4 w-4 text-gray-500" />
-                    Screening Quiz Answers
+                    Screening Quiz Answers ({application.assignedQuestionIds?.length ?? Object.keys(application.screeningAnswers || {}).length})
                     <span className="text-xs font-normal text-gray-500">
                       ({expandedScreening[application.id] ? 'hide' : 'show'})
                     </span>
                   </button>
                   {expandedScreening[application.id] && (
                     <div className="mt-4 space-y-4">
-                      {SCREENING_QUESTIONS.map(q => (
+                      {(application.assignedQuestionIds?.length
+                        ? SCREENING_QUESTIONS.filter(q => application.assignedQuestionIds!.includes(q.id))
+                        // Older applications submitted before random assignment had all 28 answered.
+                        : SCREENING_QUESTIONS.filter(q => application.screeningAnswers?.[q.id])
+                      ).map(q => (
                         <div key={q.id} className="border-l-2 border-blue-200 pl-4 py-2">
                           <div className="font-medium text-gray-900 text-sm">{q.prompt}</div>
                           <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">
