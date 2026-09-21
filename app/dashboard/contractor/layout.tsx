@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { Suspense } from 'react';
 // Link, cn, usePathname, UserButton are not directly used in this simplified layout,
 // but kept for potential future small additions. Re-evaluate if not needed.
-import { redirect, usePathname, useSearchParams } from 'next/navigation';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import { getContractorProfile } from '@/lib/firebase/contractors';
 import type { Contractor } from '@/types/contractor';
@@ -21,6 +21,7 @@ function ContractorDashboardLayoutContent({ children }: ContractorDashboardLayou
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const isPreviewMode = searchParams?.get('preview') === 'admin';
+  const router = useRouter();
 
   const { user, isLoaded: isUserLoaded } = useUser();
   const [applicationStatus, setApplicationStatus] = useState<string | null>(null);
@@ -49,9 +50,28 @@ function ContractorDashboardLayoutContent({ children }: ContractorDashboardLayou
       // Still loading user
     } else {
       setIsLoadingStatus(false);
-      redirect('/sign-in');
+      router.replace('/sign-in');
     }
-  }, [user, isUserLoaded, isPreviewMode]);
+  }, [user, isUserLoaded, isPreviewMode, router]);
+
+  // Navigate from an effect rather than calling redirect() during render, which
+  // could throw mid-render in this client component and corrupt React's hook
+  // bookkeeping for that pass (observed as "Rendered more hooks than during
+  // the previous render" for brand-new contractor accounts).
+  useEffect(() => {
+    if (isPreviewMode || !isUserLoaded || isLoadingStatus) return;
+
+    if (pathname === '/dashboard/contractor/apply') {
+      if (applicationStatus === 'approved') {
+        router.replace('/dashboard/contractor');
+      }
+      return;
+    }
+
+    if (applicationStatus !== 'approved') {
+      router.replace('/dashboard/contractor/apply');
+    }
+  }, [pathname, applicationStatus, isPreviewMode, isUserLoaded, isLoadingStatus, router]);
 
   if (!isUserLoaded || isLoadingStatus) {
     return (
@@ -68,15 +88,13 @@ function ContractorDashboardLayoutContent({ children }: ContractorDashboardLayou
 
   if (pathname === '/dashboard/contractor/apply') {
     if (applicationStatus === 'approved') {
-      redirect('/dashboard/contractor');
-      return null;
+      return null; // redirecting via effect above
     }
     return <>{children}</>;
   }
 
   if (applicationStatus !== 'approved') {
-    redirect('/dashboard/contractor/apply');
-    return null;
+    return null; // redirecting via effect above
   }
 
   // User is approved and on a protected contractor route.
