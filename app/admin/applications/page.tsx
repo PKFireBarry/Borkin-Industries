@@ -1,7 +1,14 @@
 import { currentUser } from '@clerk/nextjs/server'
 import { isAdmin } from '@/lib/auth/role-helpers'
 import { redirect } from 'next/navigation'
-import { getAllContractorApplications, updateContractorApplicationStatus, updateContractorProfile } from '@/lib/firebase/contractors'
+import {
+  getAllContractorApplications,
+  updateContractorApplicationStatus,
+  updateContractorProfile,
+  updateContractorApplicationScreeningScore,
+  createTestContractorApplication,
+  deleteContractorApplication,
+} from '@/lib/firebase/contractors'
 import AdminApplicationsClient, { type Application } from './AdminApplicationsClient'
 
 // Helper function to serialize Firestore timestamps
@@ -55,8 +62,9 @@ async function approveContractor(id: string) {
         drivingRange: application.drivingRange?.maxDistance || '',
         certifications: Array.isArray(application.certifications) ? 
           application.certifications.map((cert: any) => typeof cert === 'string' ? cert : cert.name || '').filter(Boolean) : [],
-        references: Array.isArray(application.references) ? 
-          application.references.map((ref: any) => `${ref.name || ''} (${ref.relationship || ''})`).filter(Boolean) : []
+        references: Array.isArray(application.references) ?
+          application.references.map((ref: any) => `${ref.name || ''} (${ref.relationship || ''})`).filter(Boolean) : [],
+        screeningScore: application.screeningScore ?? null
       }
     })
   }
@@ -92,8 +100,9 @@ async function rejectContractor(id: string) {
         drivingRange: application.drivingRange?.maxDistance || '',
         certifications: Array.isArray(application.certifications) ? 
           application.certifications.map((cert: any) => typeof cert === 'string' ? cert : cert.name || '').filter(Boolean) : [],
-        references: Array.isArray(application.references) ? 
-          application.references.map((ref: any) => `${ref.name || ''} (${ref.relationship || ''})`).filter(Boolean) : []
+        references: Array.isArray(application.references) ?
+          application.references.map((ref: any) => `${ref.name || ''} (${ref.relationship || ''})`).filter(Boolean) : [],
+        screeningScore: application.screeningScore ?? null
       }
     })
   }
@@ -129,11 +138,33 @@ async function reinstateContractor(id: string) {
         drivingRange: application.drivingRange?.maxDistance || '',
         certifications: Array.isArray(application.certifications) ? 
           application.certifications.map((cert: any) => typeof cert === 'string' ? cert : cert.name || '').filter(Boolean) : [],
-        references: Array.isArray(application.references) ? 
-          application.references.map((ref: any) => `${ref.name || ''} (${ref.relationship || ''})`).filter(Boolean) : []
+        references: Array.isArray(application.references) ?
+          application.references.map((ref: any) => `${ref.name || ''} (${ref.relationship || ''})`).filter(Boolean) : [],
+        screeningScore: application.screeningScore ?? null
       }
     })
   }
+}
+
+async function gradeApplication(id: string, score: number) {
+  'use server'
+  const user = await currentUser()
+  if (!user || !isAdmin(user)) redirect('/not-authorized')
+  await updateContractorApplicationScreeningScore(id, score, user.emailAddresses[0]?.emailAddress || 'unknown')
+}
+
+async function createTestApplication() {
+  'use server'
+  const user = await currentUser()
+  if (!user || !isAdmin(user)) redirect('/not-authorized')
+  await createTestContractorApplication()
+}
+
+async function deleteApplication(id: string) {
+  'use server'
+  const user = await currentUser()
+  if (!user || !isAdmin(user)) redirect('/not-authorized')
+  await deleteContractorApplication(id)
 }
 
 export default async function AdminApplicationsPage() {
@@ -181,5 +212,8 @@ export default async function AdminApplicationsPage() {
     onApprove={approveContractor}
     onReject={rejectContractor}
     onReinstate={reinstateContractor}
+    onGrade={gradeApplication}
+    onCreateTest={createTestApplication}
+    onDelete={deleteApplication}
   />
 } 
